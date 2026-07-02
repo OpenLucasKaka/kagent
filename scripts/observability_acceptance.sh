@@ -63,6 +63,7 @@ required_metrics = [
     "self_correcting_agent_runtime_run_duration_seconds_bucket",
     "self_correcting_agent_runtime_approval_required_total",
     "self_correcting_agent_runtime_stale_pending_approvals_current",
+    "self_correcting_agent_runtime_progress_event_sink_failures_total",
     "self_correcting_agent_runtime_runs_by_auth_subject_total",
     "self_correcting_agent_build_info",
 ]

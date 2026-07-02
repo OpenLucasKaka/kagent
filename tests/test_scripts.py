@@ -300,6 +300,7 @@ def test_run_checks_starts_real_service_smoke():
 
 def test_production_readiness_audit_reports_required_artifacts():
     script_path = Path("scripts/production_readiness_audit.py")
+    script_text = script_path.read_text()
     makefile = Path("Makefile").read_text()
     readme = Path("README.md").read_text()
     rollout = Path("docs/internal-rollout.md").read_text()
@@ -310,6 +311,8 @@ def test_production_readiness_audit_reports_required_artifacts():
     assert "scripts/production_readiness_audit.py" in makefile
     assert "scripts/production_readiness_audit.py" in readme
     assert "scripts/production_readiness_audit.py" in rollout
+    assert "self_correcting_agent_runtime_progress_event_sink_failures_total" in script_text
+    assert "SelfCorrectingAgentRuntimeProgressSinkFailures" in script_text
 
     completed = subprocess.run(
         [".venv/bin/python", str(script_path)],
@@ -499,6 +502,7 @@ def test_observability_acceptance_script_is_secret_safe_and_documented():
     assert "Bearer" in script
     assert "/metrics.prom" in script
     assert "self_correcting_agent_runtime_stale_pending_approvals_current" in script
+    assert "self_correcting_agent_runtime_progress_event_sink_failures_total" in script
     assert "deploy/grafana/self-correcting-agent-dashboard.json" in script
     assert "deploy/prometheus/self-correcting-agent-rules.yaml" in script
     assert "observability_token" not in script
@@ -543,7 +547,8 @@ def test_observability_acceptance_script_verifies_live_metrics(tmp_path):
     assert payload["metrics_endpoint"] == "/metrics.prom"
     assert payload["metrics_status"] == "200"
     assert payload["required_metrics_present"] == "true"
-    assert int(payload["required_metric_count"]) >= 6
+    assert int(payload["required_metric_count"]) >= 10
+    assert payload["missing_required_metrics"] == []
     assert payload["grafana_dashboard_status"] == "passed"
     assert payload["prometheus_rules_status"] == "passed"
     assert len(payload["metrics_sha256"]) == 64

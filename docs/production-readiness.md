@@ -104,14 +104,17 @@ check. The Grafana dashboard semantic check records `required_metrics_present`,
 panel count, dashboard title, missing metric names, and dashboard `sha256`, so
 production promotion fails if the packaged dashboard no longer covers the core
 service, runtime latency, approval, stale pending approval gauges,
-per-subject usage, per-subject outcome, resume, and tool-error metrics,
-including `self_correcting_agent_runtime_stale_pending_approvals_current`.
+progress sink failure counters, per-subject usage, per-subject outcome, resume,
+and tool-error metrics, including
+`self_correcting_agent_runtime_stale_pending_approvals_current` and
+`self_correcting_agent_runtime_progress_event_sink_failures_total`.
 It also runs a Prometheus alert rules semantic check that records
 `required_alerts_present`, `required_metrics_present`, alert count, missing
 alert names, missing metric names, and rules file `sha256`. This keeps service
 down, HTTP error, runtime latency, stale pending approval, per-subject
-failure/resume, tool timeout, trace persistence, concurrency, malformed
-request, oversized request, and unknown route alerting in the release evidence.
+failure/resume, progress sink failure, tool timeout, trace persistence,
+concurrency, malformed request, oversized request, and unknown route alerting
+in the release evidence.
 The `observability` section also includes a ServiceMonitor semantic check for
 Prometheus Operator clusters. It records `scrape_target_present`,
 `selector_present`, missing scrape markers, and ServiceMonitor `sha256`, so the
