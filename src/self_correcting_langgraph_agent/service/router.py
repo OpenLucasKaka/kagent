@@ -677,6 +677,9 @@ def _record_runtime_run_metrics(
         error_code_counts=_runtime_observation_error_code_counts(observations),
         auth_subject=str(payload.get("auth_subject", "")),
         resumed_by_auth_subject=str(payload.get("resumed_by_auth_subject", "")),
+        progress_event_sink_failure_count=_runtime_non_negative_int(
+            payload.get("progress_event_sink_failure_count", 0)
+        ),
     )
 
 
@@ -685,6 +688,13 @@ def _runtime_duration_seconds(payload: Dict[str, Any]) -> float:
         return max(0.0, float(payload.get("duration_seconds", 0.0)))
     except (TypeError, ValueError):
         return 0.0
+
+
+def _runtime_non_negative_int(value: Any) -> int:
+    try:
+        return max(0, int(value))
+    except (TypeError, ValueError):
+        return 0
 
 
 def _runtime_observation_status_count(value: Any, status: str) -> int:

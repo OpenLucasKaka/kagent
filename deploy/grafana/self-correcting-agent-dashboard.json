@@ -155,14 +155,42 @@
       },
       "fieldConfig": {
         "defaults": {
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 12,
+        "x": 0,
+        "y": 20
+      },
+      "id": 10,
+      "targets": [
+        {
+          "expr": "sum(rate(self_correcting_agent_runtime_progress_event_sink_failures_total[5m]))",
+          "legendFormat": "sink failures",
+          "refId": "A"
+        }
+      ],
+      "title": "Runtime Progress Sink Failures",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
           "unit": "short"
         },
         "overrides": []
       },
       "gridPos": {
         "h": 4,
-        "w": 24,
-        "x": 0,
+        "w": 12,
+        "x": 12,
         "y": 20
       },
       "id": 9,

@@ -159,6 +159,15 @@ groups:
           summary: Codex-style runtime runs are exhausting iteration budgets
           description: Failed runtime executions spent all allowed planner iterations.
 
+      - alert: SelfCorrectingAgentRuntimeProgressSinkFailures
+        expr: sum(rate(self_correcting_agent_runtime_progress_event_sink_failures_total[5m])) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Codex-style runtime progress event sinks are failing
+          description: Runtime progress events could not be delivered to an operator UI, webhook, or streaming sink.
+
       - alert: SelfCorrectingAgentRuntimeToolExecutionTimeouts
         expr: |
           sum(rate(

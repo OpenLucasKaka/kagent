@@ -135,7 +135,7 @@ def service_openapi() -> Dict[str, Any]:
                 },
                 "MetricsResponse": {
                     "type": "object",
-                    "properties": _diagnostic_audit_properties(),
+                    "properties": _metrics_response_properties(),
                     "additionalProperties": {
                         "oneOf": [
                             {"type": "string"},
@@ -1789,6 +1789,12 @@ def _diagnostic_audit_properties() -> Dict[str, Dict[str, Any]]:
     }
     properties.update(_trace_permission_policy_properties())
     properties.update(_llm_provider_audit_properties())
+    return properties
+
+
+def _metrics_response_properties() -> Dict[str, Dict[str, Any]]:
+    properties = _diagnostic_audit_properties()
+    properties["runtime_progress_event_sink_failures_total"] = {"type": "string"}
     return properties
 
 

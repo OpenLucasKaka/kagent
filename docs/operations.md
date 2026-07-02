@@ -762,8 +762,11 @@ without exposing bearer tokens. Use
 `self_correcting_agent_runtime_resumes_by_auth_subject_total` to trend
 subject/admin resume activity separately from run ownership. Use
 `self_correcting_agent_runtime_failed_observations_total` for tool or planner
-failure pressure, `self_correcting_agent_runtime_approval_required_total` for
-human approval queue pressure, and
+failure pressure,
+`self_correcting_agent_runtime_progress_event_sink_failures_total` for progress
+event delivery failures in streaming, webhook, or operator UI sinks,
+`self_correcting_agent_runtime_approval_required_total` for human approval queue
+pressure, and
 `self_correcting_agent_runtime_failed_budget_exhaustions_total` to alert on
 failed runtime runs that spent their whole iteration budget.
 Use `self_correcting_agent_runtime_final_answer_guardrails_total` and

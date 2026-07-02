@@ -362,7 +362,7 @@ def test_prometheus_alert_rules_cover_service_and_agent_health():
     )
     assert "groups:" in rules
     assert "  - name: self-correcting-agent.rules" in rules
-    assert alert_count == 26
+    assert alert_count == 27
     assert "SelfCorrectingAgentServiceDown" in rules
     assert "SelfCorrectingAgentHighErrorRate" in rules
     assert "SelfCorrectingAgentHighRequestLatency" in rules
@@ -377,6 +377,7 @@ def test_prometheus_alert_rules_cover_service_and_agent_health():
     assert "SelfCorrectingAgentRuntimeStalePendingApprovals" in rules
     assert "SelfCorrectingAgentRuntimeSubjectResumes" in rules
     assert "SelfCorrectingAgentRuntimeBudgetExhausted" in rules
+    assert "SelfCorrectingAgentRuntimeProgressSinkFailures" in rules
     assert "SelfCorrectingAgentRuntimeToolExecutionTimeouts" in rules
     assert "SelfCorrectingAgentTracePersistenceFailures" in rules
     assert "SelfCorrectingAgentConcurrencySaturated" in rules
@@ -402,6 +403,7 @@ def test_prometheus_alert_rules_cover_service_and_agent_health():
     assert "self_correcting_agent_runtime_approval_required_total" in rules
     assert "self_correcting_agent_runtime_stale_pending_approvals_current" in rules
     assert "self_correcting_agent_runtime_failed_budget_exhaustions_total" in rules
+    assert "self_correcting_agent_runtime_progress_event_sink_failures_total" in rules
     assert "self_correcting_agent_runtime_observation_errors_total" in rules
     assert "tool_execution_timeout" in rules
     assert "self_correcting_agent_error_responses_total" in rules
@@ -463,6 +465,7 @@ def test_grafana_dashboard_covers_internal_runtime_operations():
     assert "Runtime Outcomes by Subject" in panel_titles
     assert "Runtime Resumes by Subject" in panel_titles
     assert "Runtime Approval Pressure" in panel_titles
+    assert "Runtime Progress Sink Failures" in panel_titles
     assert "Runtime Stale Pending Approvals" in panel_titles
     assert "Runtime Tool Errors" in panel_titles
     assert 'up{job=\\"self-correcting-agent\\"}' in dashboard_text
@@ -472,6 +475,7 @@ def test_grafana_dashboard_covers_internal_runtime_operations():
     assert "self_correcting_agent_runtime_run_status_by_auth_subject_total" in payload
     assert "self_correcting_agent_runtime_resumes_by_auth_subject_total" in payload
     assert "self_correcting_agent_runtime_approval_required_total" in payload
+    assert "self_correcting_agent_runtime_progress_event_sink_failures_total" in payload
     assert "self_correcting_agent_runtime_stale_pending_approvals_current" in payload
     assert "self_correcting_agent_runtime_observation_errors_total" in payload
     assert "deploy/grafana/self-correcting-agent-dashboard.json" in deployment

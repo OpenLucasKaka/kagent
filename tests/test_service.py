@@ -23,6 +23,7 @@ from self_correcting_langgraph_agent.service import (
     readiness_payload,
 )
 from self_correcting_langgraph_agent.service import cli as service_module
+from self_correcting_langgraph_agent.service import router as service_router
 from self_correcting_langgraph_agent.service import runtime as service_runtime
 from self_correcting_langgraph_agent.service import safety as service_safety
 from self_correcting_langgraph_agent.service.trace_store import persist_trace
@@ -445,6 +446,7 @@ def test_service_metrics_tracks_requests_by_path_and_status():
         "runtime_runs_by_auth_subject_status": {},
         "runtime_resumes_by_auth_subject": {},
         "runtime_failed_observations_total": "0",
+        "runtime_progress_event_sink_failures_total": "0",
         "runtime_observation_errors_by_code": {},
         "runtime_approval_required_total": "0",
         "runtime_failed_budget_exhaustions_total": "0",
@@ -535,6 +537,7 @@ def test_service_metrics_tracks_runtime_operational_counters():
         budget_exhausted=False,
         duration_seconds=0.2,
         auth_subject="team-a",
+        progress_event_sink_failure_count=1,
     )
     metrics.record_runtime_run(
         status="failed",
@@ -544,6 +547,7 @@ def test_service_metrics_tracks_runtime_operational_counters():
         duration_seconds=3.0,
         auth_subject="team-a",
         resumed_by_auth_subject="default",
+        progress_event_sink_failure_count=2,
         error_code_counts={
             "invalid_tool_input": 1,
             "tool_execution_timeout": 1,
@@ -577,6 +581,7 @@ def test_service_metrics_tracks_runtime_operational_counters():
     }
     assert snapshot["runtime_resumes_by_auth_subject"] == {"default": "1"}
     assert snapshot["runtime_failed_observations_total"] == "2"
+    assert snapshot["runtime_progress_event_sink_failures_total"] == "3"
     assert snapshot["runtime_observation_errors_by_code"] == {
         "invalid_tool_input": "1",
         "tool_execution_timeout": "1",
@@ -714,6 +719,7 @@ def test_service_metrics_endpoint_reports_runtime_operational_outcomes():
         "requires_approval": "1",
     }
     assert metrics_payload["runtime_failed_observations_total"] == "1"
+    assert metrics_payload["runtime_progress_event_sink_failures_total"] == "0"
     assert metrics_payload["runtime_observation_errors_by_code"] == {
         "invalid_tool_input": "1",
         "tool_not_allowed": "1",
@@ -723,6 +729,39 @@ def test_service_metrics_endpoint_reports_runtime_operational_outcomes():
     assert metrics_payload["runtime_run_duration_seconds_count"] == "2"
     assert float(metrics_payload["runtime_run_duration_seconds_sum"]) > 0
     assert float(metrics_payload["max_runtime_run_duration_seconds"]) > 0
+
+
+def test_service_metrics_endpoint_records_runtime_progress_sink_failures(monkeypatch):
+    metrics = ServiceMetrics()
+
+    def runtime_response(_body, _config, _auth_subject):
+        return 200, {
+            "trace_type": "codex_runtime",
+            "status": "done",
+            "duration_seconds": "0.25",
+            "observations": [],
+            "progress_event_sink_failure_count": "4",
+        }
+
+    monkeypatch.setattr(
+        service_router.service_runtime_run,
+        "execute_runtime_run_request",
+        runtime_response,
+    )
+
+    run_status, run_payload = handle_request(
+        "POST",
+        "/runtime/run",
+        b'{"goal":"emit progress"}',
+        metrics=metrics,
+    )
+    metrics_status, metrics_payload = handle_request("GET", "/metrics", b"", metrics=metrics)
+
+    assert run_status == 200
+    assert run_payload["progress_event_sink_failure_count"] == "4"
+    assert metrics_status == 200
+    assert metrics_payload["runtime_runs_total"] == "1"
+    assert metrics_payload["runtime_progress_event_sink_failures_total"] == "4"
 
 
 def test_service_metrics_endpoint_reports_current_runtime_approval_queue(tmp_path):
@@ -839,6 +878,7 @@ def test_service_prometheus_metrics_endpoint_reports_text_exposition(monkeypatch
         duration_seconds=0.4,
         auth_subject="team-a",
         resumed_by_auth_subject="default",
+        progress_event_sink_failure_count=1,
     )
     metrics.record_runtime_run(
         status="failed",
@@ -848,6 +888,7 @@ def test_service_prometheus_metrics_endpoint_reports_text_exposition(monkeypatch
         duration_seconds=3.5,
         auth_subject="team-a",
         resumed_by_auth_subject="team-a",
+        progress_event_sink_failure_count=2,
         error_code_counts={
             "invalid_tool_input": 1,
             "tool_execution_timeout": 1,
@@ -923,6 +964,11 @@ def test_service_prometheus_metrics_endpoint_reports_text_exposition(monkeypatch
     )
     assert "# HELP self_correcting_agent_runtime_observation_errors_total" in payload
     assert "# TYPE self_correcting_agent_runtime_observation_errors_total counter" in payload
+    assert "# HELP self_correcting_agent_runtime_progress_event_sink_failures_total" in payload
+    assert (
+        "# TYPE self_correcting_agent_runtime_progress_event_sink_failures_total counter"
+        in payload
+    )
     assert "# HELP self_correcting_agent_runtime_final_answer_guardrails_total" in payload
     assert "# TYPE self_correcting_agent_runtime_final_answer_guardrails_total counter" in payload
     assert (
@@ -1014,6 +1060,7 @@ def test_service_prometheus_metrics_endpoint_reports_text_exposition(monkeypatch
         in payload
     )
     assert "self_correcting_agent_runtime_approval_required_total 1" in payload
+    assert "self_correcting_agent_runtime_progress_event_sink_failures_total 3" in payload
     assert "self_correcting_agent_runtime_final_answer_guardrails_total 0" in payload
     assert "self_correcting_agent_runtime_pending_approvals_current 0" in payload
     assert "self_correcting_agent_runtime_stale_pending_approvals_current 0" in payload

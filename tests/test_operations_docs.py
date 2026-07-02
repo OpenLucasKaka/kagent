@@ -301,6 +301,7 @@ def test_operations_runbook_documents_continuous_iteration_and_failure_triage():
     assert "self_correcting_agent_runtime_run_status_by_auth_subject_total" in runbook
     assert "self_correcting_agent_runtime_resumes_by_auth_subject_total" in runbook
     assert "self_correcting_agent_runtime_failed_observations_total" in runbook
+    assert "self_correcting_agent_runtime_progress_event_sink_failures_total" in runbook
     assert "self_correcting_agent_runtime_observation_errors_total" in runbook
     assert "self_correcting_agent_runtime_approval_required_total" in runbook
     assert "self_correcting_agent_runtime_final_answer_guardrails_total" in runbook

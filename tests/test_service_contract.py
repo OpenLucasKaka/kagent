@@ -1076,6 +1076,19 @@ def test_service_contract_documents_internal_auth_audit_fields():
         }
 
 
+def test_service_contract_documents_runtime_progress_sink_failure_metric():
+    payload = service_openapi()
+    schema_properties = payload["components"]["schemas"]["MetricsResponse"]["properties"]
+
+    assert schema_properties["runtime_progress_event_sink_failures_total"] == {
+        "type": "string"
+    }
+    assert (
+        "runtime_progress_event_sink_failures_total"
+        not in payload["components"]["schemas"]["ConfigResponse"]["properties"]
+    )
+
+
 def test_service_contract_documents_llm_provider_audit_fields():
     payload = service_openapi()
     schemas = payload["components"]["schemas"]

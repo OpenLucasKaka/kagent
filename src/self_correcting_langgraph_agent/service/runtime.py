@@ -203,6 +203,7 @@ class ServiceMetrics:
         self._runtime_runs_by_auth_subject_status: Dict[str, int] = {}
         self._runtime_resumes_by_auth_subject: Dict[str, int] = {}
         self._runtime_failed_observations_total = 0
+        self._runtime_progress_event_sink_failures_total = 0
         self._runtime_observation_errors_by_code: Dict[str, int] = {}
         self._runtime_approval_required_total = 0
         self._runtime_failed_budget_exhaustions_total = 0
@@ -267,6 +268,7 @@ class ServiceMetrics:
         error_code_counts: Optional[Mapping[str, int]] = None,
         auth_subject: str = "",
         resumed_by_auth_subject: str = "",
+        progress_event_sink_failure_count: int = 0,
     ) -> None:
         with self._lock:
             self._runtime_runs_total += 1
@@ -300,6 +302,10 @@ class ServiceMetrics:
                     self._runtime_run_duration_buckets[label] += 1
             self._runtime_run_duration_buckets["+Inf"] += 1
             self._runtime_failed_observations_total += max(0, failed_observation_count)
+            self._runtime_progress_event_sink_failures_total += max(
+                0,
+                progress_event_sink_failure_count,
+            )
             for error_code, count in (error_code_counts or {}).items():
                 normalized_error_code = str(error_code)
                 if not normalized_error_code:
@@ -371,6 +377,9 @@ class ServiceMetrics:
                 ),
                 "runtime_failed_observations_total": str(
                     self._runtime_failed_observations_total
+                ),
+                "runtime_progress_event_sink_failures_total": str(
+                    self._runtime_progress_event_sink_failures_total
                 ),
                 "runtime_observation_errors_by_code": _string_counts(
                     self._runtime_observation_errors_by_code
@@ -940,6 +949,11 @@ def prometheus_metrics_text(snapshot: Mapping[str, Any]) -> str:
         )
     lines.extend(
         [
+            "# HELP self_correcting_agent_runtime_progress_event_sink_failures_total "
+            "Runtime progress event sink delivery failures.",
+            "# TYPE self_correcting_agent_runtime_progress_event_sink_failures_total counter",
+            "self_correcting_agent_runtime_progress_event_sink_failures_total "
+            f"{snapshot.get('runtime_progress_event_sink_failures_total', '0')}",
             "# HELP self_correcting_agent_runtime_approval_required_total "
             "Approval-required observations produced by Codex-style runtime runs.",
             "# TYPE self_correcting_agent_runtime_approval_required_total counter",
