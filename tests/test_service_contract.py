@@ -637,6 +637,13 @@ def test_service_contract_documents_named_success_schemas():
         "type": "array",
         "items": {"$ref": "#/components/schemas/RuntimeEvent"},
     }
+    assert schemas["RuntimeRunResponse"]["properties"]["progress_events"] == {
+        "type": "array",
+        "items": {"type": "object"},
+    }
+    assert schemas["RuntimeRunResponse"]["properties"][
+        "progress_event_sink_failure_count"
+    ] == {"type": "string"}
     assert schemas["RuntimeToolsResponse"]["properties"]["tools"] == {
         "type": "array",
         "items": {"$ref": "#/components/schemas/RuntimeToolMetadata"},

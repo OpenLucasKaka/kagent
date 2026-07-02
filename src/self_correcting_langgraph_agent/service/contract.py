@@ -322,6 +322,11 @@ def service_openapi() -> Dict[str, Any]:
                             "type": "array",
                             "items": {"$ref": "#/components/schemas/RuntimeEvent"},
                         },
+                        "progress_events": {
+                            "type": "array",
+                            "items": {"type": "object"},
+                        },
+                        "progress_event_sink_failure_count": {"type": "string"},
                         "error_code": {"type": "string"},
                         "error": {"type": "string"},
                     },

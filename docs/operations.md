@@ -707,7 +707,9 @@ Timeline responses also include redacted `progress_events` and
 exclude tool inputs, patch bodies, and observation outputs. Each progress event
 includes `run_id`, so streaming sinks and timeline UIs can correlate planner,
 policy, tool, and completion events without copying context from the outer
-response.
+response. If an in-process progress event sink fails, the runtime continues the
+run and reports `progress_event_sink_failure_count` in the response for
+operator triage.
 Use
 `GET /runtime/runs/{run_id}/artifacts` to list artifact metadata without
 content before selecting a specific deliverable. Use

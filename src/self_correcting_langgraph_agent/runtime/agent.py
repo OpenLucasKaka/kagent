@@ -93,12 +93,17 @@ def run_runtime_agent(
     pending_approval: Dict[str, Any] = {}
     iteration_count = 0
     progress_events: List[Dict[str, Any]] = []
+    progress_event_sink_failure_count = 0
 
     def emit_progress(event: Dict[str, Any]) -> None:
+        nonlocal progress_event_sink_failure_count
         event_with_run_id = {"run_id": run_id, **event}
         progress_events.append(event_with_run_id)
         if event_sink is not None:
-            event_sink(event_with_run_id)
+            try:
+                event_sink(event_with_run_id)
+            except Exception:
+                progress_event_sink_failure_count += 1
 
     for iteration in range(1, max_iterations + 1):
         iteration_count = iteration
@@ -350,6 +355,10 @@ def run_runtime_agent(
         iteration_count=str(iteration_count),
         duration_seconds=result["duration_seconds"],
     )
+    if progress_event_sink_failure_count:
+        result["progress_event_sink_failure_count"] = str(
+            progress_event_sink_failure_count
+        )
     return result
 
 

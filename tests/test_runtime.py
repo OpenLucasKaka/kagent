@@ -744,3 +744,27 @@ def test_runtime_agent_emits_redacted_progress_events():
     assert progress_events[-1]["duration_seconds"] == result["duration_seconds"]
     assert {event["run_id"] for event in progress_events} == {result["run_id"]}
     assert "secret progress body" not in json.dumps(progress_events)
+
+
+def test_runtime_agent_does_not_fail_when_progress_event_sink_fails():
+    provider = FakeLLMProvider(
+        '{"actions":[{"id":"step-1","tool":"note",'
+        '"input":{"text":"hello"},"reason":"capture"}],"final_answer":"done"}'
+    )
+    attempted_events = []
+
+    def failing_sink(event):
+        attempted_events.append(event)
+        raise RuntimeError("sink offline")
+
+    result = run_runtime_agent(
+        "capture hello",
+        provider=provider,
+        event_sink=failing_sink,
+    )
+
+    assert result["status"] == "done"
+    assert result["answer"] == "done"
+    assert result["progress_event_sink_failure_count"] == "6"
+    assert len(result["progress_events"]) == 6
+    assert attempted_events == result["progress_events"]
