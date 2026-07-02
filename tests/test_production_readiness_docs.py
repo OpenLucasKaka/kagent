@@ -166,20 +166,26 @@ def test_production_readiness_checklist_documents_release_gates():
     assert "exit code 1" in readiness
 
 
-def test_readme_documents_service_runtime_controls():
-    readme = Path("README.md").read_text()
+def test_detailed_docs_document_service_runtime_controls():
+    detailed_docs = "\n".join(
+        [
+            Path("docs/operations.md").read_text(),
+            Path("docs/deployment.md").read_text(),
+            Path("docs/architecture.md").read_text(),
+        ]
+    )
 
-    assert "SELF_CORRECTING_SERVICE_AUTH_TOKEN" in readme
-    assert "SELF_CORRECTING_SERVICE_RATE_LIMIT_PER_MINUTE" in readme
-    assert "SELF_CORRECTING_SERVICE_MAX_CONCURRENT_RUNS" in readme
-    assert "SELF_CORRECTING_SERVICE_MAX_GOAL_CHARS" in readme
-    assert "SELF_CORRECTING_SERVICE_ALLOW_FULL_TRACE_RESPONSE" in readme
-    assert "SELF_CORRECTING_SERVICE_PROTECT_DIAGNOSTICS" in readme
-    assert "SELF_CORRECTING_SERVICE_RUN_TIMEOUT_SECONDS" in readme
-    assert "SELF_CORRECTING_SERVICE_REQUEST_TIMEOUT_SECONDS" in readme
-    assert "SELF_CORRECTING_SERVICE_RUNTIME_ALLOWED_TOOLS" in readme
-    assert "SELF_CORRECTING_SERVICE_RUNTIME_ALLOWED_TOOLS_BY_SUBJECT" in readme
-    assert "SELF_CORRECTING_SERVICE_TRUST_FORWARDED_FOR" in readme
-    assert "SELF_CORRECTING_SERVICE_TRACE_DIR" in readme
-    assert "SSRF" in readme
-    assert "does not follow redirects" in readme
+    assert "SELF_CORRECTING_SERVICE_AUTH_TOKEN" in detailed_docs
+    assert "SELF_CORRECTING_SERVICE_RATE_LIMIT_PER_MINUTE" in detailed_docs
+    assert "SELF_CORRECTING_SERVICE_MAX_CONCURRENT_RUNS" in detailed_docs
+    assert "SELF_CORRECTING_SERVICE_MAX_GOAL_CHARS" in detailed_docs
+    assert "SELF_CORRECTING_SERVICE_ALLOW_FULL_TRACE_RESPONSE" in detailed_docs
+    assert "SELF_CORRECTING_SERVICE_PROTECT_DIAGNOSTICS" in detailed_docs
+    assert "SELF_CORRECTING_SERVICE_RUN_TIMEOUT_SECONDS" in detailed_docs
+    assert "SELF_CORRECTING_SERVICE_REQUEST_TIMEOUT_SECONDS" in detailed_docs
+    assert "SELF_CORRECTING_SERVICE_RUNTIME_ALLOWED_TOOLS" in detailed_docs
+    assert "SELF_CORRECTING_SERVICE_RUNTIME_ALLOWED_TOOLS_BY_SUBJECT" in detailed_docs
+    assert "SELF_CORRECTING_SERVICE_TRUST_FORWARDED_FOR" in detailed_docs
+    assert "SELF_CORRECTING_SERVICE_TRACE_DIR" in detailed_docs
+    assert "SSRF" in detailed_docs
+    assert "does not follow redirects" in detailed_docs
