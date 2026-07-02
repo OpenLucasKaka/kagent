@@ -143,6 +143,9 @@ def prometheus_rules_status():
 
 metrics_status, metrics_text = request_text(metrics_path)
 missing_metrics = [metric for metric in required_metrics if metric not in metrics_text]
+required_metrics_sha256 = hashlib.sha256(
+    "\n".join(sorted(required_metrics)).encode("utf-8")
+).hexdigest()
 dashboard_status, dashboard_sha256 = grafana_status()
 rules_status, rules_sha256 = prometheus_rules_status()
 prometheus_query_status, prometheus_result_count = request_prometheus_query()
@@ -166,6 +169,7 @@ result = {
     "required_metrics_present": str(not missing_metrics).lower(),
     "required_metric_count": str(len(required_metrics)),
     "missing_required_metrics": missing_metrics,
+    "required_metrics_sha256": required_metrics_sha256,
     "metrics_sha256": hashlib.sha256(metrics_text.encode("utf-8")).hexdigest(),
     "grafana_dashboard_status": dashboard_status,
     "grafana_dashboard_sha256": dashboard_sha256,

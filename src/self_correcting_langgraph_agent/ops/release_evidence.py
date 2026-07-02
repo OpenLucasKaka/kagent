@@ -79,12 +79,29 @@ REQUIRED_OBSERVABILITY_ACCEPTANCE_VALUES = {
     "prometheus_rules_status": "passed",
     "required_metrics_present": "true",
 }
+REQUIRED_OBSERVABILITY_ACCEPTANCE_METRICS = (
+    "self_correcting_agent_build_info",
+    "self_correcting_agent_request_duration_seconds_bucket",
+    "self_correcting_agent_requests_total",
+    "self_correcting_agent_responses_total",
+    "self_correcting_agent_runtime_approval_required_total",
+    "self_correcting_agent_runtime_progress_event_sink_failures_total",
+    "self_correcting_agent_runtime_run_duration_seconds_bucket",
+    "self_correcting_agent_runtime_runs_by_auth_subject_total",
+    "self_correcting_agent_runtime_runs_total",
+    "self_correcting_agent_runtime_stale_pending_approvals_current",
+)
+REQUIRED_OBSERVABILITY_ACCEPTANCE_METRICS_SHA256 = hashlib.sha256(
+    "\n".join(sorted(REQUIRED_OBSERVABILITY_ACCEPTANCE_METRICS)).encode("utf-8")
+).hexdigest()
 REQUIRED_OBSERVABILITY_ACCEPTANCE_SHA_FIELDS = (
     "grafana_dashboard_sha256",
     "metrics_sha256",
     "prometheus_rules_sha256",
 )
-MIN_OBSERVABILITY_ACCEPTANCE_REQUIRED_METRIC_COUNT = 10
+MIN_OBSERVABILITY_ACCEPTANCE_REQUIRED_METRIC_COUNT = len(
+    REQUIRED_OBSERVABILITY_ACCEPTANCE_METRICS
+)
 REQUIRED_INTERNAL_ROLLOUT_FIELDS = (
     "environment",
     "expected_environment",
@@ -476,6 +493,7 @@ def _observability_acceptance_record(path: Path) -> Dict[str, Any]:
         "missing_required_metrics": _string_list(
             payload.get("missing_required_metrics")
         ),
+        "required_metrics_sha256": str(payload.get("required_metrics_sha256", "")),
         "metrics_sha256": str(payload.get("metrics_sha256", "")),
         "grafana_dashboard_status": str(
             payload.get("grafana_dashboard_status", "")
@@ -617,6 +635,11 @@ def _observability_acceptance_missing_fields(payload: Dict[str, Any]) -> List[st
         or len(missing_required_metrics) > 0
     ):
         missing.append("missing_required_metrics")
+    if (
+        str(payload.get("required_metrics_sha256", ""))
+        != REQUIRED_OBSERVABILITY_ACCEPTANCE_METRICS_SHA256
+    ):
+        missing.append("required_metrics_sha256")
     for field in REQUIRED_OBSERVABILITY_ACCEPTANCE_SHA_FIELDS:
         if not _is_sha256(str(payload.get(field, ""))):
             missing.append(field)

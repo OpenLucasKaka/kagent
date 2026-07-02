@@ -1191,6 +1191,7 @@ def _observability_acceptance_record(evidence_path: str) -> Dict[str, Any]:
         "missing_required_metrics": _string_list(
             payload.get("missing_required_metrics")
         ),
+        "required_metrics_sha256": str(payload.get("required_metrics_sha256", "")),
         "metrics_sha256": str(payload.get("metrics_sha256", "")),
         "grafana_dashboard_status": str(
             payload.get("grafana_dashboard_status", "")

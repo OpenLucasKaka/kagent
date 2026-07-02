@@ -227,10 +227,12 @@ at least one matching sample. Attach the redacted JSON to
 `--observability-acceptance-evidence` and enforce it with
 `--require-observability-acceptance` before company-wide enablement. The
 evidence must include `metrics_status`, `required_metrics_present`,
-`required_metric_count`, `missing_required_metrics`, `metrics_sha256`,
-`grafana_dashboard_status`, `grafana_dashboard_sha256`, `prometheus_rules_status`,
+`required_metric_count`, `missing_required_metrics`,
+`required_metrics_sha256`, `metrics_sha256`, `grafana_dashboard_status`,
+`grafana_dashboard_sha256`, `prometheus_rules_status`,
 `prometheus_rules_sha256`, and `prometheus_query_status`; missing fields produce
-`invalid_evidence`, and `missing_required_metrics` must be an empty list. The
+`invalid_evidence`, `missing_required_metrics` must be an empty list, and
+`required_metrics_sha256` must match the current required metric checklist. The
 evidence schema must be `evidence_schema_version: "1"`.
 
 ## Staging Acceptance

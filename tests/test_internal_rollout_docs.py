@@ -54,6 +54,7 @@ def test_internal_rollout_guide_is_linked_and_actionable():
     assert "deploy/prometheus/self-correcting-agent-servicemonitor.yaml" in guide
     assert "Grafana" in guide
     assert "missing_required_metrics" in guide
+    assert "required_metrics_sha256" in guide
     assert "self_correcting_agent_runtime_runs_by_auth_subject_total" in guide
     assert "self_correcting_agent_runtime_resumes_by_auth_subject_total" in guide
     assert "runtime_owner_auth_subject" in guide
