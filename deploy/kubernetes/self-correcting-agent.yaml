@@ -1,0 +1,328 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: self-correcting-agent-secret
+  labels:
+    app.kubernetes.io/name: self-correcting-agent
+type: Opaque
+stringData:
+  SELF_CORRECTING_SERVICE_AUTH_TOKEN: "replace-with-a-long-random-token"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: self-correcting-agent-config
+  labels:
+    app.kubernetes.io/name: self-correcting-agent
+data:
+  SELF_CORRECTING_SERVICE_HOST: "0.0.0.0"
+  SELF_CORRECTING_SERVICE_PORT: "8000"
+  SELF_CORRECTING_SERVICE_MAX_REQUEST_BYTES: "65536"
+  SELF_CORRECTING_SERVICE_MAX_GOAL_CHARS: "4096"
+  SELF_CORRECTING_SERVICE_RATE_LIMIT_PER_MINUTE: "60"
+  SELF_CORRECTING_SERVICE_MAX_CONCURRENT_RUNS: "4"
+  SELF_CORRECTING_SERVICE_IDEMPOTENCY_CACHE_SIZE: "256"
+  SELF_CORRECTING_SERVICE_IDEMPOTENCY_CACHE_PATH: "/var/lib/self-correcting-agent/traces/.idempotency.sqlite3"
+  SELF_CORRECTING_SERVICE_RUNTIME_ALLOWED_TOOLS: ""
+  SELF_CORRECTING_SERVICE_RUNTIME_ALLOWED_TOOLS_BY_SUBJECT: ""
+  SELF_CORRECTING_SERVICE_RUNTIME_MAX_ITERATIONS: "10"
+  SELF_CORRECTING_SERVICE_RUNTIME_PENDING_APPROVAL_STALE_SECONDS: "3600"
+  SELF_CORRECTING_SERVICE_ALLOW_FULL_TRACE_RESPONSE: "false"
+  SELF_CORRECTING_SERVICE_PROTECT_DIAGNOSTICS: "true"
+  SELF_CORRECTING_SERVICE_TRUST_FORWARDED_FOR: "false"
+  SELF_CORRECTING_SERVICE_TRACE_DIR: "/var/lib/self-correcting-agent/traces"
+  SELF_CORRECTING_SERVICE_RUN_TIMEOUT_SECONDS: "30"
+  SELF_CORRECTING_SERVICE_REQUEST_TIMEOUT_SECONDS: "10"
+  SELF_CORRECTING_MAX_STEPS: "6"
+  SELF_CORRECTING_MAX_RETRIES: "2"
+  PYTHONDONTWRITEBYTECODE: "1"
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: self-correcting-agent-traces
+  labels:
+    app.kubernetes.io/name: self-correcting-agent
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: self-correcting-agent
+  labels:
+    app.kubernetes.io/name: self-correcting-agent
+spec:
+  replicas: 2
+  revisionHistoryLimit: 3
+  minReadySeconds: 5
+  progressDeadlineSeconds: 120
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: self-correcting-agent
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: self-correcting-agent
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/path: /metrics.prom
+        prometheus.io/port: "8000"
+    spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 45
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: self-correcting-agent
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      initContainers:
+        - name: production-doctor
+          image: self-correcting-langgraph-agent:0.1.0
+          imagePullPolicy: IfNotPresent
+          command:
+            - self-correcting-agent-doctor
+            - --production
+          envFrom:
+            - configMapRef:
+                name: self-correcting-agent-config
+            - secretRef:
+                name: self-correcting-agent-secret
+          volumeMounts:
+            - name: traces
+              mountPath: /var/lib/self-correcting-agent/traces
+            - name: tmp
+              mountPath: /tmp
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+              ephemeral-storage: 32Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+              ephemeral-storage: 64Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            seccompProfile:
+              type: RuntimeDefault
+            capabilities:
+              drop:
+                - ALL
+      containers:
+        - name: service
+          image: self-correcting-langgraph-agent:0.1.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8000
+          envFrom:
+            - configMapRef:
+                name: self-correcting-agent-config
+            - secretRef:
+                name: self-correcting-agent-secret
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+          startupProbe:
+            httpGet:
+              path: /ready
+              port: http
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 12
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 20
+            timeoutSeconds: 2
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+              ephemeral-storage: 64Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+              ephemeral-storage: 128Mi
+          volumeMounts:
+            - name: traces
+              mountPath: /var/lib/self-correcting-agent/traces
+            - name: tmp
+              mountPath: /tmp
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            seccompProfile:
+              type: RuntimeDefault
+            capabilities:
+              drop:
+                - ALL
+      volumes:
+        - name: traces
+          persistentVolumeClaim:
+            claimName: self-correcting-agent-traces
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: self-correcting-agent
+  labels:
+    app.kubernetes.io/name: self-correcting-agent
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: self-correcting-agent
+  ports:
+    - name: http
+      port: 8000
+      targetPort: http
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: self-correcting-agent
+  labels:
+    app.kubernetes.io/name: self-correcting-agent
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: self-correcting-agent
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: self-correcting-agent
+  labels:
+    app.kubernetes.io/name: self-correcting-agent
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: self-correcting-agent
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              self-correcting-agent-access: "true"
+          podSelector:
+            matchLabels:
+              self-correcting-agent-access: "true"
+      ports:
+        - protocol: TCP
+          port: 8000
+  egress:
+    - ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    - ports:
+        - protocol: TCP
+          port: 443
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: self-correcting-agent-trace-prune
+  labels:
+    app.kubernetes.io/name: self-correcting-agent
+spec:
+  schedule: "17 3 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: self-correcting-agent
+            app.kubernetes.io/component: trace-prune
+        spec:
+          automountServiceAccountToken: false
+          restartPolicy: OnFailure
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+            fsGroup: 10001
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: trace-prune
+              image: self-correcting-langgraph-agent:0.1.0
+              imagePullPolicy: IfNotPresent
+              command:
+                - self-correcting-agent-trace-prune
+              args:
+                - /var/lib/self-correcting-agent/traces
+                - --max-age-days
+                - "7"
+                - --runtime-only
+                - --delete
+              env:
+                - name: PYTHONDONTWRITEBYTECODE
+                  value: "1"
+              resources:
+                requests:
+                  cpu: 25m
+                  memory: 64Mi
+                  ephemeral-storage: 32Mi
+                limits:
+                  cpu: 250m
+                  memory: 256Mi
+                  ephemeral-storage: 64Mi
+              volumeMounts:
+                - name: traces
+                  mountPath: /var/lib/self-correcting-agent/traces
+                - name: tmp
+                  mountPath: /tmp
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                seccompProfile:
+                  type: RuntimeDefault
+                capabilities:
+                  drop:
+                    - ALL
+          volumes:
+            - name: traces
+              persistentVolumeClaim:
+                claimName: self-correcting-agent-traces
+            - name: tmp
+              emptyDir:
+                sizeLimit: 64Mi

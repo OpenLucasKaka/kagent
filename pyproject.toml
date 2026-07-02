@@ -1,0 +1,54 @@
+[build-system]
+requires = ["setuptools>=61", "wheel>=0.45,<1"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "self-correcting-langgraph-agent"
+version = "0.1.0"
+description = "A bounded self-correcting agent built with LangGraph."
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "langgraph>=0.2,<0.7",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8,<9",
+    "ruff>=0.8,<1",
+    "setuptools>=61",
+    "wheel>=0.45,<1",
+]
+
+[project.scripts]
+self-correcting-agent = "self_correcting_langgraph_agent.cli:main"
+self-correcting-agent-batch = "self_correcting_langgraph_agent.ops.batch:main"
+self-correcting-agent-doctor = "self_correcting_langgraph_agent.ops.doctor:main"
+self-correcting-agent-eval = "self_correcting_langgraph_agent.eval.evaluator:main"
+self-correcting-agent-metrics = "self_correcting_langgraph_agent.ops.metrics:main"
+self-correcting-agent-release-evidence = "self_correcting_langgraph_agent.ops.release_evidence:main"
+self-correcting-agent-release-manifest = "self_correcting_langgraph_agent.ops.release_manifest:main"
+self-correcting-agent-serve = "self_correcting_langgraph_agent.service:main"
+self-correcting-agent-trace-prune = "self_correcting_langgraph_agent.service.trace_store:main"
+self-correcting-agent-trace-replay = "self_correcting_langgraph_agent.ops.trace_replay:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+self_correcting_langgraph_agent = ["py.typed"]
+
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["tests"]
+filterwarnings = [
+    "ignore:urllib3 v2 only supports OpenSSL 1.1.1+:urllib3.exceptions.NotOpenSSLWarning",
+    "ignore:The default value of `allowed_objects` will change in a future version:langchain_core._api.deprecation.LangChainPendingDeprecationWarning",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]

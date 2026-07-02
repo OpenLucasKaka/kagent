@@ -1,0 +1,30 @@
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+build/
+dist/
+.DS_Store
+
+# Local secrets and operator-specific configuration.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.csr
+*secret*
+*token*
+*credential*
+
+# Local runtime outputs.
+*.log
+*.jsonl
+coverage.xml
+.coverage
+htmlcov/

@@ -1,0 +1,39 @@
+[Unit]
+Description=Self-Correcting LangGraph Agent Service
+After=network.target
+
+[Service]
+Type=simple
+User=self-correcting-agent
+Group=self-correcting-agent
+WorkingDirectory=/opt/self-correcting-langgraph-agent
+EnvironmentFile=/etc/self-correcting-agent.env
+ExecStartPre=/opt/self-correcting-langgraph-agent/.venv/bin/self-correcting-agent-doctor --production --trace-dir /var/lib/self-correcting-agent/traces
+ExecStart=/opt/self-correcting-langgraph-agent/.venv/bin/self-correcting-agent-serve --trace-dir /var/lib/self-correcting-agent/traces --host ${SELF_CORRECTING_SERVICE_HOST} --port ${SELF_CORRECTING_SERVICE_PORT}
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=45
+MemoryMax=1G
+CPUQuota=100%
+TasksMax=64
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+CapabilityBoundingSet=
+LockPersonality=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictSUIDSGID=true
+RestrictRealtime=true
+SystemCallArchitectures=native
+StateDirectory=self-correcting-agent
+ReadWritePaths=/var/lib/self-correcting-agent
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

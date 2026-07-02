@@ -1,0 +1,15 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: self-correcting-agent
+  labels:
+    app.kubernetes.io/name: self-correcting-agent
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: self-correcting-agent
+  endpoints:
+    - port: http
+      path: /metrics.prom
+      interval: 30s
+      scrapeTimeout: 5s

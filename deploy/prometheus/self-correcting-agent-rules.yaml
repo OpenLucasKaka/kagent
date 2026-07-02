@@ -1,0 +1,314 @@
+groups:
+  - name: self-correcting-agent.rules
+    rules:
+      - alert: SelfCorrectingAgentServiceDown
+        expr: up{job="self-correcting-agent"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: Self-correcting agent service is not being scraped
+          description: Prometheus has not scraped a healthy service target for 2 minutes.
+
+      - alert: SelfCorrectingAgentHighErrorRate
+        expr: |
+          sum(rate(self_correcting_agent_responses_total{status=~"5.."}[5m]))
+            /
+          clamp_min(sum(rate(self_correcting_agent_requests_total[5m])), 1) > 0.05
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Self-correcting agent HTTP 5xx rate is elevated
+          description: More than 5 percent of HTTP responses are 5xx over 10 minutes.
+
+      - alert: SelfCorrectingAgentHighRequestLatency
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum(rate(self_correcting_agent_request_duration_seconds_bucket[5m])) by (le)
+          ) > 2
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Self-correcting agent HTTP request latency is elevated
+          description: 95th percentile HTTP request latency has exceeded 2 seconds for 10 minutes.
+
+      - alert: SelfCorrectingAgentSlowAgentRuns
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum(rate(self_correcting_agent_agent_run_duration_seconds_bucket[5m])) by (le)
+          ) > 2
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Self-correcting agent run latency is elevated
+          description: 95th percentile internal agent run latency has exceeded 2 seconds for 10 minutes.
+
+      - alert: SelfCorrectingAgentSlowRuntimeRuns
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum(rate(self_correcting_agent_runtime_run_duration_seconds_bucket[5m])) by (le)
+          ) > 5
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Codex-style runtime run latency is elevated
+          description: 95th percentile Codex-style runtime latency has exceeded 5 seconds for 10 minutes.
+
+      - alert: SelfCorrectingAgentRunTimeouts
+        expr: sum(rate(self_correcting_agent_run_status_total{status="timeout"}[5m])) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Self-correcting agent runs are timing out
+          description: At least one /run request has exceeded the configured run timeout.
+
+      - alert: SelfCorrectingAgentRunFailures
+        expr: sum(rate(self_correcting_agent_run_status_total{status="failed"}[5m])) > 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Self-correcting agent runs are failing
+          description: Agent execution failures have been observed in the last 10 minutes.
+
+      - alert: SelfCorrectingAgentRuntimeRunFailures
+        expr: sum(rate(self_correcting_agent_runtime_run_status_total{status="failed"}[5m])) > 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Codex-style runtime runs are failing
+          description: Runtime executions are ending in failed status; inspect latest_failed_* run summaries.
+
+      - alert: SelfCorrectingAgentRuntimeSubjectRunFailures
+        expr: |
+          sum by (auth_subject) (
+            rate(
+              self_correcting_agent_runtime_run_status_by_auth_subject_total{
+                status="failed"
+              }[5m]
+            )
+          ) > 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Codex-style runtime runs are failing for an internal subject
+          description: A named internal auth subject has runtime executions ending in failed status.
+
+      - alert: SelfCorrectingAgentRuntimeApprovalsPending
+        expr: sum(rate(self_correcting_agent_runtime_approval_required_total[5m])) > 0
+        for: 10m
+        labels:
+          severity: info
+        annotations:
+          summary: Codex-style runtime runs require human approval
+          description: Runtime policy gates are producing approval-required observations.
+
+      - alert: SelfCorrectingAgentRuntimeSubjectApprovalsPending
+        expr: |
+          sum by (auth_subject) (
+            rate(
+              self_correcting_agent_runtime_run_status_by_auth_subject_total{
+                status="requires_approval"
+              }[5m]
+            )
+          ) > 0
+        for: 10m
+        labels:
+          severity: info
+        annotations:
+          summary: Codex-style runtime runs require approval for an internal subject
+          description: A named internal auth subject is producing approval-required runtime runs.
+
+      - alert: SelfCorrectingAgentRuntimeStalePendingApprovals
+        expr: sum(self_correcting_agent_runtime_stale_pending_approvals_current) > 0
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: Codex-style runtime approvals are stale
+          description: Pending approvals have exceeded the configured stale approval threshold.
+
+      - alert: SelfCorrectingAgentRuntimeSubjectResumes
+        expr: |
+          sum by (auth_subject) (
+            rate(self_correcting_agent_runtime_resumes_by_auth_subject_total[5m])
+          ) > 0
+        for: 10m
+        labels:
+          severity: info
+        annotations:
+          summary: Codex-style runtime runs are being resumed by an internal subject
+          description: A named internal auth subject is resuming pending runtime runs; inspect resumed_by_auth_subject audit fields.
+
+      - alert: SelfCorrectingAgentRuntimeBudgetExhausted
+        expr: sum(rate(self_correcting_agent_runtime_failed_budget_exhaustions_total[5m])) > 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Codex-style runtime runs are exhausting iteration budgets
+          description: Failed runtime executions spent all allowed planner iterations.
+
+      - alert: SelfCorrectingAgentRuntimeToolExecutionTimeouts
+        expr: |
+          sum(rate(
+            self_correcting_agent_runtime_observation_errors_total{
+              error_code="tool_execution_timeout"
+            }[5m]
+          )) > 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Codex-style runtime tools are timing out
+          description: Runtime tool handlers are exceeding their declared timeout_seconds budgets.
+
+      - alert: SelfCorrectingAgentTracePersistenceFailures
+        expr: |
+          sum(rate(
+            self_correcting_agent_error_responses_total{error_code="trace_persistence_failed"}[5m]
+          )) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Self-correcting agent trace persistence is failing
+          description: Completed runs could not persist trace files; check trace storage and mounts.
+
+      - alert: SelfCorrectingAgentConcurrencySaturated
+        expr: |
+          sum(rate(
+            self_correcting_agent_error_responses_total{error_code="too_many_concurrent_runs"}[5m]
+          )) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Self-correcting agent run concurrency is saturated
+          description: /run requests are being rejected because all run slots are occupied.
+
+      - alert: SelfCorrectingAgentRateLimited
+        expr: |
+          sum(rate(
+            self_correcting_agent_error_responses_total{error_code="rate_limit_exceeded"}[5m]
+          )) > 0
+        for: 10m
+        labels:
+          severity: info
+        annotations:
+          summary: Self-correcting agent clients are being rate limited
+          description: One or more clients are hitting the configured /run rate limit.
+
+      - alert: SelfCorrectingAgentIdempotencyConflicts
+        expr: |
+          sum(rate(
+            self_correcting_agent_error_responses_total{error_code="idempotency_key_conflict"}[5m]
+          )) > 0
+        for: 10m
+        labels:
+          severity: info
+        annotations:
+          summary: Self-correcting agent clients are misusing idempotency keys
+          description: One or more clients reused an Idempotency-Key with a different /run body.
+
+      - alert: SelfCorrectingAgentIdempotencyCacheEvictions
+        expr: |
+          sum(increase(self_correcting_agent_idempotency_cache_evictions[10m])) > 0
+        for: 10m
+        labels:
+          severity: info
+        annotations:
+          summary: Self-correcting agent idempotency cache is evicting entries
+          description: Idempotency cache entries are being evicted during the retry window.
+
+      - alert: SelfCorrectingAgentRequestBodyTimeouts
+        expr: |
+          sum(rate(
+            self_correcting_agent_error_responses_total{error_code="request_body_timeout"}[5m]
+          )) > 0
+        for: 10m
+        labels:
+          severity: info
+        annotations:
+          summary: Self-correcting agent clients are timing out while sending bodies
+          description: One or more clients or gateways stalled before completing request bodies.
+
+      - alert: SelfCorrectingAgentMalformedRunRequests
+        expr: |
+          sum(rate(
+            self_correcting_agent_error_responses_total{
+              error_code=~"invalid_content_length|incomplete_request_body|unsupported_media_type"
+            }[5m]
+          )) > 0
+        for: 10m
+        labels:
+          severity: info
+        annotations:
+          summary: Self-correcting agent is rejecting malformed /run requests
+          description: Clients are sending invalid lengths, incomplete bodies, or non-JSON media types.
+
+      - alert: SelfCorrectingAgentOversizedRunRequests
+        expr: |
+          sum(rate(
+            self_correcting_agent_error_responses_total{
+              error_code=~"request_too_large|goal_too_large"
+            }[5m]
+          )) > 0
+        for: 10m
+        labels:
+          severity: info
+        annotations:
+          summary: Self-correcting agent is rejecting oversized /run requests
+          description: Request bodies or goals are exceeding configured /run size limits.
+
+      - alert: SelfCorrectingAgentSuspiciousHttpFraming
+        expr: |
+          sum(rate(
+            self_correcting_agent_error_responses_total{
+              error_code=~"invalid_transfer_encoding|expectation_failed"
+            }[5m]
+          )) > 0
+        for: 10m
+        labels:
+          severity: info
+        annotations:
+          summary: Self-correcting agent received unsupported HTTP framing headers
+          description: Transfer-Encoding or Expect headers reached /run; check gateways and clients.
+
+      - alert: SelfCorrectingAgentUnknownMethodTraffic
+        expr: |
+          sum(rate(
+            self_correcting_agent_requests_by_method_total{method="__unknown__"}[5m]
+          )) > 0
+        for: 10m
+        labels:
+          severity: info
+        annotations:
+          summary: Self-correcting agent is receiving unknown HTTP methods
+          description: Unknown HTTP methods are being requested; check access logs for raw methods.
+
+      - alert: SelfCorrectingAgentUnknownRouteTraffic
+        expr: |
+          sum(rate(
+            self_correcting_agent_requests_by_path_total{path="__unknown__"}[5m]
+          )) > 0
+          or
+          sum(rate(
+            self_correcting_agent_error_responses_total{error_code="not_found"}[5m]
+          )) > 0
+        for: 10m
+        labels:
+          severity: info
+        annotations:
+          summary: Self-correcting agent is receiving unknown route traffic
+          description: Unknown HTTP paths are being requested; check access logs for raw paths.

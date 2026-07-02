@@ -1,0 +1,14 @@
+.git
+.github
+.pytest_cache
+.ruff_cache
+.venv
+__pycache__
+*.pyc
+*.pyo
+*.egg-info
+src/self_correcting_langgraph_agent.egg-info
+dist
+build
+.DS_Store
+docs/superpowers
