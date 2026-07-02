@@ -709,7 +709,9 @@ includes `run_id`, so streaming sinks and timeline UIs can correlate planner,
 policy, tool, and completion events without copying context from the outer
 response. If an in-process progress event sink fails, the runtime continues the
 run and reports `progress_event_sink_failure_count` in the response for
-operator triage.
+operator triage; persisted runtime status, list, and summary responses surface
+the same count so dashboards can alert on broken event delivery without opening
+full traces.
 Use
 `GET /runtime/runs/{run_id}/artifacts` to list artifact metadata without
 content before selecting a specific deliverable. Use

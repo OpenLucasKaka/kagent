@@ -425,6 +425,9 @@ def runtime_status_summary(
         "observation_count": str(_list_count(observations)),
         "event_count": str(_list_count(trace.get("events"))),
         "progress_event_count": str(_list_count(trace.get("progress_events"))),
+        "progress_event_sink_failure_count": str(
+            _parse_non_negative_int(trace.get("progress_event_sink_failure_count"))
+        ),
         "failed_observation_count": str(
             _observation_status_count(observations, "failed")
         ),
@@ -580,6 +583,7 @@ def _empty_runtime_summary_aggregate() -> Dict[str, Any]:
         "tool_counts": {},
         "error_code_counts": {},
         "failed_observation_count": "0",
+        "progress_event_sink_failure_count": "0",
         "approval_required_count": "0",
         "pending_approval_count": "0",
         "final_answer_guardrail_applied_count": "0",
@@ -614,6 +618,10 @@ def _add_runtime_summary_to_aggregate(
     aggregate["failed_observation_count"] = str(
         int(aggregate["failed_observation_count"])
         + _parse_non_negative_int(summary.get("failed_observation_count"))
+    )
+    aggregate["progress_event_sink_failure_count"] = str(
+        int(aggregate["progress_event_sink_failure_count"])
+        + _parse_non_negative_int(summary.get("progress_event_sink_failure_count"))
     )
     aggregate["approval_required_count"] = str(
         int(aggregate["approval_required_count"])

@@ -1996,6 +1996,32 @@ def test_service_router_runtime_status_reports_final_answer_guardrail(tmp_path):
     assert "observations" not in payload
 
 
+def test_service_router_runtime_status_reports_progress_sink_failures(tmp_path):
+    persist_trace(
+        {
+            "trace_type": "codex_runtime",
+            "run_id": "sink-failed",
+            "status": "done",
+            "goal": "capture progress",
+            "progress_event_sink_failure_count": "2",
+            "plans": [{"actions": []}],
+            "observations": [],
+            "events": [],
+        },
+        str(tmp_path),
+    )
+
+    status_code, payload = service_router.handle_request(
+        "GET",
+        "/runtime/runs/sink-failed",
+        b"",
+        config=ServiceConfig(trace_dir=str(tmp_path)),
+    )
+
+    assert status_code == 200
+    assert payload["progress_event_sink_failure_count"] == "2"
+
+
 def test_service_router_runtime_status_requires_trace_persistence():
     status_code, payload = service_router.handle_request(
         "GET",
@@ -2092,6 +2118,7 @@ def test_service_router_runtime_runs_list_reports_persisted_summaries(tmp_path):
     assert all("latest_plan_action_ids" in run for run in payload["runs"])
     assert all("observation_count" in run for run in payload["runs"])
     assert all("event_count" in run for run in payload["runs"])
+    assert all("progress_event_sink_failure_count" in run for run in payload["runs"])
     assert all("duration_seconds" in run for run in payload["runs"])
     assert all("failed_observation_count" in run for run in payload["runs"])
     assert all("planner_failure_count" in run for run in payload["runs"])
@@ -2128,6 +2155,7 @@ def test_service_router_runtime_runs_summary_aggregates_visible_traces(tmp_path)
                 "reason": "runtime_identity_boundary",
                 "original_answer_omitted": "true",
             },
+            "progress_event_sink_failure_count": "3",
             "observations": [
                 {
                     "action_id": "fetch-site",
@@ -2160,6 +2188,7 @@ def test_service_router_runtime_runs_summary_aggregates_visible_traces(tmp_path)
             "goal": "fetch vendor status",
             "auth_subject": "ops",
             "pending_approval": {"id": "ops-fetch", "tool": "http_request"},
+            "progress_event_sink_failure_count": "2",
             "observations": [
                 {
                     "action_id": "ops-fetch",
@@ -2191,6 +2220,7 @@ def test_service_router_runtime_runs_summary_aggregates_visible_traces(tmp_path)
         "tool_counts": {"artifact": "1", "http_request": "2"},
         "error_code_counts": {"tool_execution_timeout": "1"},
         "failed_observation_count": "1",
+        "progress_event_sink_failure_count": "5",
         "approval_required_count": "1",
         "pending_approval_count": "1",
         "final_answer_guardrail_applied_count": "1",
