@@ -97,6 +97,7 @@ def test_release_evidence_cli_builds_verified_bundle(tmp_path):
                 "metrics_status": "200",
                 "required_metrics_present": "true",
                 "required_metric_count": "10",
+                "missing_required_metrics": [],
                 "metrics_sha256": "a" * 64,
                 "grafana_dashboard_status": "passed",
                 "grafana_dashboard_sha256": "b" * 64,
@@ -221,6 +222,7 @@ def test_release_evidence_cli_builds_verified_bundle(tmp_path):
         "metrics_status": "200",
         "required_metrics_present": "true",
         "required_metric_count": "10",
+        "missing_required_metrics": [],
         "metrics_sha256": "a" * 64,
         "grafana_dashboard_status": "passed",
         "grafana_dashboard_sha256": "b" * 64,
@@ -520,6 +522,7 @@ def test_release_evidence_cli_rejects_incomplete_observability_evidence(tmp_path
         "metrics_endpoint",
         "metrics_sha256",
         "metrics_status",
+        "missing_required_metrics",
         "prometheus_query_status",
         "prometheus_rules_sha256",
         "prometheus_rules_status",
@@ -544,6 +547,7 @@ def test_release_evidence_cli_rejects_stale_observability_metric_count(tmp_path)
                 "metrics_status": "200",
                 "required_metrics_present": "true",
                 "required_metric_count": "9",
+                "missing_required_metrics": [],
                 "metrics_sha256": "a" * 64,
                 "grafana_dashboard_status": "passed",
                 "grafana_dashboard_sha256": "b" * 64,
@@ -582,6 +586,64 @@ def test_release_evidence_cli_rejects_stale_observability_metric_count(tmp_path)
         "observability_acceptance_invalid_evidence"
         in payload["summary"]["failed_checks"]
     )
+
+
+def test_release_evidence_cli_rejects_observability_missing_metric_list(tmp_path):
+    readiness_path = tmp_path / "readiness-audit.json"
+    readiness_path.write_text(
+        json.dumps({"status": "passed", "summary": {"failed_checks": []}}) + "\n"
+    )
+    observability_acceptance_path = tmp_path / "observability-acceptance.json"
+    observability_acceptance_path.write_text(
+        json.dumps(
+            {
+                "evidence_schema_version": "1",
+                "status": "passed",
+                "base_url_host": "agent.internal",
+                "metrics_endpoint": "/metrics.prom",
+                "metrics_status": "200",
+                "required_metrics_present": "true",
+                "required_metric_count": "10",
+                "missing_required_metrics": [
+                    "self_correcting_agent_runtime_progress_event_sink_failures_total"
+                ],
+                "metrics_sha256": "a" * 64,
+                "grafana_dashboard_status": "passed",
+                "grafana_dashboard_sha256": "b" * 64,
+                "prometheus_rules_status": "passed",
+                "prometheus_rules_sha256": "c" * 64,
+                "prometheus_query_status": "not_configured",
+            }
+        )
+        + "\n"
+    )
+
+    completed = subprocess.run(
+        [
+            ".venv/bin/python",
+            "-m",
+            "self_correcting_langgraph_agent.ops.release_evidence",
+            "--run-checks-exit-code",
+            "0",
+            "--readiness-audit",
+            str(readiness_path),
+            "--observability-acceptance-evidence",
+            str(observability_acceptance_path),
+            "--require-observability-acceptance",
+        ],
+        capture_output=True,
+        text=True,
+    )
+    payload = json.loads(completed.stdout)
+
+    assert completed.returncode == 1
+    assert payload["observability_acceptance"]["status"] == "invalid_evidence"
+    assert payload["observability_acceptance"]["missing_required_metrics"] == [
+        "self_correcting_agent_runtime_progress_event_sink_failures_total"
+    ]
+    assert payload["observability_acceptance"]["missing_fields"] == [
+        "missing_required_metrics"
+    ]
 
 
 def test_release_evidence_cli_rejects_incomplete_internal_rollout_evidence(tmp_path):

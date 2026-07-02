@@ -473,6 +473,9 @@ def _observability_acceptance_record(path: Path) -> Dict[str, Any]:
         "metrics_status": str(payload.get("metrics_status", "")),
         "required_metrics_present": str(payload.get("required_metrics_present", "")),
         "required_metric_count": str(payload.get("required_metric_count", "")),
+        "missing_required_metrics": _string_list(
+            payload.get("missing_required_metrics")
+        ),
         "metrics_sha256": str(payload.get("metrics_sha256", "")),
         "grafana_dashboard_status": str(
             payload.get("grafana_dashboard_status", "")
@@ -608,6 +611,12 @@ def _observability_acceptance_missing_fields(payload: Dict[str, Any]) -> List[st
         and "required_metric_count" not in missing
     ):
         missing.append("required_metric_count")
+    missing_required_metrics = payload.get("missing_required_metrics")
+    if (
+        not isinstance(missing_required_metrics, list)
+        or len(missing_required_metrics) > 0
+    ):
+        missing.append("missing_required_metrics")
     for field in REQUIRED_OBSERVABILITY_ACCEPTANCE_SHA_FIELDS:
         if not _is_sha256(str(payload.get(field, ""))):
             missing.append(field)

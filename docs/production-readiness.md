@@ -202,13 +202,15 @@ exposes the required Prometheus metrics, the scrape/query path works, and the
 packaged Grafana/Prometheus artifacts are still coherent. A passing
 observability file must use `evidence_schema_version: "1"` and include
 `metrics_status`, `required_metrics_present`, `required_metric_count`,
-`metrics_sha256`, `grafana_dashboard_status`, `grafana_dashboard_sha256`,
-`prometheus_rules_status`, `prometheus_rules_sha256`, and
+`missing_required_metrics`, `metrics_sha256`, `grafana_dashboard_status`,
+`grafana_dashboard_sha256`, `prometheus_rules_status`, `prometheus_rules_sha256`, and
 `prometheus_query_status`; missing or invalid fields become `invalid_evidence`.
 Strict gates also reject stale observability evidence whose
 `required_metric_count` is lower than the current live metric checklist, forcing
 operators to rerun `scripts/observability_acceptance.sh` after observability
-coverage expands.
+coverage expands. `missing_required_metrics` must be an empty list, so evidence
+that claims all metrics are present but still carries missing metric names is
+blocked.
 Before opening the service to internal teams, complete
 `docs/internal-rollout.md` and attach internal rollout sign-off evidence for
 team subjects, runtime tool policy, provider smoke, staging acceptance,

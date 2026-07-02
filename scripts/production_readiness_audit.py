@@ -12,6 +12,7 @@ from self_correcting_langgraph_agent.ops.release_evidence import (
     _internal_rollout_missing_fields,
     _observability_acceptance_missing_fields,
     _staging_acceptance_missing_fields,
+    _string_list,
 )
 
 REQUIRED_ARTIFACTS = (
@@ -1187,6 +1188,9 @@ def _observability_acceptance_record(evidence_path: str) -> Dict[str, Any]:
             payload.get("required_metrics_present", "")
         ),
         "required_metric_count": str(payload.get("required_metric_count", "")),
+        "missing_required_metrics": _string_list(
+            payload.get("missing_required_metrics")
+        ),
         "metrics_sha256": str(payload.get("metrics_sha256", "")),
         "grafana_dashboard_status": str(
             payload.get("grafana_dashboard_status", "")

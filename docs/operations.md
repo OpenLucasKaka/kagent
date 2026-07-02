@@ -95,7 +95,8 @@ one result. It prints redacted JSON only, so the observability acceptance output
 can be attached to the release evidence bundle. Strict gates require metrics
 schema `1`, metrics status, required metric count, metrics scrape hash, Grafana
 dashboard status and hash, Prometheus rules status and hash, and Prometheus
-query status; missing required fields are reported as `invalid_evidence`.
+query status; `missing_required_metrics` must be an empty list. Missing or
+contradictory required fields are reported as `invalid_evidence`.
 
 Validate internal rollout sign-off before company-wide enablement:
 

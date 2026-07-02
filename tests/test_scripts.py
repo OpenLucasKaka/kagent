@@ -1004,6 +1004,7 @@ def test_production_approval_bundle_script_builds_strict_release_evidence(tmp_pa
                 "metrics_status": "200",
                 "required_metrics_present": "true",
                 "required_metric_count": "10",
+                "missing_required_metrics": [],
                 "metrics_sha256": "a" * 64,
                 "grafana_dashboard_status": "passed",
                 "grafana_dashboard_sha256": "b" * 64,
@@ -1649,6 +1650,7 @@ def test_production_readiness_audit_accepts_observability_acceptance_evidence(tm
                 "metrics_status": "200",
                 "required_metrics_present": "true",
                 "required_metric_count": "10",
+                "missing_required_metrics": [],
                 "metrics_sha256": "a" * 64,
                 "grafana_dashboard_status": "passed",
                 "grafana_dashboard_sha256": "b" * 64,
@@ -1744,6 +1746,7 @@ def test_production_readiness_audit_rejects_incomplete_observability_evidence(
         "metrics_endpoint",
         "metrics_sha256",
         "metrics_status",
+        "missing_required_metrics",
         "prometheus_query_status",
         "prometheus_rules_sha256",
         "prometheus_rules_status",
@@ -1766,6 +1769,7 @@ def test_production_readiness_audit_rejects_stale_observability_metric_count(
                 "metrics_status": "200",
                 "required_metrics_present": "true",
                 "required_metric_count": "9",
+                "missing_required_metrics": [],
                 "metrics_sha256": "a" * 64,
                 "grafana_dashboard_status": "passed",
                 "grafana_dashboard_sha256": "b" * 64,
@@ -1799,6 +1803,57 @@ def test_production_readiness_audit_rejects_stale_observability_metric_count(
         "observability_acceptance_invalid_evidence"
         in payload["summary"]["failed_checks"]
     )
+
+
+def test_production_readiness_audit_rejects_observability_missing_metric_list(
+    tmp_path,
+):
+    evidence_path = tmp_path / "observability-acceptance.json"
+    evidence_path.write_text(
+        json.dumps(
+            {
+                "evidence_schema_version": "1",
+                "status": "passed",
+                "base_url_host": "agent.internal",
+                "metrics_endpoint": "/metrics.prom",
+                "metrics_status": "200",
+                "required_metrics_present": "true",
+                "required_metric_count": "10",
+                "missing_required_metrics": [
+                    "self_correcting_agent_runtime_progress_event_sink_failures_total"
+                ],
+                "metrics_sha256": "a" * 64,
+                "grafana_dashboard_status": "passed",
+                "grafana_dashboard_sha256": "b" * 64,
+                "prometheus_rules_status": "passed",
+                "prometheus_rules_sha256": "c" * 64,
+                "prometheus_query_status": "not_configured",
+            }
+        )
+        + "\n"
+    )
+
+    completed = subprocess.run(
+        [
+            ".venv/bin/python",
+            "scripts/production_readiness_audit.py",
+            "--observability-acceptance-evidence",
+            str(evidence_path),
+            "--require-observability-acceptance",
+        ],
+        capture_output=True,
+        text=True,
+    )
+    payload = json.loads(completed.stdout)
+
+    assert completed.returncode == 1
+    assert payload["observability_acceptance"]["status"] == "invalid_evidence"
+    assert payload["observability_acceptance"]["missing_required_metrics"] == [
+        "self_correcting_agent_runtime_progress_event_sink_failures_total"
+    ]
+    assert payload["observability_acceptance"]["missing_fields"] == [
+        "missing_required_metrics"
+    ]
 
 
 def test_production_readiness_audit_accepts_internal_rollout_evidence(tmp_path):

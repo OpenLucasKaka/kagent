@@ -211,6 +211,7 @@ def test_operations_runbook_documents_continuous_iteration_and_failure_triage():
     assert "SELF_CORRECTING_LLM_RETRY_BACKOFF_SECONDS" in runbook
     assert "evidence_schema_version" in runbook
     assert "provider_snapshot" in runbook
+    assert "missing_required_metrics" in runbook
     assert "llm_base_url_host" in runbook
     assert "capability_checks" in runbook
     assert "trace_status" in runbook
