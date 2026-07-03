@@ -264,6 +264,9 @@ During rollout, verify `/runtime/tools` exposes `approval_required_by_default`.
 Direct local tools such as `artifact` should report `false`, while
 policy-gated tools such as `http_request` and `shell_command` should report
 `true` unless an explicit deployment allowlist changes the runtime policy path.
+If a rollout enables `shell_command`, verify its guardrails still reject
+destructive local commands, environment/secret exposure, pipe-to-shell
+installers, and network-capable shell clients.
 Also verify
 `/runtime/policy` for each team token and confirm `effective_tool_policy`
 matches the intended execution boundary: allowed tools report

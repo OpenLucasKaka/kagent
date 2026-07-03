@@ -55,6 +55,7 @@ def test_architecture_document_names_runtime_and_operational_boundaries():
     assert "symlink entries" in architecture
     assert "http_request" in architecture
     assert "shell_command" in architecture
+    assert "secret-exposing environment reads" in architecture
     assert "SSRF" in architecture
     assert "private, loopback, and link-local" in architecture
     assert "url credentials" in architecture
@@ -147,6 +148,7 @@ def test_readme_documents_console_script_entrypoints():
     assert "live progress" in readme
     assert "compact operator transcript" in readme
     assert "bounded local shell commands" in readme
+    assert "secret-exposing" in readme
     assert "--session-memory PATH" in readme
     assert "KAGENT_SESSION_MEMORY_PATH" in readme
     assert "session-memory.json" in readme

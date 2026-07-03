@@ -64,6 +64,24 @@ _SHELL_INTERACTIVE_PATTERNS = (
     re.compile(r"\b(ipython|node|ruby|irb)\b\s*$"),
     re.compile(r"\b(read|vim|vi|nano|less|more|top|tail\s+-f)\b"),
 )
+_SHELL_DESTRUCTIVE_PATTERNS = (
+    re.compile(r"\brm\b(?=[^;&|]*-[A-Za-z]*r)(?=[^;&|]*-[A-Za-z]*f)"),
+    re.compile(r"\bsudo\b"),
+    re.compile(r"\b(?:chmod|chown|chgrp)\b(?=[^;&|]*\s-R\b)"),
+    re.compile(r"\bdd\s+if="),
+    re.compile(r"\b(?:mkfs|diskutil|shutdown|reboot|halt)\b"),
+)
+_SHELL_SECRET_EXPOSURE_PATTERNS = (
+    re.compile(r"^\s*(?:env|printenv|set|export)\b(?:\s|$)"),
+    re.compile(r"\b(?:cat|grep|awk|sed)\b[^;&|]*(?:^|[\s/\\])\.env(?:[\s.]|$)"),
+    re.compile(r"\b(?:cat|grep|awk|sed)\b[^;&|]*(?:secret|token|api[_-]?key)", re.I),
+)
+_SHELL_NETWORK_COMMAND_PATTERNS = (
+    re.compile(r"\b(?:curl|wget|ssh|scp|sftp|rsync|nc|netcat|telnet)\b"),
+)
+_SHELL_PIPE_TO_SHELL_PATTERN = re.compile(
+    r"\|\s*(?:sh|bash|zsh|python[0-9.]*|node|ruby)\b"
+)
 
 
 @dataclass(frozen=True)
@@ -980,6 +998,17 @@ def _validate_shell_command(command: str) -> None:
     for pattern in _SHELL_INTERACTIVE_PATTERNS:
         if pattern.search(command):
             raise ValueError("interactive shell commands are not supported")
+    for pattern in _SHELL_DESTRUCTIVE_PATTERNS:
+        if pattern.search(command):
+            raise ValueError("high-risk shell commands are not supported")
+    for pattern in _SHELL_SECRET_EXPOSURE_PATTERNS:
+        if pattern.search(command):
+            raise ValueError("secret-exposing shell commands are not supported")
+    if _SHELL_PIPE_TO_SHELL_PATTERN.search(command):
+        raise ValueError("pipe-to-shell commands are not supported")
+    for pattern in _SHELL_NETWORK_COMMAND_PATTERNS:
+        if pattern.search(command):
+            raise ValueError("network shell commands are not supported; use http_request")
 
 
 def _resolve_shell_cwd(workspace_root: Path, relative_path: Any) -> Path:

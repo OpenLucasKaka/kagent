@@ -61,6 +61,10 @@ safe local tools such as `artifact`, `decision_matrix`, `note`,
 policy-gated `http_request` tool for approved HTTP GET fetches and
 `shell_command` for bounded non-interactive local CLI checks; later domain tools
 can register behind the same metadata, input, output, and error-code contract.
+`shell_command` stays approval-required by default and rejects destructive
+local commands, secret-exposing environment reads, pipe-to-shell installers, and
+network-capable shell clients; use `http_request` for approved HTTP fetches
+instead.
 Tool `input_schema` metadata includes
 planner-visible shape and validation constraints such as `required`, `enum`,
 `minItems`, `maxItems`, `minLength`, and `maxLength`, and the executor enforces
