@@ -474,8 +474,9 @@ default/global/subject policy precedence is applied. The
 Codex-style `apply_patch` runtime tool applies patch-form file creation,
 updates, moves, and deletes inside the current workspace only, rejects absolute
 paths, parent traversal, symlink targets, and overwrites, and returns
-changed-file `path`, `operation`, `bytes`, and `sha256` metadata so file effects
-remain auditable. The executor also validates runtime tool
+changed-file `path`, optional `previous_path` for moves, `operation`, `bytes`,
+and `sha256` metadata so file effects remain auditable. The executor also
+validates runtime tool
 inputs against the supported schema subset before invoking handlers, including
 required fields, enums, arrays, nested objects, and rejected additional
 properties. Handler outputs are validated against `output_schema`; violations

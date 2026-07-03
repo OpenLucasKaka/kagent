@@ -10,3 +10,4 @@ def test_changelog_documents_current_release_capabilities():
     assert "LangGraph" in changelog
     assert "continuous iteration" in changelog
     assert "*** Move to:" in changelog
+    assert "previous_path" in changelog

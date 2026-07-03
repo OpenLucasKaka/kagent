@@ -599,7 +599,8 @@ paths inside the current workspace and reject symlink paths, while `list_files`
 skips symlink entries so external file metadata is not exposed through directory
 listings. `apply_patch` supports audited add, update, move, and delete
 operations; move operations use `*** Move to: PATH` and report
-`operation=move`, changed-file `path`, `bytes`, and `sha256` in observations.
+`operation=move`, changed-file `path`, `previous_path`, `bytes`, and `sha256`
+in observations.
 `decision_matrix` ranks options with weighted criteria for structured tradeoff
 decisions, `rubric_score` returns score percentages, failed criteria, and
 blocking failures for structured self-review, while `task_list` returns

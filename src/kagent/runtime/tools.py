@@ -146,6 +146,7 @@ _APPLY_PATCH_CHANGED_FILE_OUTPUT_SCHEMA = {
     "required": ["path", "operation", "bytes", "sha256"],
     "properties": {
         "path": {"type": "string"},
+        "previous_path": {"type": "string"},
         "operation": {"type": "string", "enum": ["add", "update", "delete", "move"]},
         "bytes": {"type": "number", "minimum": 0},
         "sha256": {"type": "string"},
@@ -1101,6 +1102,7 @@ def _apply_patch(input_payload: Dict[str, Any]) -> Dict[str, Any]:
             changed_files.append(
                 {
                     "path": operation.destination_path,
+                    "previous_path": operation.relative_path,
                     "operation": operation.operation,
                     "bytes": len(encoded),
                     "sha256": hashlib.sha256(encoded).hexdigest(),

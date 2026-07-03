@@ -436,6 +436,7 @@ def test_apply_patch_tool_moves_existing_file(tmp_path, monkeypatch):
     assert moved.read_text(encoding="utf-8") == "# Pilot\n\nready\n"
     assert observation.output["file_count"] == 1
     assert observation.output["changed_files"][0]["path"] == "docs/pilot.md"
+    assert observation.output["changed_files"][0]["previous_path"] == "drafts/pilot.md"
     assert observation.output["changed_files"][0]["operation"] == "move"
     assert observation.output["changed_files"][0]["bytes"] == len(
         "# Pilot\n\nready\n".encode("utf-8")
@@ -1053,6 +1054,9 @@ def test_runtime_tool_specs_expose_output_schemas_for_planning_and_clients():
     assert tools["apply_patch"].output_schema["properties"]["changed_files"]["items"][
         "properties"
     ]["operation"]["enum"] == ["add", "update", "delete", "move"]
+    assert tools["apply_patch"].output_schema["properties"]["changed_files"]["items"][
+        "properties"
+    ]["previous_path"] == {"type": "string"}
     assert tools["artifact"].output_schema == {
         "type": "object",
         "required": ["artifact_id", "title", "kind", "format", "content", "tags", "bytes"],
@@ -1339,6 +1343,9 @@ def test_registered_runtime_tool_metadata_includes_input_schemas():
     assert by_name["apply_patch"]["output_schema"]["properties"]["changed_files"][
         "items"
     ]["properties"]["operation"]["enum"] == ["add", "update", "delete", "move"]
+    assert by_name["apply_patch"]["output_schema"]["properties"]["changed_files"][
+        "items"
+    ]["properties"]["previous_path"] == {"type": "string"}
     assert by_name["artifact"]["approval_required_by_default"] == "false"
     assert by_name["artifact"]["timeout_seconds"] == "30.0"
     assert by_name["artifact"]["input_schema"]["required"] == [
