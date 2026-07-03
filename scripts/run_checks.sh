@@ -192,6 +192,7 @@ if mode != 0o600:
     raise SystemExit(f"unexpected session memory file mode: {oct(mode)}")
 PY
 chmod 0644 /tmp/kagent-session-memory-dir/session-memory.json
+chmod 0755 /tmp/kagent-session-memory-dir
 if printf '我是谁\nexit\n' | PYTHONWARNINGS=ignore .venv/bin/python -m kagent.cli \
     --runtime \
     --interactive \
@@ -205,6 +206,17 @@ if printf '我是谁\nexit\n' | PYTHONWARNINGS=ignore .venv/bin/python -m kagent
 fi
 grep "session memory file must be owner-only" \
     /tmp/kagent-session-memory-unsafe.stderr >/dev/null
+PYTHONWARNINGS=ignore .venv/bin/python - <<'PY'
+import stat
+from pathlib import Path
+
+memory_dir = Path("/tmp/kagent-session-memory-dir")
+dir_mode = stat.S_IMODE(memory_dir.stat().st_mode)
+if dir_mode != 0o700:
+    raise SystemExit(
+        f"session memory load did not tighten directory mode: {oct(dir_mode)}"
+    )
+PY
 if grep "Traceback" /tmp/kagent-session-memory-unsafe.stderr >/dev/null; then
     echo "unsafe session memory unexpectedly emitted traceback" >&2
     exit 1

@@ -1658,6 +1658,27 @@ def test_cli_session_memory_tightens_existing_parent_directory(tmp_path):
     assert memory_path.stat().st_mode & 0o777 == 0o600
 
 
+def test_cli_session_memory_tightens_existing_parent_directory_on_load(tmp_path):
+    from kagent.cli.memory import load_runtime_session_memory
+
+    memory_dir = tmp_path / "memory"
+    memory_dir.mkdir()
+    memory_dir.chmod(0o755)
+    memory_path = memory_dir / "agent-memory.json"
+    memory_path.write_text(
+        json.dumps(
+            {"schema_version": "1", "turns": [{"user": "kaka", "assistant": "ready"}]}
+        ),
+        encoding="utf-8",
+    )
+    memory_path.chmod(0o600)
+
+    memory = load_runtime_session_memory(str(memory_path), max_turns=12)
+
+    assert memory == [{"user": "kaka", "assistant": "ready"}]
+    assert memory_dir.stat().st_mode & 0o777 == 0o700
+
+
 def test_cli_session_memory_requires_interactive_runtime():
     completed = subprocess.run(
         [

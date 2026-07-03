@@ -39,8 +39,10 @@ def load_runtime_session_memory(path: str, *, max_turns: int) -> list[dict[str, 
         return []
     memory_path = Path(path)
     try:
-        _require_owner_only_memory_file(memory_path)
+        _reject_symlink_memory_file(memory_path)
         _reject_symlink_memory_path_parts(memory_path)
+        _tighten_existing_owner_only_memory_dir(memory_path.parent)
+        _require_owner_only_memory_file(memory_path)
         payload = json.loads(memory_path.read_text(encoding="utf-8"))
     except FileNotFoundError:
         return []
@@ -126,16 +128,24 @@ def redact_runtime_session_memory_text(text: str) -> str:
 
 
 def _require_owner_only_memory_file(path: Path) -> None:
-    if path.is_symlink():
-        raise ValueError("session memory file must not be a symlink")
     mode = path.stat().st_mode & 0o777
     if mode & 0o077:
         raise ValueError("session memory file must be owner-only (0600)")
 
 
+def _reject_symlink_memory_file(path: Path) -> None:
+    if path.is_symlink():
+        raise ValueError("session memory file must not be a symlink")
+
+
 def _ensure_owner_only_memory_dir(path: Path) -> None:
     path.mkdir(parents=True, exist_ok=True)
     path.chmod(0o700)
+
+
+def _tighten_existing_owner_only_memory_dir(path: Path) -> None:
+    if path.exists():
+        path.chmod(0o700)
 
 
 def _reject_symlink_memory_path_parts(path: Path) -> None:

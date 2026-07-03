@@ -35,6 +35,7 @@ def test_operations_runbook_documents_continuous_iteration_and_failure_triage():
     assert "--deterministic" in runbook
     assert "owner-only" in runbook
     assert "parent directories are created or tightened" in runbook
+    assert "load and save paths" in runbook
     assert "symlink memory files" in runbook
     assert "symlink parent directories" in runbook
     assert "group or world" in runbook

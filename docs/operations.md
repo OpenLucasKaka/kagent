@@ -508,7 +508,8 @@ empty value to disable default persistence for TTY sessions. The memory file is
 loaded and written owner-only; parent directories are created or tightened to
 `0700`, symlink memory files, symlink parent directories, and existing files
 with group or world permissions are rejected before parsing, and `/clear` also
-clears the persisted file. Before reusing session memory in later turns or
+clears the persisted file. The CLI tightens the parent directory on both memory
+load and save paths. Before reusing session memory in later turns or
 writing it to disk, the CLI redacts common API keys, bearer tokens, and URL
 credentials so accidental provider or service secrets are not sent back to the
 model or preserved in the memory file.
