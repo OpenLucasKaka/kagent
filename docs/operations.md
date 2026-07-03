@@ -386,7 +386,9 @@ and `approved_action_ids` as approval audit metadata.
 If trace persistence is enabled, `POST /runtime/resume` can resume from a
 persisted pending run by `run_id` and `approved_action_ids`; resume accepts
 only the pending approval action from that trace and does not replay earlier
-actions that already executed before approval was requested. Resumed responses include
+actions that already executed before approval was requested. The persisted
+`pending_approval` payload must match the plan action with the same ID before
+execution resumes. Resumed responses include
 `resumed_from_run_id` and a new `trace_path`. Operator/admin resumes keep the
 original run owner in `auth_subject` and record the approver in
 `resumed_by_auth_subject`.

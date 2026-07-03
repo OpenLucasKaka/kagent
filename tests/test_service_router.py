@@ -1759,6 +1759,47 @@ def test_service_router_runtime_resume_rejects_extra_approved_action_ids(tmp_pat
     assert "only the pending approval action id" in resume_payload["error"]
 
 
+def test_service_router_runtime_resume_rejects_mismatched_pending_action_plan(
+    tmp_path,
+):
+    persist_trace(
+        {
+            "trace_type": "codex_runtime",
+            "run_id": "mismatched-pending",
+            "status": "requires_approval",
+            "goal": "fetch site",
+            "pending_approval": {
+                "id": "step-1",
+                "tool": "http_request",
+                "input": {"url": "https://example.com"},
+                "reason": "reviewed fetch",
+            },
+            "plan": {
+                "actions": [
+                    {
+                        "id": "step-1",
+                        "tool": "note",
+                        "input": {"text": "unreviewed substitute"},
+                        "reason": "not reviewed",
+                    }
+                ]
+            },
+        },
+        str(tmp_path),
+    )
+
+    resume_status, resume_payload = service_router.handle_request(
+        "POST",
+        "/runtime/resume",
+        b'{"run_id":"mismatched-pending","approved_action_ids":["step-1"]}',
+        config=ServiceConfig(trace_dir=str(tmp_path)),
+    )
+
+    assert resume_status == 400
+    assert resume_payload["error_code"] == "invalid_request_body"
+    assert "pending approval action plan" in resume_payload["error"]
+
+
 def test_service_router_runtime_resume_requires_trace_persistence():
     status_code, payload = service_router.handle_request(
         "POST",

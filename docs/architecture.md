@@ -331,9 +331,10 @@ The service intentionally keeps a narrow API:
   `run_id`, applies reviewed `approved_action_ids`, and writes a new resumed
   trace linked by `resumed_from_run_id`; resume accepts only the pending approval action
   from that trace and does not replay earlier actions that
-  already executed before approval was requested. Resumed traces keep the
-  original owner `auth_subject` and record the approver in
-  `resumed_by_auth_subject`.
+  already executed before approval was requested. The persisted
+  `pending_approval` payload must match the plan action with the same ID before
+  execution resumes. Resumed traces keep the original owner `auth_subject` and
+  record the approver in `resumed_by_auth_subject`.
 - `/runtime/run trace persistence` uses the same configured trace directory as
   `/run`; successful persisted runtime responses include `trace_path`, and HTTP
   responses expose it through `X-Trace-Path`.

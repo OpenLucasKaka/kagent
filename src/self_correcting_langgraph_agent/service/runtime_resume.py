@@ -122,7 +122,7 @@ def execute_runtime_resume_request(
             service_errors.INVALID_REQUEST_BODY,
             "runtime run trace is missing resumable plan state",
         )
-    resumable_plan = _pending_approval_plan(plan, pending_action_id)
+    resumable_plan = _pending_approval_plan(plan, pending_approval)
     if resumable_plan is None:
         return 400, failure_payload(
             service_errors.INVALID_REQUEST_BODY,
@@ -172,8 +172,9 @@ def execute_runtime_resume_request(
 
 def _pending_approval_plan(
     plan: Dict[str, Any],
-    pending_action_id: str,
+    pending_approval: Dict[str, Any],
 ) -> Dict[str, Any] | None:
+    pending_action_id = str(pending_approval.get("id", ""))
     actions = plan.get("actions")
     if not isinstance(actions, list):
         return None
@@ -184,7 +185,11 @@ def _pending_approval_plan(
     ]
     if len(matching_actions) != 1:
         return None
-    pending_action = dict(matching_actions[0])
+    matching_action = matching_actions[0]
+    if matching_action != pending_approval:
+        return None
+    pending_action = dict(matching_action)
+    # Dependencies from earlier actions were already satisfied in the persisted run.
     pending_action.pop("depends_on", None)
     resumable_plan: Dict[str, Any] = {"actions": [pending_action]}
     final_answer = plan.get("final_answer")
