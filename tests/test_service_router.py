@@ -1153,6 +1153,57 @@ def test_service_router_runtime_artifact_returns_one_persisted_artifact(tmp_path
     }
 
 
+def test_service_router_runtime_artifact_sanitizes_detail_metadata(tmp_path):
+    persist_trace(
+        {
+            "trace_type": "codex_runtime",
+            "run_id": "malformed-artifact-detail",
+            "status": "done",
+            "goal": "inspect artifact detail",
+            "observations": [
+                {
+                    "action_id": {"secret": "action"},
+                    "tool": {"secret": "tool"},
+                    "status": "ok",
+                    "output": {
+                        "artifact_id": "artifact-safe",
+                        "title": {"secret": "title"},
+                        "kind": {"secret": "kind"},
+                        "format": {"secret": "format"},
+                        "content": "safe content",
+                        "tags": ["release", {"secret": "tag"}],
+                        "bytes": {"secret": "bytes"},
+                        "extra": {"secret": "extra"},
+                    },
+                }
+            ],
+        },
+        str(tmp_path),
+    )
+
+    status_code, payload = service_router.handle_request(
+        "GET",
+        "/runtime/runs/malformed-artifact-detail/artifacts/artifact-safe",
+        b"",
+        config=ServiceConfig(trace_dir=str(tmp_path)),
+    )
+
+    assert status_code == 200
+    assert payload["action_id"] == ""
+    assert payload["tool"] == ""
+    assert payload["artifact"] == {
+        "artifact_id": "artifact-safe",
+        "title": "",
+        "kind": "",
+        "format": "",
+        "content": "safe content",
+        "tags": ["release"],
+        "bytes": "",
+    }
+    assert "extra" not in payload["artifact"]
+    assert "secret" not in json.dumps(payload)
+
+
 def test_service_router_runtime_artifact_reports_missing_artifact(tmp_path):
     run_status, run_payload = service_router.handle_request(
         "POST",

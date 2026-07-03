@@ -1025,11 +1025,24 @@ def _runtime_trace_artifact(
         if output.get("artifact_id") != artifact_id:
             continue
         return {
-            "action_id": str(observation.get("action_id", "")),
-            "tool": str(observation.get("tool", "")),
-            "artifact": output,
+            "action_id": _artifact_metadata_string(observation.get("action_id")),
+            "tool": _artifact_metadata_string(observation.get("tool")),
+            "artifact": _runtime_trace_artifact_body(output),
         }
     return None
+
+
+def _runtime_trace_artifact_body(output: Dict[str, Any]) -> Dict[str, Any]:
+    bytes_count = _artifact_byte_count(output.get("bytes"))
+    return {
+        "artifact_id": _artifact_metadata_string(output.get("artifact_id")),
+        "title": _artifact_metadata_string(output.get("title")),
+        "kind": _artifact_metadata_string(output.get("kind")),
+        "format": _artifact_metadata_string(output.get("format")),
+        "content": _artifact_metadata_string(output.get("content")),
+        "tags": _artifact_tag_list(output.get("tags")),
+        "bytes": "" if bytes_count is None else bytes_count,
+    }
 
 
 def _runtime_trace_artifacts(trace: Dict[str, Any]) -> list[Dict[str, Any]]:

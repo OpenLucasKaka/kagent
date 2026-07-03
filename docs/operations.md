@@ -766,8 +766,10 @@ artifact ID itself is invalid. Byte counts are returned only when they parse as
 non-negative integer values. Use
 `GET /runtime/runs/{run_id}/artifacts/{artifact_id}` to fetch one persisted
 artifact body by ID without returning the full trace; the response includes
-`trace_path` for audit correlation. If the target trace cannot be decoded or
-read, the endpoint returns
+`trace_path` for audit correlation. The artifact detail schema is fixed to
+artifact ID, title, kind, format, content, string tags, and byte count; unknown
+or malformed metadata fields are omitted instead of being forwarded from trace
+JSON. If the target trace cannot be decoded or read, the endpoint returns
 `500 trace_read_failed` without exposing local file paths or parser details.
 
 Use `agent_runs_by_status`, `average_agent_run_duration_seconds`, and
