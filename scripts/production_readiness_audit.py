@@ -336,6 +336,7 @@ def main() -> int:
     _add_repo_src_to_import_path(repo_root)
     from self_correcting_langgraph_agent.ops.release_evidence import (
         _external_evidence_secret_findings,
+        _runtime_policy_fingerprint_mismatch,
     )
 
     artifacts = {
@@ -382,6 +383,13 @@ def main() -> int:
                 if args.internal_rollout_evidence
                 else None
             ),
+        }
+    )
+    runtime_policy_fingerprint_mismatch = _runtime_policy_fingerprint_mismatch(
+        {
+            "provider_smoke": provider_smoke,
+            "staging_acceptance": staging_acceptance,
+            "internal_rollout": internal_rollout,
         }
     )
     failed_checks = []
@@ -436,6 +444,8 @@ def main() -> int:
         failed_checks.append(f"internal_rollout_{internal_rollout['status']}")
     if evidence_secret_findings:
         failed_checks.append("evidence_secret_detected")
+    if runtime_policy_fingerprint_mismatch:
+        failed_checks.append("runtime_policy_fingerprint_mismatch")
     payload: Dict[str, Any] = {
         "status": "failed" if failed_checks else "passed",
         "summary": {
@@ -443,6 +453,9 @@ def main() -> int:
             "missing_artifacts": missing,
             "failed_checks": failed_checks,
             "evidence_secret_findings": evidence_secret_findings,
+            "runtime_policy_fingerprint_mismatch": (
+                runtime_policy_fingerprint_mismatch
+            ),
         },
         "configuration": configuration,
         "deployment": deployment,

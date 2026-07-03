@@ -512,7 +512,8 @@ visibility, category counts, and recommendations for follow-up.
 - real HTTP service smoke checks
 - evaluator smoke checks
 - metrics smoke checks
-- wheel build and clean virtual-environment wheel install smoke
+- wheel build, isolated PEP 517 build with offline fallback, and clean
+  virtual-environment wheel install smoke
 - release manifest generation with artifact `sha256` hashes and `--verify`
   checks against the built wheel
 

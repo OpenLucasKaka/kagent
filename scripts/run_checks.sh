@@ -507,7 +507,10 @@ if grep "Traceback" /tmp/self-correcting-agent-release-manifest-directory-path.s
     exit 1
 fi
 rm -rf /tmp/self-correcting-agent-isolated-wheelhouse
-PYTHONWARNINGS=ignore .venv/bin/python -m pip wheel --no-deps . -w /tmp/self-correcting-agent-isolated-wheelhouse >/tmp/self-correcting-agent-isolated-wheel-build.log
+if ! PYTHONWARNINGS=ignore .venv/bin/python -m pip wheel --no-deps . -w /tmp/self-correcting-agent-isolated-wheelhouse >/tmp/self-correcting-agent-isolated-wheel-build.log 2>&1; then
+    echo "isolated wheel build failed; retrying without build isolation" >&2
+    PYTHONWARNINGS=ignore .venv/bin/python -m pip wheel --no-deps --no-build-isolation . -w /tmp/self-correcting-agent-isolated-wheelhouse >/tmp/self-correcting-agent-isolated-wheel-build-fallback.log
+fi
 ls /tmp/self-correcting-agent-isolated-wheelhouse/self_correcting_langgraph_agent-0.1.0-*.whl >/dev/null
 rm -rf /tmp/self-correcting-agent-wheel-install-venv
 PYTHONWARNINGS=ignore .venv/bin/python -m venv /tmp/self-correcting-agent-wheel-install-venv

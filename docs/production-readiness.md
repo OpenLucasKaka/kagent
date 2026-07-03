@@ -56,8 +56,9 @@ scripts/production_approval_bundle.sh --strict
 
 The standard gate covers tests, Ruff, byte compilation, CLI smoke checks, real
 HTTP service smoke checks, internal subject runtime smoke checks, deployment
-doctor self-checks with runtime policy fingerprints, evaluator checks, metrics checks, no-build-isolation wheel
-build, isolated PEP 517 wheel build,
+doctor self-checks with runtime policy fingerprints, evaluator checks, metrics
+checks, no-build-isolation wheel build, isolated PEP 517 wheel build with an
+offline no-build-isolation fallback for local DNS/package-index outages,
 release manifest generation with wheel `sha256` hashes, manifest `verify`
 checks, `package mismatch` and `version mismatch` detection,
 `artifact_count mismatch` detection, `artifacts must be a list` and
@@ -233,6 +234,11 @@ environment. A passing internal rollout evidence file must also include
 `required_checks_passed`, `approver_role_count`,
 `runtime_effective_tool_policy_sha256`, and the sign-off `sha256`;
 strict gates downgrade incomplete sign-off evidence to `invalid_evidence`.
+When provider smoke, staging acceptance, and internal rollout evidence are
+attached together, their `runtime_effective_tool_policy_sha256` values must
+match. A mismatch means the model smoke, deployed service, or human sign-off
+reviewed different runtime tool boundaries, so strict readiness and release
+evidence gates block promotion with `runtime_policy_fingerprint_mismatch`.
 After all four external evidence files exist, run
 `scripts/production_approval_bundle.sh --strict` or `make production-approval-bundle` to
 generate the strict readiness audit and strict release evidence bundle with all

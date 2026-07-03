@@ -12,7 +12,8 @@ scripts/run_checks.sh
 
 The same command runs in CI. It covers tests, Ruff linting, byte-compilation,
 CLI smoke checks, a real service smoke check, evaluator smoke checks, metrics
-smoke checks, no-build-isolation and isolated wheel builds, and clean wheel
+smoke checks, no-build-isolation and isolated wheel builds, an offline fallback
+for local package-index outages during the isolated build, and clean wheel
 install metadata smoke. It also writes
 `/tmp/self-correcting-agent-release-manifest.json` with artifact `sha256`
 hashes through `self-correcting-agent-release-manifest` so release automation
@@ -76,6 +77,12 @@ subject, runtime policy source, `runtime_effective_tool_policy_count`,
 `runtime_effective_tool_policy_sha256`, `runtime_note_allowed`,
 `runtime_http_request_approval_required`, run status and ID, timeline/summary
 counts, trace-persistence metrics, and runtime run totals.
+When strict production gates receive provider smoke, staging acceptance, and
+internal rollout evidence together, every attached
+`runtime_effective_tool_policy_sha256` must match. If the fingerprints differ,
+rerun the stale evidence producer before promotion; the gates report
+`runtime_policy_fingerprint_mismatch` instead of accepting mixed policy
+approval.
 
 Run observability acceptance after the deployment is reachable from the same
 network path Prometheus will use:

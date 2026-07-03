@@ -166,6 +166,13 @@ def build_release_evidence(
             "internal_rollout": internal_rollout_evidence_path,
         }
     )
+    runtime_policy_fingerprint_mismatch = _runtime_policy_fingerprint_mismatch(
+        {
+            "provider_smoke": provider_smoke,
+            "staging_acceptance": staging_acceptance,
+            "internal_rollout": internal_rollout,
+        }
+    )
     failed_checks = _failed_checks(
         run_checks_exit_code=run_checks_exit_code,
         readiness_audit=readiness_audit,
@@ -175,6 +182,7 @@ def build_release_evidence(
         observability_acceptance=observability_acceptance,
         internal_rollout=internal_rollout,
         evidence_secret_findings=evidence_secret_findings,
+        runtime_policy_fingerprint_mismatch=runtime_policy_fingerprint_mismatch,
         require_provider_smoke=require_provider_smoke,
         require_staging_acceptance=require_staging_acceptance,
         require_observability_acceptance=require_observability_acceptance,
@@ -209,6 +217,9 @@ def build_release_evidence(
             "failed_checks": failed_checks,
             "evidence_file_count": str(len(evidence_files)),
             "evidence_secret_findings": evidence_secret_findings,
+            "runtime_policy_fingerprint_mismatch": (
+                runtime_policy_fingerprint_mismatch
+            ),
         },
         "run_checks": _run_checks_record(run_checks_exit_code),
         "readiness_audit": _readiness_audit_record(readiness_audit),
@@ -338,6 +349,7 @@ def _failed_checks(
     observability_acceptance: Dict[str, Any],
     internal_rollout: Dict[str, Any],
     evidence_secret_findings: List[Dict[str, str]],
+    runtime_policy_fingerprint_mismatch: Dict[str, str],
     require_provider_smoke: bool,
     require_staging_acceptance: bool,
     require_observability_acceptance: bool,
@@ -373,6 +385,8 @@ def _failed_checks(
         failed.append(f"internal_rollout_{internal_rollout['status']}")
     if evidence_secret_findings:
         failed.append("evidence_secret_detected")
+    if runtime_policy_fingerprint_mismatch:
+        failed.append("runtime_policy_fingerprint_mismatch")
     return failed
 
 
@@ -547,6 +561,20 @@ def _internal_rollout_record(path: Path) -> Dict[str, Any]:
         "sha256": str(payload.get("sha256", "")),
         "missing_fields": missing_fields,
     }
+
+
+def _runtime_policy_fingerprint_mismatch(
+    records_by_label: Dict[str, Dict[str, Any]],
+) -> Dict[str, str]:
+    fingerprints = {
+        label: str(record.get("runtime_effective_tool_policy_sha256", ""))
+        for label, record in records_by_label.items()
+        if record.get("status") == "passed"
+        and _is_sha256(str(record.get("runtime_effective_tool_policy_sha256", "")))
+    }
+    if len(set(fingerprints.values())) <= 1:
+        return {}
+    return fingerprints
 
 
 def _file_record(path: Path) -> Dict[str, str]:

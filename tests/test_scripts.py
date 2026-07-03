@@ -1978,6 +1978,118 @@ def test_production_readiness_audit_accepts_internal_rollout_evidence(tmp_path):
     assert len(payload["internal_rollout"]["sha256"]) == 64
 
 
+def test_production_readiness_audit_rejects_mismatched_runtime_policy_evidence(
+    tmp_path,
+):
+    provider_smoke_path = tmp_path / "provider-smoke.json"
+    provider_smoke_path.write_text(
+        json.dumps(
+            {
+                "evidence_schema_version": "1",
+                "status": "passed",
+                "provider_snapshot": {
+                    "llm_provider": "openai_compatible",
+                    "llm_base_url_host": "api.example.test",
+                    "llm_model": "agent-runtime-model",
+                    "llm_api_key_configured": "true",
+                },
+                "capability_checks": {
+                    "cli_runtime": "passed",
+                    "http_runtime": "passed",
+                    "trace_status": "passed",
+                    "timeline": "passed",
+                    "approval_resume": "passed",
+                    "metrics": "passed",
+                },
+                "cli_run_id": "cli-run",
+                "http_run_id": "http-run",
+                "approval_run_id": "approval-run",
+                "resumed_run_id": "resume-run",
+                "runtime_effective_tool_policy_sha256": "a" * 64,
+            }
+        )
+        + "\n"
+    )
+    staging_acceptance_path = tmp_path / "staging-acceptance.json"
+    staging_acceptance_path.write_text(
+        json.dumps(
+            {
+                "evidence_schema_version": "1",
+                "status": "passed",
+                "base_url_host": "agent.internal",
+                "health_status": "ok",
+                "ready_status": "ready",
+                "runtime_run_id": "staging-run",
+                "auth_subject": "team-a",
+                "runtime_policy_source": "default",
+                "runtime_effective_tool_policy_count": "7",
+                "runtime_effective_tool_policy_sha256": "b" * 64,
+                "runtime_note_allowed": "true",
+                "runtime_http_request_approval_required": "true",
+                "runtime_run_status": "done",
+                "runtime_timeline_event_count": "4",
+                "runtime_summary_run_count": "1",
+                "metrics_trace_persistence": "enabled",
+                "metrics_runtime_runs_total": "1",
+            }
+        )
+    )
+    internal_rollout_path = tmp_path / "internal-rollout.json"
+    internal_rollout_path.write_text(
+        json.dumps(
+            {
+                "evidence_schema_version": "1",
+                "status": "passed",
+                "rollout_id": "rollout-2026-06-28",
+                "release_version": "0.1.0",
+                "environment": "internal-production",
+                "signed_off_at_utc": "2026-06-28T00:00:00+00:00",
+                "runtime_effective_tool_policy_sha256": "a" * 64,
+                "required_roles_present": "true",
+                "required_checks_passed": "true",
+                "approver_role_count": "4",
+                "expected_release_version": "0.1.0",
+                "version_matches": "true",
+                "expected_environment": "internal-production",
+                "environment_matches": "true",
+                "sha256": "d" * 64,
+            }
+        )
+        + "\n"
+    )
+
+    completed = subprocess.run(
+        [
+            ".venv/bin/python",
+            "scripts/production_readiness_audit.py",
+            "--provider-smoke-evidence",
+            str(provider_smoke_path),
+            "--staging-acceptance-evidence",
+            str(staging_acceptance_path),
+            "--internal-rollout-evidence",
+            str(internal_rollout_path),
+            "--require-provider-smoke",
+            "--require-staging-acceptance",
+            "--require-internal-rollout",
+        ],
+        capture_output=True,
+        text=True,
+    )
+    payload = json.loads(completed.stdout)
+
+    assert completed.returncode == 1
+    assert payload["status"] == "failed"
+    assert payload["summary"]["runtime_policy_fingerprint_mismatch"] == {
+        "provider_smoke": "a" * 64,
+        "staging_acceptance": "b" * 64,
+        "internal_rollout": "a" * 64,
+    }
+    assert (
+        "runtime_policy_fingerprint_mismatch"
+        in payload["summary"]["failed_checks"]
+    )
+
+
 def test_production_readiness_audit_can_require_internal_rollout_evidence():
     completed = subprocess.run(
         [
@@ -2254,6 +2366,14 @@ def test_run_checks_builds_isolated_release_wheel():
 
     assert "/tmp/self-correcting-agent-isolated-wheelhouse" in run_checks
     assert "/tmp/self-correcting-agent-isolated-wheel-build.log" in run_checks
+
+
+def test_run_checks_has_offline_fallback_for_isolated_wheel_build():
+    run_checks = Path("scripts/run_checks.sh").read_text()
+
+    assert "/tmp/self-correcting-agent-isolated-wheel-build-fallback.log" in run_checks
+    assert "isolated wheel build failed; retrying without build isolation" in run_checks
+    assert "--no-build-isolation . -w /tmp/self-correcting-agent-isolated-wheelhouse" in run_checks
 
 
 def test_run_checks_installs_built_wheel_in_clean_venv():
