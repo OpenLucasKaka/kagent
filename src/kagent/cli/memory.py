@@ -150,6 +150,13 @@ def _tighten_existing_owner_only_memory_dir(path: Path) -> None:
 
 
 def _reject_symlink_memory_path_parts(path: Path) -> None:
-    parent = path.parent
-    if parent.exists() and parent.is_symlink():
-        raise ValueError("session memory path must not contain symlinks")
+    current = Path(path.anchor) if path.is_absolute() else Path(".")
+    parts = path.parent.parts[1:] if path.parent.is_absolute() else path.parent.parts
+    for part in parts:
+        current = current / part
+        if current.exists() and current.is_symlink() and not _is_platform_path_alias(current):
+            raise ValueError("session memory path must not contain symlinks")
+
+
+def _is_platform_path_alias(path: Path) -> bool:
+    return str(path) in {"/tmp", "/var"}

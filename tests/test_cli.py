@@ -1614,6 +1614,34 @@ def test_cli_session_memory_rejects_symlink_parent_on_load(tmp_path):
         raise AssertionError("session memory through symlink parent was loaded")
 
 
+def test_cli_session_memory_rejects_nested_symlink_parent_on_load(tmp_path):
+    from kagent.cli.memory import load_runtime_session_memory
+
+    target_dir = tmp_path / "target-memory-dir"
+    nested_dir = target_dir / "nested"
+    nested_dir.mkdir(parents=True)
+    target_dir.chmod(0o700)
+    nested_dir.chmod(0o700)
+    memory_path = nested_dir / "agent-memory.json"
+    memory_path.write_text(
+        json.dumps({"schema_version": "1", "turns": [{"user": "kaka"}]}),
+        encoding="utf-8",
+    )
+    memory_path.chmod(0o600)
+    linked_dir = tmp_path / "linked-memory-dir"
+    linked_dir.symlink_to(target_dir)
+
+    try:
+        load_runtime_session_memory(
+            str(linked_dir / "nested" / "agent-memory.json"),
+            max_turns=12,
+        )
+    except ValueError as exc:
+        assert "session memory path must not contain symlinks" in str(exc)
+    else:
+        raise AssertionError("session memory through nested symlink parent was loaded")
+
+
 def test_cli_session_memory_rejects_symlink_parent_on_save(tmp_path):
     from kagent.cli.memory import save_runtime_session_memory
 
@@ -1632,6 +1660,27 @@ def test_cli_session_memory_rejects_symlink_parent_on_save(tmp_path):
         assert "session memory path must not contain symlinks" in str(exc)
     else:
         raise AssertionError("session memory was saved through a symlink parent")
+
+
+def test_cli_session_memory_rejects_nested_symlink_parent_on_save(tmp_path):
+    from kagent.cli.memory import save_runtime_session_memory
+
+    target_dir = tmp_path / "target-memory-dir"
+    (target_dir / "nested").mkdir(parents=True)
+    target_dir.chmod(0o700)
+    (target_dir / "nested").chmod(0o700)
+    linked_dir = tmp_path / "linked-memory-dir"
+    linked_dir.symlink_to(target_dir)
+
+    try:
+        save_runtime_session_memory(
+            str(linked_dir / "nested" / "agent-memory.json"),
+            [{"user": "kaka", "assistant": "ready"}],
+        )
+    except ValueError as exc:
+        assert "session memory path must not contain symlinks" in str(exc)
+    else:
+        raise AssertionError("session memory was saved through a nested symlink parent")
 
 
 def test_cli_session_memory_redacts_secret_like_text_before_persisting(tmp_path):

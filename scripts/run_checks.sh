@@ -262,15 +262,16 @@ if grep "Traceback" /tmp/kagent-session-memory-symlink-save.stderr >/dev/null; t
     exit 1
 fi
 rm -rf /tmp/kagent-session-memory-parent-target /tmp/kagent-session-memory-parent-link
-mkdir -p /tmp/kagent-session-memory-parent-target
+mkdir -p /tmp/kagent-session-memory-parent-target/nested
 chmod 0700 /tmp/kagent-session-memory-parent-target
+chmod 0700 /tmp/kagent-session-memory-parent-target/nested
 ln -s /tmp/kagent-session-memory-parent-target /tmp/kagent-session-memory-parent-link
 if printf '我是卡卡\nexit\n' | PYTHONWARNINGS=ignore .venv/bin/python -m kagent.cli \
     --runtime \
     --interactive \
     --max-iterations 1 \
     --runtime-plan '{"actions":[],"final_answer":"你好，卡卡。"}' \
-    --session-memory /tmp/kagent-session-memory-parent-link/session-memory.json \
+    --session-memory /tmp/kagent-session-memory-parent-link/nested/session-memory.json \
     >/tmp/kagent-session-memory-parent-symlink.stdout \
     2>/tmp/kagent-session-memory-parent-symlink.stderr; then
     echo "interactive runtime unexpectedly used symlink session memory parent" >&2
