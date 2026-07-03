@@ -29,6 +29,7 @@ SECRET_VALUE_PATTERNS = (
     re.compile(r"(?i)\bbearer\s+[A-Za-z0-9._:/+=-]{6,}"),
     re.compile(r"(?i)\bauthorization\s*:\s*[A-Za-z0-9._:/+=-]{6,}"),
 )
+SENSITIVE_URL_VALUE_PATTERN = re.compile(r"(?i)\bhttps?://[^\s\"'<>]+")
 REQUIRED_PROVIDER_SMOKE_RUN_IDS = (
     "approval_run_id",
     "cli_run_id",
@@ -419,7 +420,7 @@ def _provider_smoke_record(path: Path) -> Dict[str, Any]:
         "evidence_schema_version": str(
             payload.get("evidence_schema_version", "")
         ),
-        "provider_snapshot": _string_map(payload.get("provider_snapshot", {})),
+        "provider_snapshot": _provider_snapshot_record(payload),
         "capability_checks": _string_map(payload.get("capability_checks", {})),
         "runtime_effective_tool_policy_sha256": str(
             payload.get("runtime_effective_tool_policy_sha256", "")
@@ -575,6 +576,17 @@ def _runtime_policy_fingerprint_mismatch(
     if len(set(fingerprints.values())) <= 1:
         return {}
     return fingerprints
+
+
+def _provider_snapshot_record(payload: Dict[str, Any]) -> Dict[str, str]:
+    provider_snapshot = payload.get("provider_snapshot", {})
+    if not isinstance(provider_snapshot, dict):
+        provider_snapshot = {}
+    return {
+        field: str(provider_snapshot.get(field, ""))
+        for field in REQUIRED_PROVIDER_SMOKE_SNAPSHOT_FIELDS
+        if str(provider_snapshot.get(field, "")).strip()
+    }
 
 
 def _file_record(path: Path) -> Dict[str, str]:
@@ -773,14 +785,23 @@ def _secret_findings(label: str, path: str, value: Any) -> List[Dict[str, str]]:
     elif isinstance(value, list):
         for index, item in enumerate(value):
             findings.extend(_secret_findings(label, f"{path}[{index}]", item))
-    elif isinstance(value, str) and _is_secret_like_value(value):
-        findings.append(
-            {
-                "label": label,
-                "path": path,
-                "reason": "secret_like_value",
-            }
-        )
+    elif isinstance(value, str):
+        if _is_secret_like_value(value):
+            findings.append(
+                {
+                    "label": label,
+                    "path": path,
+                    "reason": "secret_like_value",
+                }
+            )
+        if _is_sensitive_url_value(value):
+            findings.append(
+                {
+                    "label": label,
+                    "path": path,
+                    "reason": "sensitive_url_value",
+                }
+            )
     return findings
 
 
@@ -807,6 +828,10 @@ def _has_present_secret_like_key_value(value: Any) -> bool:
 
 def _is_secret_like_value(value: str) -> bool:
     return any(pattern.search(value) for pattern in SECRET_VALUE_PATTERNS)
+
+
+def _is_sensitive_url_value(value: str) -> bool:
+    return bool(SENSITIVE_URL_VALUE_PATTERN.search(value))
 
 
 def _json_path_key(key: str) -> str:

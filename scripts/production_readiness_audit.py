@@ -1047,6 +1047,7 @@ def _provider_smoke_record(evidence_path: str) -> Dict[str, Any]:
     status = str(payload.get("status", "missing_status"))
     from self_correcting_langgraph_agent.ops.release_evidence import (
         _provider_smoke_missing_fields,
+        _provider_snapshot_record,
     )
 
     missing_fields = (
@@ -1074,7 +1075,7 @@ def _provider_smoke_record(evidence_path: str) -> Dict[str, Any]:
         "evidence_schema_version": str(
             payload.get("evidence_schema_version", "")
         ),
-        "provider_snapshot": _string_map(payload.get("provider_snapshot", {})),
+        "provider_snapshot": _provider_snapshot_record(payload),
         "capability_checks": _string_map(payload.get("capability_checks", {})),
         "runtime_effective_tool_policy_sha256": str(
             payload.get("runtime_effective_tool_policy_sha256", "")

@@ -152,6 +152,9 @@ The bundle also blocks external evidence files that accidentally contain
 secret-like keys or values. In that case `failed_checks` includes
 `evidence_secret_detected`, and `evidence_secret_findings` contains only the
 evidence label, JSON path, and reason, never the secret value.
+Full `http://` or `https://` values are treated as sensitive evidence values;
+capture host-only fields such as `base_url_host` or `llm_base_url_host`
+instead of provider or internal service base URLs.
 When evidence files are present but fail strict semantic validation, the script
 still writes readiness and release-evidence artifacts, prints a redacted stdout
 JSON payload with `status: "blocked"` and `failed_checks`, and exits with

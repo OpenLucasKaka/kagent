@@ -439,6 +439,57 @@ def test_release_evidence_cli_blocks_structured_secret_like_external_evidence(
     ]
 
 
+def test_release_evidence_cli_blocks_full_url_external_evidence(tmp_path):
+    readiness_path = tmp_path / "readiness-audit.json"
+    readiness_path.write_text(
+        json.dumps({"status": "passed", "summary": {"failed_checks": []}}) + "\n"
+    )
+    provider_smoke_path = tmp_path / "provider-smoke.json"
+    full_url = "https://provider.example.test/v1"
+    provider_smoke_path.write_text(
+        json.dumps(
+            {
+                "status": "failed",
+                "provider_snapshot": {
+                    "llm_base_url": full_url,
+                    "llm_base_url_host": "provider.example.test",
+                },
+            }
+        )
+        + "\n"
+    )
+
+    completed = subprocess.run(
+        [
+            ".venv/bin/python",
+            "-m",
+            "self_correcting_langgraph_agent.ops.release_evidence",
+            "--run-checks-exit-code",
+            "0",
+            "--readiness-audit",
+            str(readiness_path),
+            "--provider-smoke-evidence",
+            str(provider_smoke_path),
+        ],
+        capture_output=True,
+        text=True,
+    )
+    payload = json.loads(completed.stdout)
+
+    assert completed.returncode == 1
+    assert payload["status"] == "blocked"
+    assert "evidence_secret_detected" in payload["summary"]["failed_checks"]
+    assert payload["summary"]["evidence_secret_findings"] == [
+        {
+            "label": "provider_smoke",
+            "path": "$.provider_snapshot.llm_base_url",
+            "reason": "sensitive_url_value",
+        }
+    ]
+    assert full_url not in completed.stdout
+    assert full_url not in completed.stderr
+
+
 def test_release_evidence_cli_rejects_incomplete_provider_smoke_evidence(tmp_path):
     readiness_path = tmp_path / "readiness-audit.json"
     readiness_path.write_text(

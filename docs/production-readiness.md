@@ -74,7 +74,9 @@ generation time without copying provider secrets into the repository or the
 bundle. External evidence files are also scanned before the bundle can become
 ready; secret-like evidence fields block release with `evidence_secret_detected`
 and only redacted `evidence_secret_findings` containing label, JSON path, and
-reason are written to the bundle.
+reason are written to the bundle. Full `http://` or `https://` values are also
+blocked so provider and internal service base URLs are not copied into release
+artifacts; use host-only fields such as `llm_base_url_host`.
 `scripts/production_readiness_audit.py` applies the same external evidence
 secret scan, so provider, staging, observability, and rollout evidence are
 blocked before the final release bundle is generated.

@@ -110,7 +110,8 @@ bundle is blocked with `evidence_secret_detected`; reviewers only see redacted
 `evidence_secret_findings` with the evidence label, JSON path, and reason.
 Secret-like keys are rejected even when their values are structured or already
 redacted; keep evidence files to non-secret status fields such as
-`llm_api_key_configured`.
+`llm_api_key_configured`. Full `http://` or `https://` values are also blocked;
+record only host fields such as `base_url_host` or `llm_base_url_host`.
 The same scan runs in `scripts/production_readiness_audit.py`, so bad evidence
 is rejected before release evidence generation.
 

@@ -1528,6 +1528,48 @@ def test_production_readiness_audit_blocks_structured_secret_like_evidence(
     ]
 
 
+def test_production_readiness_audit_blocks_full_url_external_evidence(tmp_path):
+    evidence_path = tmp_path / "provider-smoke.json"
+    full_url = "https://provider.example.test/v1"
+    evidence_path.write_text(
+        json.dumps(
+            {
+                "status": "failed",
+                "provider_snapshot": {
+                    "llm_base_url": full_url,
+                    "llm_base_url_host": "provider.example.test",
+                },
+            }
+        )
+        + "\n"
+    )
+
+    completed = subprocess.run(
+        [
+            ".venv/bin/python",
+            "scripts/production_readiness_audit.py",
+            "--provider-smoke-evidence",
+            str(evidence_path),
+        ],
+        capture_output=True,
+        text=True,
+    )
+    payload = json.loads(completed.stdout)
+
+    assert completed.returncode == 1
+    assert payload["status"] == "failed"
+    assert "evidence_secret_detected" in payload["summary"]["failed_checks"]
+    assert payload["summary"]["evidence_secret_findings"] == [
+        {
+            "label": "provider_smoke",
+            "path": "$.provider_snapshot.llm_base_url",
+            "reason": "sensitive_url_value",
+        }
+    ]
+    assert full_url not in completed.stdout
+    assert full_url not in completed.stderr
+
+
 def test_production_readiness_audit_rejects_incomplete_provider_smoke_evidence(
     tmp_path,
 ):
