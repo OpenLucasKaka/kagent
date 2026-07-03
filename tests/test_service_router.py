@@ -831,6 +831,72 @@ def test_service_router_runtime_artifacts_filters_non_string_tags(tmp_path):
     assert "content" not in payload["artifacts"][0]
 
 
+def test_service_router_runtime_artifacts_rejects_non_string_metadata(tmp_path):
+    persist_trace(
+        {
+            "trace_type": "codex_runtime",
+            "run_id": "malformed-artifact-metadata",
+            "status": "done",
+            "goal": "inspect artifact metadata",
+            "observations": [
+                {
+                    "action_id": {"secret": "action"},
+                    "tool": {"secret": "tool"},
+                    "status": "ok",
+                    "output": {
+                        "artifact_id": {"secret": "id"},
+                        "title": {"secret": "title"},
+                        "kind": {"secret": "kind"},
+                        "format": {"secret": "format"},
+                        "tags": ["safe"],
+                        "bytes": {"secret": "bytes"},
+                        "content": "not listed",
+                    },
+                },
+                {
+                    "action_id": {"secret": "action"},
+                    "tool": {"secret": "tool"},
+                    "status": "ok",
+                    "output": {
+                        "artifact_id": "artifact-safe",
+                        "title": {"secret": "title"},
+                        "kind": {"secret": "kind"},
+                        "format": {"secret": "format"},
+                        "tags": ["safe"],
+                        "bytes": {"secret": "bytes"},
+                        "content": "not listed",
+                    },
+                },
+            ],
+        },
+        str(tmp_path),
+    )
+
+    status_code, payload = service_router.handle_request(
+        "GET",
+        "/runtime/runs/malformed-artifact-metadata/artifacts",
+        b"",
+        config=ServiceConfig(trace_dir=str(tmp_path)),
+    )
+
+    assert status_code == 200
+    assert payload["count"] == "1"
+    assert payload["artifacts"] == [
+        {
+            "artifact_id": "artifact-safe",
+            "action_id": "",
+            "tool": "",
+            "title": "",
+            "kind": "",
+            "format": "",
+            "tags": ["safe"],
+            "bytes": "",
+        }
+    ]
+    assert "secret" not in json.dumps(payload)
+    assert "content" not in payload["artifacts"][0]
+
+
 def test_service_router_runtime_artifacts_returns_empty_manifest(tmp_path):
     run_status, run_payload = service_router.handle_request(
         "POST",

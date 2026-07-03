@@ -744,7 +744,11 @@ Use
 `GET /runtime/runs/{run_id}/artifacts` to list artifact metadata without
 content before selecting a specific deliverable. The listing normalizes tags to
 non-empty string tags only, so malformed trace metadata cannot leak nested
-objects through operator dashboards. Use
+objects through operator dashboards. It also accepts only scalar metadata fields
+that are strings, such as artifact ID, title, kind, format, action ID, and tool name;
+malformed object values are returned as empty strings or skipped when the
+artifact ID itself is invalid. Byte counts are returned only when they parse as
+non-negative integer values. Use
 `GET /runtime/runs/{run_id}/artifacts/{artifact_id}` to fetch one persisted
 artifact body by ID without returning the full trace; the response includes
 `trace_path` for audit correlation. If the target trace cannot be decoded or

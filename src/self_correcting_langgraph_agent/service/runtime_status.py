@@ -1005,22 +1005,29 @@ def _runtime_trace_artifacts(trace: Dict[str, Any]) -> list[Dict[str, Any]]:
         output = observation.get("output")
         if not isinstance(output, dict):
             continue
-        artifact_id = str(output.get("artifact_id", ""))
+        artifact_id = _artifact_metadata_string(output.get("artifact_id"))
         if not artifact_id.strip():
             continue
+        bytes_count = _artifact_byte_count(output.get("bytes"))
         artifacts.append(
             {
                 "artifact_id": artifact_id,
-                "action_id": str(observation.get("action_id", "")),
-                "tool": str(observation.get("tool", "")),
-                "title": str(output.get("title", "")),
-                "kind": str(output.get("kind", "")),
-                "format": str(output.get("format", "")),
+                "action_id": _artifact_metadata_string(observation.get("action_id")),
+                "tool": _artifact_metadata_string(observation.get("tool")),
+                "title": _artifact_metadata_string(output.get("title")),
+                "kind": _artifact_metadata_string(output.get("kind")),
+                "format": _artifact_metadata_string(output.get("format")),
                 "tags": _artifact_tag_list(output.get("tags")),
-                "bytes": str(output.get("bytes", "")),
+                "bytes": "" if bytes_count is None else str(bytes_count),
             }
         )
     return artifacts
+
+
+def _artifact_metadata_string(value: Any) -> str:
+    if not isinstance(value, str):
+        return ""
+    return value.strip()
 
 
 def _artifact_tag_list(value: Any) -> list[str]:
