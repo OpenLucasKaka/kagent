@@ -2492,6 +2492,45 @@ def test_service_router_runtime_status_reports_final_answer_guardrail(tmp_path):
     assert "observations" not in payload
 
 
+def test_service_router_runtime_status_sanitizes_final_answer_guardrail(tmp_path):
+    persist_trace(
+        {
+            "trace_type": "codex_runtime",
+            "run_id": "malformed-guardrail",
+            "status": "done",
+            "goal": "你是谁",
+            "final_answer_guardrail": {
+                "applied": "true",
+                "reason": {"secret": "guardrail-reason"},
+                "original_answer_omitted": ["secret-answer"],
+            },
+            "observations": [],
+        },
+        str(tmp_path),
+    )
+
+    status_code, payload = service_router.handle_request(
+        "GET",
+        "/runtime/runs/malformed-guardrail",
+        b"",
+        config=ServiceConfig(trace_dir=str(tmp_path)),
+    )
+    summary_status, summary_payload = service_router.handle_request(
+        "GET",
+        "/runtime/runs/summary",
+        b"",
+        config=ServiceConfig(trace_dir=str(tmp_path)),
+    )
+
+    assert status_code == 200
+    assert summary_status == 200
+    assert payload["final_answer_guardrail"] == {"applied": "true"}
+    assert summary_payload["final_answer_guardrail_applied_count"] == "1"
+    assert summary_payload["final_answer_guardrail_reason_counts"] == {}
+    assert "secret" not in json.dumps(payload)
+    assert "secret" not in json.dumps(summary_payload)
+
+
 def test_service_router_runtime_status_reports_progress_sink_failures(tmp_path):
     persist_trace(
         {

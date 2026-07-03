@@ -476,7 +476,6 @@ def runtime_status_summary(
     }
     for optional_field in [
         "answer",
-        "final_answer_guardrail",
         "error_code",
         "error",
         "pending_approval",
@@ -491,6 +490,9 @@ def runtime_status_summary(
     ]:
         if optional_field in trace:
             summary[optional_field] = trace[optional_field]
+    final_answer_guardrail = _trace_final_answer_guardrail(trace)
+    if final_answer_guardrail:
+        summary["final_answer_guardrail"] = final_answer_guardrail
     return summary
 
 
@@ -759,6 +761,18 @@ def _trace_tags(trace: Dict[str, Any]) -> list[str]:
             if isinstance(tag, str) and tag.strip()
         }
     )
+
+
+def _trace_final_answer_guardrail(trace: Dict[str, Any]) -> Dict[str, str]:
+    value = trace.get("final_answer_guardrail")
+    if not isinstance(value, dict):
+        return {}
+    guardrail = {}
+    for field in ["applied", "reason", "original_answer_omitted"]:
+        field_value = _runtime_string(value.get(field))
+        if field_value:
+            guardrail[field] = field_value
+    return guardrail
 
 
 def _pending_approval_field(value: Any, field: str) -> str:
