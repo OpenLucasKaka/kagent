@@ -1568,6 +1568,29 @@ def test_cli_session_memory_rejects_symlink_file(tmp_path):
         raise AssertionError("symlink session memory file was loaded")
 
 
+def test_cli_session_memory_rejects_symlink_file_on_save(tmp_path):
+    from kagent.cli.memory import save_runtime_session_memory
+
+    target_path = tmp_path / "target-memory.json"
+    target_path.write_text(
+        json.dumps({"schema_version": "1", "turns": []}),
+        encoding="utf-8",
+    )
+    target_path.chmod(0o600)
+    memory_path = tmp_path / "agent-memory.json"
+    memory_path.symlink_to(target_path)
+
+    try:
+        save_runtime_session_memory(
+            str(memory_path),
+            [{"user": "kaka", "assistant": "ready"}],
+        )
+    except ValueError as exc:
+        assert "session memory file must not be a symlink" in str(exc)
+    else:
+        raise AssertionError("session memory was saved through a symlink file")
+
+
 def test_cli_session_memory_rejects_symlink_parent_on_load(tmp_path):
     from kagent.cli.memory import load_runtime_session_memory
 

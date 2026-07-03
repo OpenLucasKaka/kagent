@@ -244,6 +244,23 @@ if grep "Traceback" /tmp/kagent-session-memory-symlink.stderr >/dev/null; then
     echo "symlink session memory unexpectedly emitted traceback" >&2
     exit 1
 fi
+if printf '/clear\nexit\n' | PYTHONWARNINGS=ignore .venv/bin/python -m kagent.cli \
+    --runtime \
+    --interactive \
+    --max-iterations 1 \
+    --runtime-plan '{"actions":[],"final_answer":"unused"}' \
+    --session-memory /tmp/kagent-session-memory-link.json \
+    >/tmp/kagent-session-memory-symlink-save.stdout \
+    2>/tmp/kagent-session-memory-symlink-save.stderr; then
+    echo "interactive runtime unexpectedly saved through symlink session memory" >&2
+    exit 1
+fi
+grep "session memory file must not be a symlink" \
+    /tmp/kagent-session-memory-symlink-save.stderr >/dev/null
+if grep "Traceback" /tmp/kagent-session-memory-symlink-save.stderr >/dev/null; then
+    echo "symlink session memory save unexpectedly emitted traceback" >&2
+    exit 1
+fi
 rm -rf /tmp/kagent-session-memory-parent-target /tmp/kagent-session-memory-parent-link
 mkdir -p /tmp/kagent-session-memory-parent-target
 chmod 0700 /tmp/kagent-session-memory-parent-target
