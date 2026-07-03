@@ -1948,8 +1948,22 @@ def _runtime_run_status_properties(*, include_pending_approval: bool) -> Dict[st
         "error": {"type": "string"},
     }
     if include_pending_approval:
-        properties["pending_approval"] = {"type": "object"}
+        properties["pending_approval"] = _pending_approval_schema()
     return properties
+
+
+def _pending_approval_schema() -> Dict[str, Any]:
+    return {
+        "type": "object",
+        "properties": {
+            "id": {"type": "string"},
+            "tool": {"type": "string"},
+            "input": {"type": "object"},
+            "reason": {"type": "string"},
+        },
+        "required": ["id", "tool", "input"],
+        "additionalProperties": False,
+    }
 
 
 def _final_answer_guardrail_schema() -> Dict[str, Any]:

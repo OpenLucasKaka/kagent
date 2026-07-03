@@ -89,6 +89,7 @@ def test_operations_runbook_documents_continuous_iteration_and_failure_triage():
     assert "invalid_tool_output" in runbook
     assert "GET /runtime/approvals" in runbook
     assert "pending_approval.input" in runbook
+    assert "pending approval detail schema" in runbook
     assert "GET /runtime/runs" in runbook
     assert "GET /runtime/runs/summary" in runbook
     assert "summary scalar metadata" in runbook

@@ -831,7 +831,15 @@ def test_service_contract_documents_named_success_schemas():
         "resumed_by_auth_subject"
     ] == {"type": "string"}
     assert schemas["RuntimeRunStatusResponse"]["properties"]["pending_approval"] == {
-        "type": "object"
+        "type": "object",
+        "properties": {
+            "id": {"type": "string"},
+            "tool": {"type": "string"},
+            "input": {"type": "object"},
+            "reason": {"type": "string"},
+        },
+        "required": ["id", "tool", "input"],
+        "additionalProperties": False,
     }
     assert schemas["RuntimeRunStatusResponse"]["properties"][
         "pending_approval_action_id"

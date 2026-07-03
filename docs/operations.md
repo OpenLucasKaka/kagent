@@ -707,7 +707,10 @@ normalized to `/runtime/runs/{run_id}/artifacts/{artifact_id}`. Runtime status
 summaries include `iteration_count`, `max_iterations`,
 `iteration_budget_remaining`, `plan_count`, `observation_count`, and
 `event_count` for low-cardinality dashboard triage without exposing full event
-or observation bodies. They also include
+or observation bodies. When a run is waiting for approval, the
+pending approval detail schema is limited to `id`, `tool`, `input`, and optional `reason`;
+unknown action fields are omitted while `pending_approval.input` remains
+available for operator review before resume. They also include
 `failed_observation_count`, `approval_required_count`,
 `planner_failure_count`, `tool_failure_count`, `latest_failed_action_id`,
 `latest_failed_tool`, `latest_failed_error_code`, `error_code_counts`,

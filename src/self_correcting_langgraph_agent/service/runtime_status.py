@@ -491,8 +491,9 @@ def runtime_status_summary(
             field_value = _runtime_scalar(trace[optional_field])
             if field_value:
                 summary[optional_field] = field_value
-    if "pending_approval" in trace:
-        summary["pending_approval"] = trace["pending_approval"]
+    pending_approval_detail = _trace_pending_approval(trace)
+    if pending_approval_detail:
+        summary["pending_approval"] = pending_approval_detail
     final_answer_guardrail = _trace_final_answer_guardrail(trace)
     if final_answer_guardrail:
         summary["final_answer_guardrail"] = final_answer_guardrail
@@ -776,6 +777,25 @@ def _trace_final_answer_guardrail(trace: Dict[str, Any]) -> Dict[str, str]:
         if field_value:
             guardrail[field] = field_value
     return guardrail
+
+
+def _trace_pending_approval(trace: Dict[str, Any]) -> Dict[str, Any]:
+    value = trace.get("pending_approval")
+    if not isinstance(value, dict):
+        return {}
+    approval: Dict[str, Any] = {
+        "id": _runtime_string(value.get("id")),
+        "tool": _runtime_string(value.get("tool")),
+    }
+    approval_input = value.get("input")
+    if isinstance(approval_input, dict):
+        approval["input"] = json_ready(approval_input)
+    else:
+        approval["input"] = {}
+    reason = _runtime_string(value.get("reason"))
+    if reason:
+        approval["reason"] = reason
+    return approval
 
 
 def _pending_approval_field(value: Any, field: str) -> str:

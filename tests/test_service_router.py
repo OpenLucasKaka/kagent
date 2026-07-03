@@ -2698,6 +2698,46 @@ def test_service_router_runtime_status_sanitizes_optional_scalar_fields(tmp_path
     assert "secret" not in json.dumps(list_payload)
 
 
+def test_service_router_runtime_status_sanitizes_pending_approval_detail(tmp_path):
+    persist_trace(
+        {
+            "trace_type": "codex_runtime",
+            "run_id": "malformed-pending-approval",
+            "status": "requires_approval",
+            "goal": "inspect pending approval",
+            "pending_approval": {
+                "id": {"secret": "id"},
+                "tool": {"secret": "tool"},
+                "input": {"url": "https://example.invalid"},
+                "reason": ["secret-reason"],
+                "depends_on": ["step-0"],
+                "extra": {"secret": "extra"},
+            },
+            "observations": [],
+        },
+        str(tmp_path),
+    )
+
+    status_code, payload = service_router.handle_request(
+        "GET",
+        "/runtime/runs/malformed-pending-approval",
+        b"",
+        config=ServiceConfig(trace_dir=str(tmp_path)),
+    )
+
+    assert status_code == 200
+    assert payload["pending_approval_action_id"] == ""
+    assert payload["pending_approval_tool"] == ""
+    assert payload["pending_approval"] == {
+        "id": "",
+        "tool": "",
+        "input": {"url": "https://example.invalid"},
+    }
+    assert "depends_on" not in payload["pending_approval"]
+    assert "extra" not in payload["pending_approval"]
+    assert "secret" not in json.dumps(payload)
+
+
 def test_service_router_runtime_status_reports_progress_sink_failures(tmp_path):
     persist_trace(
         {
