@@ -120,6 +120,29 @@ def test_list_files_tool_rejects_path_traversal(tmp_path, monkeypatch):
     assert "path must stay inside the workspace" in observation.error
 
 
+def test_list_files_tool_skips_symlinks_to_avoid_external_metadata_leaks(
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.chdir(tmp_path)
+    outside = tmp_path.parent / "outside-secret.txt"
+    outside.write_text("secret bytes outside workspace\n", encoding="utf-8")
+    (tmp_path / "safe.md").write_text("safe\n", encoding="utf-8")
+    (tmp_path / "outside-link").symlink_to(outside)
+
+    observation = execute_runtime_tool(
+        default_runtime_tools(),
+        "list_files",
+        {"path": ".", "max_depth": 1},
+        action_id="step-1",
+    )
+
+    assert observation.status == "ok"
+    assert observation.output["entries"] == [
+        {"path": "safe.md", "type": "file", "bytes": 5}
+    ]
+
+
 def test_apply_patch_tool_adds_file_inside_workspace(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
 

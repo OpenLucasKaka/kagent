@@ -1028,6 +1028,8 @@ def _find_subsequence(lines: list[str], needle: list[str]) -> int | None:
 def _iter_workspace_entries(root: Path, *, max_depth: int):
     root_depth = len(root.parts)
     for path in sorted(root.rglob("*"), key=lambda item: item.relative_to(root).as_posix()):
+        if path.is_symlink():
+            continue
         depth = len(path.parts) - root_depth
         if depth > max_depth:
             continue

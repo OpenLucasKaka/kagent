@@ -576,6 +576,9 @@ passwords cannot be copied into runtime observations or traces.
 `artifact` records
 structured reports, plans, decisions, data, or messages with a stable
 `artifact_id`, normalized tags, content format, and byte count.
+Workspace file tools keep execution local: `read_file` and `apply_patch` resolve
+paths inside the current workspace, and `list_files` skips symlink entries so
+external file metadata is not exposed through directory listings.
 `decision_matrix` ranks options with weighted criteria for structured tradeoff
 decisions, `rubric_score` returns score percentages, failed criteria, and
 blocking failures for structured self-review, while `task_list` returns

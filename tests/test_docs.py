@@ -51,6 +51,8 @@ def test_architecture_document_names_runtime_and_operational_boundaries():
     assert "unknown action fields" in architecture
     assert "artifact" in architecture
     assert "decision_matrix" in architecture
+    assert "list_files" in architecture
+    assert "symlink entries" in architecture
     assert "http_request" in architecture
     assert "SSRF" in architecture
     assert "private, loopback, and link-local" in architecture

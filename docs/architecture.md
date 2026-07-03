@@ -93,6 +93,10 @@ authority fields.
 `open_url` is intentionally separate from `http_request`: it opens `http://`
 and `https://` URLs through Google Chrome automation first, with macOS `open`
 fallbacks, and does not fetch page content into the runtime trace.
+Workspace file tools keep the same local boundary: `read_file` and
+`apply_patch` resolve paths inside the current workspace, while `list_files`
+skips symlink entries so external file metadata cannot be exposed through
+directory listings.
 
 `runtime/policy.py` authorizes each planned tool call before execution. Unknown
 or disallowed tools become `requires_approval` observations, which gives the
