@@ -688,6 +688,90 @@ def test_service_router_runtime_timeline_keeps_dependency_metadata(tmp_path):
     assert dependent_executor_event["dependency_statuses"] == {"step-1": "ok"}
 
 
+def test_service_router_runtime_timeline_filters_non_scalar_metadata(tmp_path):
+    persist_trace(
+        {
+            "trace_type": "codex_runtime",
+            "run_id": "malformed-timeline-metadata",
+            "status": "done",
+            "goal": "inspect timeline metadata",
+            "events": [
+                {
+                    "node": {"secret": "node"},
+                    "status": "ok",
+                    "iteration": 1,
+                    "action_id": {"secret": "action"},
+                    "tool": "note",
+                    "reason": ["secret"],
+                    "action_count": 1,
+                    "duration_seconds": {"secret": "duration"},
+                    "depends_on": ["step-0", {"secret": "dependency"}],
+                    "dependency_statuses": {
+                        "step-0": "ok",
+                        "step-secret": {"secret": "status"},
+                    },
+                }
+            ],
+            "observations": [
+                {
+                    "action_id": {"secret": "observation-action"},
+                    "tool": "note",
+                    "status": {"secret": "observation-status"},
+                    "error_code": {"secret": "error"},
+                    "output": {"artifact_id": {"secret": "artifact"}},
+                }
+            ],
+            "progress_events": [
+                {
+                    "run_id": "malformed-timeline-metadata",
+                    "type": {"secret": "type"},
+                    "node": "executor",
+                    "status": "ok",
+                    "iteration": 1,
+                    "tool": {"secret": "progress-tool"},
+                    "duration_seconds": {"secret": "progress-duration"},
+                }
+            ],
+        },
+        str(tmp_path),
+    )
+
+    status_code, payload = service_router.handle_request(
+        "GET",
+        "/runtime/runs/malformed-timeline-metadata/timeline",
+        b"",
+        config=ServiceConfig(trace_dir=str(tmp_path)),
+    )
+
+    assert status_code == 200
+    assert payload["events"] == [
+        {
+            "status": "ok",
+            "iteration": "1",
+            "tool": "note",
+            "action_count": "1",
+            "depends_on": ["step-0"],
+            "dependency_statuses": {"step-0": "ok"},
+        }
+    ]
+    assert payload["observations"] == [
+        {
+            "action_id": "",
+            "tool": "note",
+            "status": "",
+        }
+    ]
+    assert payload["progress_events"] == [
+        {
+            "run_id": "malformed-timeline-metadata",
+            "node": "executor",
+            "status": "ok",
+            "iteration": "1",
+        }
+    ]
+    assert "secret" not in json.dumps(payload)
+
+
 def test_service_router_runtime_timeline_requires_trace_persistence():
     status_code, payload = service_router.handle_request(
         "GET",

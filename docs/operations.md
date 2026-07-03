@@ -730,6 +730,9 @@ expose `artifact_count` and `artifact_ids`, which downstream workflows can use
 to discover non-coding deliverables without loading full observation bodies. Use
 `GET /runtime/runs/{run_id}/timeline` for a compact timeline of planner,
 policy, executor, and observation status fields without full inputs or outputs.
+timeline scalar metadata is limited to strings and non-boolean numbers; nested
+objects, arrays, and booleans are omitted so malformed trace files cannot leak
+object representations into operator timelines.
 Timeline responses also include redacted `progress_events` and
 `progress_event_count`, which are safe for operations dashboards because they
 exclude tool inputs, patch bodies, and observation outputs. Each progress event

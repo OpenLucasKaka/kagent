@@ -1053,11 +1053,13 @@ def _runtime_timeline_events(value: Any) -> list[Dict[str, Any]]:
     for item in value:
         if not isinstance(item, dict):
             continue
-        event = {
-            field: str(item[field])
-            for field in fields
-            if field in item and str(item[field]).strip()
-        }
+        event = {}
+        for field in fields:
+            if field not in item:
+                continue
+            field_value = _runtime_timeline_scalar(item[field])
+            if field_value:
+                event[field] = field_value
         depends_on = item.get("depends_on")
         if isinstance(depends_on, list):
             event["depends_on"] = [
@@ -1067,14 +1069,29 @@ def _runtime_timeline_events(value: Any) -> list[Dict[str, Any]]:
             ]
         dependency_statuses = item.get("dependency_statuses")
         if isinstance(dependency_statuses, dict):
-            event["dependency_statuses"] = {
-                str(action_id): str(status)
-                for action_id, status in dependency_statuses.items()
-                if str(action_id).strip() and str(status).strip()
-            }
+            compact_statuses = {}
+            for action_id, status in dependency_statuses.items():
+                action_id_value = _runtime_timeline_scalar(action_id)
+                status_value = _runtime_timeline_scalar(status)
+                if action_id_value and status_value:
+                    compact_statuses[action_id_value] = status_value
+            if compact_statuses:
+                event["dependency_statuses"] = compact_statuses
         if event:
             events.append(event)
     return events
+
+
+def _runtime_timeline_scalar(value: Any) -> str:
+    if isinstance(value, bool):
+        return ""
+    if isinstance(value, str):
+        return value.strip()
+    if isinstance(value, int):
+        return str(value)
+    if isinstance(value, float):
+        return str(value)
+    return ""
 
 
 def _runtime_timeline_observations(value: Any) -> list[Dict[str, str]]:
@@ -1085,16 +1102,21 @@ def _runtime_timeline_observations(value: Any) -> list[Dict[str, str]]:
         if not isinstance(item, dict):
             continue
         observation = {
-            "action_id": str(item.get("action_id", "")),
-            "tool": str(item.get("tool", "")),
-            "status": str(item.get("status", "")),
+            "action_id": _runtime_timeline_scalar(item.get("action_id")),
+            "tool": _runtime_timeline_scalar(item.get("tool")),
+            "status": _runtime_timeline_scalar(item.get("status")),
         }
-        error_code = str(item.get("error_code", ""))
-        if error_code.strip():
+        error_code = _runtime_timeline_scalar(item.get("error_code"))
+        if error_code:
             observation["error_code"] = error_code
         output = item.get("output")
-        if isinstance(output, dict) and str(output.get("artifact_id", "")).strip():
-            observation["artifact_id"] = str(output["artifact_id"])
+        artifact_id = (
+            _runtime_timeline_scalar(output.get("artifact_id"))
+            if isinstance(output, dict)
+            else ""
+        )
+        if artifact_id:
+            observation["artifact_id"] = artifact_id
         observations.append(observation)
     return observations
 
@@ -1120,11 +1142,13 @@ def _runtime_timeline_progress_events(value: Any) -> list[Dict[str, str]]:
     for item in value:
         if not isinstance(item, dict):
             continue
-        event = {
-            field: str(item[field])
-            for field in fields
-            if field in item and str(item[field]).strip()
-        }
+        event = {}
+        for field in fields:
+            if field not in item:
+                continue
+            field_value = _runtime_timeline_scalar(item[field])
+            if field_value:
+                event[field] = field_value
         if event:
             progress_events.append(event)
     return progress_events
