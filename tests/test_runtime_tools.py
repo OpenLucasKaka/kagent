@@ -475,6 +475,20 @@ def test_http_request_tool_rejects_url_credentials():
     assert "password" not in str(observation.output)
 
 
+def test_http_request_tool_rejects_secret_like_url_query():
+    observation = execute_runtime_tool(
+        default_runtime_tools(),
+        "http_request",
+        {"url": "https://example.com/data?api_key=live-secret-token"},
+        action_id="step-1",
+    )
+
+    assert observation.status == "failed"
+    assert observation.error_code == "invalid_tool_input"
+    assert observation.error == "url must not contain secret-like query or fragment"
+    assert observation.output == {}
+
+
 def test_http_request_tool_does_not_follow_redirects(monkeypatch):
     class FakeHeaders:
         def get(self, name, default=""):
@@ -642,6 +656,20 @@ def test_open_url_tool_rejects_url_credentials():
     assert observation.error_code == "invalid_tool_input"
     assert observation.error == "url must not contain credentials"
     assert "password" not in str(observation.output)
+
+
+def test_open_url_tool_rejects_secret_like_url_fragment():
+    observation = execute_runtime_tool(
+        default_runtime_tools(),
+        "open_url",
+        {"url": "https://example.com/dashboard#access_token=browser-secret"},
+        action_id="step-1",
+    )
+
+    assert observation.status == "failed"
+    assert observation.error_code == "invalid_tool_input"
+    assert observation.error == "url must not contain secret-like query or fragment"
+    assert observation.output == {}
 
 
 def test_runtime_tool_observation_includes_timing_metadata():

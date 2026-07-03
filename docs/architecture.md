@@ -87,8 +87,9 @@ URL targets before opening a socket, including literal IPs,
 `localhost`, and hostnames that resolve to blocked addresses. It does not follow redirects;
 3xx responses are returned as observations so a public URL
 cannot silently redirect execution to a blocked target. Both runtime URL tools
-reject url credentials so bearer tokens, passwords, or userinfo cannot enter
-observations or traces through URL authority fields.
+reject url credentials and secret-like query or fragment fields so bearer
+tokens, passwords, or userinfo cannot enter observations or traces through URL
+authority fields.
 `open_url` is intentionally separate from `http_request`: it opens `http://`
 and `https://` URLs through Google Chrome automation first, with macOS `open`
 fallbacks, and does not fetch page content into the runtime trace.

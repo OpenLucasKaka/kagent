@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import ipaddress
 import os
+import re
 import socket
 import subprocess
 import threading
@@ -36,6 +37,19 @@ _HTTP_REQUEST_MAX_BYTES = 65536
 _HTTP_REQUEST_TIMEOUT_SECONDS = 10.0
 _BLOCKED_HTTP_HOSTS = {"localhost", "localhost."}
 _HTTP_REDIRECT_STATUS_CODES = {301, 302, 303, 307, 308}
+_URL_SECRET_KEY_PARTS = (
+    "api_key",
+    "apikey",
+    "authorization",
+    "bearer",
+    "password",
+    "secret",
+    "token",
+)
+_URL_SECRET_VALUE_PATTERNS = (
+    re.compile(r"sk-[A-Za-z0-9:_-]{6,}"),
+    re.compile(r"(?i)\bbearer\s+[A-Za-z0-9._:/+=-]{6,}"),
+)
 _APPLY_PATCH_MAX_BYTES = 20000
 _READ_FILE_MAX_BYTES = 65536
 _LIST_FILES_MAX_DEPTH = 5
@@ -1141,6 +1155,7 @@ def _validate_open_url(url: str) -> None:
         raise ValueError("url host is required")
     if parsed.username or parsed.password:
         raise ValueError("url must not contain credentials")
+    _validate_url_without_secret_like_query_or_fragment(parsed)
 
 
 def _chrome_open_location_script(url: str) -> str:
@@ -1188,6 +1203,7 @@ def _validate_http_request_url(url: str) -> None:
         raise ValueError("url host is required")
     if parsed.username or parsed.password:
         raise ValueError("url must not contain credentials")
+    _validate_url_without_secret_like_query_or_fragment(parsed)
     host = parsed.hostname.strip().lower()
     if host in _BLOCKED_HTTP_HOSTS or host.endswith(".localhost"):
         raise ValueError("url host is not allowed")
@@ -1215,6 +1231,29 @@ def _validate_resolved_http_host(host: str, port: int | None) -> None:
             raise ValueError("url host resolved to an invalid address") from exc
         if _is_blocked_http_address(address):
             raise ValueError("url host is not allowed")
+
+
+def _validate_url_without_secret_like_query_or_fragment(
+    parsed: urllib.parse.ParseResult,
+) -> None:
+    for item in (parsed.query, parsed.fragment):
+        if _has_secret_like_url_part(item):
+            raise ValueError("url must not contain secret-like query or fragment")
+
+
+def _has_secret_like_url_part(value: str) -> bool:
+    if not value:
+        return False
+    pairs = urllib.parse.parse_qsl(value, keep_blank_values=True)
+    if not pairs:
+        pairs = [(value, "")]
+    for key, item in pairs:
+        normalized_key = key.lower().replace("-", "_")
+        if any(part in normalized_key for part in _URL_SECRET_KEY_PARTS):
+            return True
+        if any(pattern.search(item) for pattern in _URL_SECRET_VALUE_PATTERNS):
+            return True
+    return False
 
 
 def _is_blocked_http_address(address: ipaddress._BaseAddress) -> bool:
