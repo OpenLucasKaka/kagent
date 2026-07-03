@@ -11,6 +11,7 @@ from self_correcting_langgraph_agent.runtime.metadata import (
     validate_runtime_tags,
 )
 from self_correcting_langgraph_agent.runtime.policy import RuntimePolicy
+from self_correcting_langgraph_agent.runtime.redaction import redact_runtime_payload
 from self_correcting_langgraph_agent.runtime.tools import (
     RuntimeToolSpec,
     default_runtime_tools,
@@ -359,7 +360,7 @@ def run_runtime_agent(
         result["progress_event_sink_failure_count"] = str(
             progress_event_sink_failure_count
         )
-    return result
+    return redact_runtime_payload(result)
 
 
 def _runtime_user_prompt(

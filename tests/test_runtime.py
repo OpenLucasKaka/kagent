@@ -202,6 +202,49 @@ def test_runtime_agent_reports_policy_denial_as_requires_approval():
     assert float(result["events"][1]["duration_seconds"]) >= 0
 
 
+def test_runtime_agent_redacts_secret_like_urls_in_result_payload():
+    provider = FakeLLMProvider(
+        json.dumps(
+            {
+                "actions": [
+                    {
+                        "id": "step-1",
+                        "tool": "http_request",
+                        "input": {
+                            "url": (
+                                "https://example.com/data?"
+                                "api_key=runtime-result-token&safe=1"
+                                "&credential=bearer-runtime-query"
+                                "#token=runtime-fragment-token"
+                            )
+                        },
+                        "reason": "fetch gated URL",
+                    }
+                ]
+            }
+        )
+    )
+
+    result = run_runtime_agent("fetch gated URL", provider=provider)
+
+    serialized = json.dumps(result, sort_keys=True)
+    assert result["status"] == "requires_approval"
+    assert "runtime-result-token" not in serialized
+    assert "bearer-runtime-query" not in serialized
+    assert "runtime-fragment-token" not in serialized
+    assert (
+        result["pending_approval"]["input"]["url"]
+        == "https://example.com/data?api_key=[REDACTED]&safe=1"
+        "&credential=[REDACTED]#token=[REDACTED]"
+    )
+    assert result["plan"]["actions"][0]["input"]["url"] == result["pending_approval"][
+        "input"
+    ]["url"]
+    assert result["plans"][0]["actions"][0]["input"]["url"] == result[
+        "pending_approval"
+    ]["input"]["url"]
+
+
 def test_runtime_agent_can_execute_action_after_explicit_approval():
     provider = FakeLLMProvider(
         '{"actions":[{"id":"step-1","tool":"transform_text",'

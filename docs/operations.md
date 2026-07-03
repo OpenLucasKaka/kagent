@@ -572,7 +572,10 @@ addresses. It does not follow redirects; 3xx responses are returned as
 observations so a public URL cannot silently redirect execution to a blocked
 target. Both `http_request` and `open_url` reject url credentials and
 secret-like query or fragment fields, so userinfo tokens, bearer tokens, or
-passwords cannot be copied into runtime observations or traces.
+passwords cannot be copied into runtime observations or traces. Runtime result
+payloads also redact secret-like URL query and fragment values before CLI
+output, HTTP responses, or persisted traces expose `plan`, `plans`, or
+`pending_approval` fields.
 `artifact` records
 structured reports, plans, decisions, data, or messages with a stable
 `artifact_id`, normalized tags, content format, and byte count.
