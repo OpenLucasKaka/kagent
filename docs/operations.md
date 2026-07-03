@@ -889,8 +889,8 @@ debugging because it returns `trace_path` without exposing internal event bodies
 to API clients.
 Use `self-correcting-agent-trace-prune TRACE_DIR --max-age-days 7` to dry-run
 trace retention before deleting anything. Add `--delete` only after reviewing
-the JSON summary; the command scans top-level `*.json` trace files and leaves
-other files untouched.
+the JSON summary; the command scans top-level `*.json` trace files, skips
+symlink trace files, and leaves other files untouched.
 For Codex-style runtime retention, prefer
 `self-correcting-agent-trace-prune TRACE_DIR --max-age-days 7 --runtime-only`.
 Runtime-only mode scans only `trace_type: "codex_runtime"` files and, by

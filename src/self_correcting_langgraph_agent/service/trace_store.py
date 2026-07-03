@@ -91,6 +91,8 @@ def prune_traces(
     errors = []
 
     for path in sorted(output_dir.glob("*.json")):
+        if path.is_symlink():
+            continue
         if not path.is_file():
             continue
         scanned += 1
@@ -146,6 +148,8 @@ def prune_runtime_traces(
     errors = []
 
     for path in sorted(output_dir.glob("*.json")):
+        if path.is_symlink():
+            continue
         if not path.is_file():
             continue
         scanned += 1

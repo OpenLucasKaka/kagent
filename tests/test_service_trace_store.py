@@ -200,6 +200,27 @@ def test_prune_traces_delete_removes_only_old_trace_json_files(tmp_path):
     assert old_text.exists()
 
 
+def test_prune_traces_skips_symlink_trace_files(tmp_path):
+    outside_trace = tmp_path.parent / "outside-old.json"
+    outside_trace.write_text("{}\n", encoding="utf-8")
+    symlink_trace = tmp_path / "linked-old.json"
+    symlink_trace.symlink_to(outside_trace)
+    os.utime(outside_trace, (1_000.0, 1_000.0))
+
+    summary = prune_traces(
+        tmp_path,
+        max_age_seconds=3_600,
+        now=10_000.0,
+        dry_run=False,
+    )
+
+    assert summary["scanned"] == 0
+    assert summary["matched"] == 0
+    assert summary["deleted"] == 0
+    assert symlink_trace.is_symlink()
+    assert outside_trace.exists()
+
+
 def test_prune_runtime_traces_dry_run_matches_only_old_terminal_runtime_traces(
     tmp_path,
 ):
@@ -321,6 +342,38 @@ def test_prune_runtime_traces_delete_removes_only_old_terminal_runtime_traces(
     assert not old_done.exists()
     assert old_pending.exists()
     assert old_legacy.exists()
+
+
+def test_prune_runtime_traces_skips_symlink_trace_files(tmp_path):
+    outside_trace = tmp_path.parent / "outside-runtime-old.json"
+    outside_trace.write_text(
+        json.dumps(
+            {
+                "trace_type": "codex_runtime",
+                "run_id": "outside-runtime",
+                "status": "done",
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    symlink_trace = tmp_path / "linked-runtime.json"
+    symlink_trace.symlink_to(outside_trace)
+    os.utime(outside_trace, (1_000.0, 1_000.0))
+
+    summary = prune_runtime_traces(
+        tmp_path,
+        max_age_seconds=3_600,
+        now=10_000.0,
+        dry_run=False,
+    )
+
+    assert summary["scanned"] == 0
+    assert summary["runtime_scanned"] == 0
+    assert summary["matched"] == 0
+    assert summary["deleted"] == 0
+    assert symlink_trace.is_symlink()
+    assert outside_trace.exists()
 
 
 def test_trace_store_module_prunes_traces_in_dry_run_mode(tmp_path):
