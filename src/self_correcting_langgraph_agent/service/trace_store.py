@@ -35,6 +35,8 @@ def persist_trace(trace: Dict[str, Any], trace_dir: str) -> str:
 
 def load_trace_by_run_id(run_id: Any, trace_dir: str) -> Dict[str, Any] | None:
     trace_path = Path(trace_dir) / f"{safe_trace_file_stem(run_id)}.json"
+    if trace_path.is_symlink():
+        raise OSError("trace file must not be a symlink")
     try:
         payload = json.loads(trace_path.read_text(encoding="utf-8"))
     except FileNotFoundError:

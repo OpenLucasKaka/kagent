@@ -1865,6 +1865,36 @@ def test_service_router_runtime_resume_reports_unreadable_trace_as_structured_er
     }
 
 
+def test_service_router_runtime_status_rejects_symlink_trace_file(tmp_path):
+    outside_trace = tmp_path.parent / "outside-runtime-trace.json"
+    outside_trace.write_text(
+        json.dumps(
+            {
+                "trace_type": "codex_runtime",
+                "run_id": "linked-run",
+                "status": "done",
+                "goal": "outside trace",
+            }
+        ),
+        encoding="utf-8",
+    )
+    (tmp_path / "linked-run.json").symlink_to(outside_trace)
+
+    status_code, payload = service_router.handle_request(
+        "GET",
+        "/runtime/runs/linked-run",
+        b"",
+        config=ServiceConfig(trace_dir=str(tmp_path)),
+    )
+
+    assert status_code == 500
+    assert payload == {
+        "status": "failed",
+        "error_code": "trace_read_failed",
+        "error": "runtime run trace could not be read",
+    }
+
+
 def test_service_router_runtime_cancel_marks_pending_run_cancelled(tmp_path):
     config = ServiceConfig(
         trace_dir=str(tmp_path),

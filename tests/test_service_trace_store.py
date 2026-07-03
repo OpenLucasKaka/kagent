@@ -93,6 +93,17 @@ def test_load_trace_by_run_id_reads_sanitized_trace_file(tmp_path):
     assert not (tmp_path / "outside.json").exists()
 
 
+def test_load_trace_by_run_id_rejects_symlink_trace_file(tmp_path):
+    trace_dir = tmp_path / "traces"
+    trace_dir.mkdir()
+    outside_trace = tmp_path / "outside.json"
+    outside_trace.write_text('{"run_id":"linked","status":"done"}\n', encoding="utf-8")
+    (trace_dir / "linked.json").symlink_to(outside_trace)
+
+    with pytest.raises(OSError, match="trace file must not be a symlink"):
+        load_trace_by_run_id("linked", str(trace_dir))
+
+
 def test_load_trace_by_run_id_returns_none_for_missing_trace(tmp_path):
     assert load_trace_by_run_id("missing", str(tmp_path)) is None
 
