@@ -2501,6 +2501,7 @@ def test_run_checks_smokes_trace_replay_redacted_summary():
     assert '"tool_counts"] != {"apply_patch": "1", "read_file": "1"}' in run_checks
     assert 'summary["changed_files"][0]["operation"] != "move"' in run_checks
     assert 'summary["changed_files"][0]["previous_path"] != "docs/plan.md"' in run_checks
+    assert 'len(str(summary["changed_files"][0]["sha256"])) != 64' in run_checks
     assert 'summary["progress_event_count"] != "4"' in run_checks
     assert "trace replay leaked read_file content" in run_checks
     assert "trace replay leaked action input patch" in run_checks

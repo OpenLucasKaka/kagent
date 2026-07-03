@@ -380,6 +380,8 @@ if summary["changed_files"][0]["operation"] != "move":
     raise SystemExit(f"unexpected trace replay changed files: {summary}")
 if summary["changed_files"][0]["previous_path"] != "docs/plan.md":
     raise SystemExit(f"unexpected trace replay changed files: {summary}")
+if len(str(summary["changed_files"][0]["sha256"])) != 64:
+    raise SystemExit(f"unexpected trace replay changed file digest: {summary}")
 if summary["progress_event_count"] != "4":
     raise SystemExit(f"unexpected trace replay progress count: {summary}")
 if "secret body should not replay" in summary_text:

@@ -40,7 +40,8 @@ def test_operations_runbook_documents_continuous_iteration_and_failure_triage():
     assert "protected_pending" in runbook
     assert "matched_by_status" in runbook
     assert "redacted summary" in runbook
-    assert "rename provenance from a redacted trace" in runbook
+    assert "rename provenance" in runbook
+    assert "content integrity checks" in runbook
     assert "0700" in runbook
     assert "0600" in runbook
     assert "sha256" in runbook

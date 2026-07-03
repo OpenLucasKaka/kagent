@@ -940,10 +940,10 @@ delete before adding `--delete`.
 Use `kagent-trace-replay TRACE.json` when debugging a persisted
 Codex-style runtime trace. The replay command emits a redacted summary with run
 status, tool counts, failed observations, changed files, artifacts, and timeline
-metadata. Changed-file entries include `previous_path` for move operations so
-operators can audit rename provenance from a redacted trace, but the command
-does not replay `read_file` contents, action inputs, or patch bodies into
-stdout.
+metadata. Changed-file entries include `previous_path` for move operations and
+`sha256` for content integrity checks so operators can audit rename provenance
+from a redacted trace, but the command does not replay `read_file` contents,
+action inputs, or patch bodies into stdout.
 `max_steps` and `max_retries` must be JSON integers, not strings, floats, or
 booleans; invalid values return `400 invalid_agent_config` before the agent
 runner starts. `full_trace` must be a JSON boolean; strings such as `"true"`

@@ -104,6 +104,7 @@ def test_summarize_runtime_trace_builds_redacted_replay_summary():
                 "previous_path": "docs/plan.md",
                 "operation": "move",
                 "bytes": "22",
+                "sha256": "a" * 64,
             }
         ],
         "artifacts": [],
