@@ -40,7 +40,13 @@ def main() -> None:
     parser.add_argument(
         "--runtime",
         action="store_true",
-        help="Run the Codex-style plan-act-observe runtime instead of the legacy graph.",
+        help="Run the Codex-style plan-act-observe runtime.",
+    )
+    parser.add_argument(
+        "--deterministic",
+        "--legacy-graph",
+        action="store_true",
+        help="Run the deterministic regression graph instead of the default runtime.",
     )
     parser.add_argument(
         "--interactive",
@@ -162,6 +168,10 @@ def main() -> None:
         parser.error("--max-retries must be non-negative")
     if args.max_iterations is not None and args.max_iterations < 1:
         parser.error("--max-iterations must be at least 1")
+    if args.deterministic and (args.runtime or args.runtime_plan):
+        parser.error("--deterministic cannot be combined with runtime options")
+    if args.deterministic and args.interactive:
+        parser.error("--deterministic cannot be combined with --interactive")
     if args.runtime and args.plan:
         parser.error("--plan is not supported with --runtime")
     if args.interactive_json and not args.interactive:
@@ -321,13 +331,30 @@ def main() -> None:
 
 
 def _apply_default_cli_mode(args: argparse.Namespace) -> None:
+    if _uses_deterministic_graph(args):
+        args.deterministic = True
+        return
     if args.runtime_plan:
         args.runtime = True
     if args.interactive:
         args.runtime = True
+    if args.goal is not None and not _is_introspection_command(args):
+        args.runtime = True
     if args.goal is None and not _is_introspection_command(args):
         args.runtime = True
         args.interactive = True
+
+
+def _uses_deterministic_graph(args: argparse.Namespace) -> bool:
+    return bool(
+        args.deterministic
+        or args.plan
+        or args.summary
+        or args.max_steps is not None
+        or args.max_retries is not None
+        or args.inject_wrong_answer
+        or args.inject_fault
+    )
 
 
 def _is_introspection_command(args: argparse.Namespace) -> bool:

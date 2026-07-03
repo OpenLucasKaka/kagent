@@ -180,6 +180,7 @@ def test_run_checks_smoke_exercises_cli_introspection():
     assert "kagent-serve --help" in run_checks
     assert "--version" in run_checks
     assert "--plan" in run_checks
+    assert "--deterministic" in run_checks
     assert "--session-memory /tmp/kagent-session-memory.json" in run_checks
     assert "/tmp/kagent-session-memory-smoke.json" in run_checks
     assert "unexpected session memory file mode" in run_checks

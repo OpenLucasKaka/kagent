@@ -155,7 +155,8 @@ def test_readme_documents_console_script_entrypoints():
     assert "KAGENT_SESSION_MEMORY_PATH" in readme
     assert "session-memory.json" in readme
     assert "progress_event_count" in readme
-    assert "--runtime" in readme
+    assert 'kagent "draft an internal rollout checklist"' in readme
+    assert "--deterministic" in readme
     assert "--runtime-plan" in readme
     assert "--max-iterations" in readme
     assert "JSON integers" in readme

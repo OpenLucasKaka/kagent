@@ -15,12 +15,87 @@ def test_cli_entrypoint_is_delegated_to_cli_main_module():
     assert cli.main is cli_main.main
 
 
+def test_cli_defaults_goal_runs_to_runtime_mode():
+    from kagent.cli.main import _apply_default_cli_mode
+
+    args = Namespace(
+        deterministic=False,
+        runtime=False,
+        runtime_plan="",
+        interactive=False,
+        goal="write an internal rollout plan",
+        list_tools=False,
+        list_faults=False,
+        graph=False,
+        version=False,
+        plan=False,
+        summary=False,
+        max_steps=None,
+        max_retries=None,
+        inject_wrong_answer=[],
+        inject_fault=[],
+    )
+
+    _apply_default_cli_mode(args)
+
+    assert args.runtime is True
+    assert args.interactive is False
+    assert args.deterministic is False
+
+
+def test_cli_deterministic_flag_keeps_goal_on_legacy_graph():
+    from kagent.cli.main import _apply_default_cli_mode
+
+    args = Namespace(
+        deterministic=True,
+        runtime=False,
+        runtime_plan="",
+        interactive=False,
+        goal="calculate 2 + 3",
+        list_tools=False,
+        list_faults=False,
+        graph=False,
+        version=False,
+        plan=False,
+        summary=False,
+        max_steps=None,
+        max_retries=None,
+        inject_wrong_answer=[],
+        inject_fault=[],
+    )
+
+    _apply_default_cli_mode(args)
+
+    assert args.runtime is False
+    assert args.interactive is False
+
+
+def test_cli_rejects_deterministic_runtime_plan_mix():
+    completed = subprocess.run(
+        [
+            ".venv/bin/python",
+            "-m",
+            "kagent.cli",
+            "--deterministic",
+            "capture hello",
+            "--runtime-plan",
+            '{"actions":[]}',
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    assert completed.returncode == 2
+    assert "--deterministic cannot be combined with runtime options" in completed.stderr
+
+
 def test_cli_runs_goal_and_prints_json_trace():
     completed = subprocess.run(
         [
             ".venv/bin/python",
             "-m",
             "kagent.cli",
+            "--deterministic",
             "calculate 2 + 3",
         ],
         check=True,
@@ -42,6 +117,7 @@ def test_cli_can_demonstrate_self_correction_with_fault_injection():
             ".venv/bin/python",
             "-m",
             "kagent.cli",
+            "--deterministic",
             "calculate 2 + 3",
             "--inject-wrong-answer",
             "calculate 2 + 3",
@@ -73,6 +149,7 @@ def test_cli_accepts_generic_fault_injection():
             ".venv/bin/python",
             "-m",
             "kagent.cli",
+            "--deterministic",
             "uppercase text in 'agent loop'",
             "--inject-fault",
             "uppercase text in 'agent loop'=empty-answer",
@@ -96,6 +173,7 @@ def test_cli_fault_injection_preserves_quoted_text_case_when_matching():
             ".venv/bin/python",
             "-m",
             "kagent.cli",
+            "--deterministic",
             "Uppercase Text in 'Agent Loop'",
             "--inject-fault",
             "Uppercase Text in 'Agent Loop'=empty-answer",
@@ -371,6 +449,7 @@ def test_cli_uses_environment_config_defaults_when_flags_are_omitted():
             ".venv/bin/python",
             "-m",
             "kagent.cli",
+            "--deterministic",
             "calculate 1 + 1 then calculate 2 + 2",
         ],
         check=True,
@@ -420,6 +499,7 @@ def test_cli_reports_invalid_environment_config_without_traceback():
             ".venv/bin/python",
             "-m",
             "kagent.cli",
+            "--deterministic",
             "calculate 2 + 3",
         ],
         capture_output=True,
@@ -438,6 +518,7 @@ def test_cli_can_exit_nonzero_when_agent_run_fails():
             ".venv/bin/python",
             "-m",
             "kagent.cli",
+            "--deterministic",
             "calculate 1 + 1 then search the web",
             "--fail-on-agent-failure",
         ],
@@ -1790,6 +1871,7 @@ def test_cli_writes_output_file_before_failure_exit(tmp_path):
             ".venv/bin/python",
             "-m",
             "kagent.cli",
+            "--deterministic",
             "calculate 1 + 1 then search the web",
             "--fail-on-agent-failure",
             "--output",

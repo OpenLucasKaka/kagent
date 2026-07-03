@@ -98,3 +98,6 @@ Initial production-oriented LangGraph agent package.
   evidence freshness configuration is not a positive integer.
 - Made strict production approval bundles print redacted `status: "blocked"`
   stdout summaries for semantically invalid evidence while exiting with code 1.
+- Made the CLI default to the Codex-style runtime for both `kagent` and
+  `kagent "goal"`, with `--deterministic` reserved for legacy graph regression
+  checks.

@@ -251,7 +251,7 @@ The CLI writes JSON to stdout by default. Use `--output PATH` to also write the
 same payload to an artifact file:
 
 ```sh
-.venv/bin/python -m kagent.cli "calculate 2 + 3" --summary --output /tmp/agent-summary.json
+.venv/bin/python -m kagent.cli --deterministic "calculate 2 + 3" --summary --output /tmp/agent-summary.json
 ```
 
 When paired with `--fail-on-agent-failure`, the output file is written before
@@ -470,12 +470,10 @@ curl -s -X POST http://127.0.0.1:8000/runtime/run \
   -H 'Content-Type: application/json' \
   -d '{"goal":"capture hello","max_iterations":1,"plan":{"actions":[{"id":"step-1","tool":"note","input":{"text":"hello"}}]}}'
 .venv/bin/python -m kagent.cli "capture hello" \
-  --runtime \
   --runtime-plan '{"actions":[{"id":"step-1","tool":"note","input":{"text":"hello"},"reason":"capture"}],"final_answer":"captured"}'
 .venv/bin/python -m kagent.cli
 .venv/bin/python -m kagent.cli --interactive-json
 .venv/bin/python -m kagent.cli "create README" \
-  --runtime \
   --runtime-plan '{"actions":[{"id":"step-1","tool":"apply_patch","input":{"patch":"*** Begin Patch\n*** Add File: README.agent.md\n+# Agent file\n+\n+Created through apply_patch.\n*** End Patch\n"},"reason":"create workspace file"}],"final_answer":"created"}'
 curl -s 'http://127.0.0.1:8000/runtime/runs?tag=internal-smoke&limit=20'
 curl -s 'http://127.0.0.1:8000/runtime/runs/summary?metadata_key=workflow&metadata_value=internal'
@@ -484,9 +482,10 @@ curl -s -X POST http://127.0.0.1:8000/runtime/resume \
   -d '{"run_id":"<pending-run-id>","approved_action_ids":["step-1"]}'
 ```
 
-TTY interactive sessions are the default CLI mode: run
-`kagent` or `.venv/bin/python -m kagent.cli`
-with no goal to start the runtime shell. Sessions start with
+The CLI defaults to the Codex-style runtime for both one-shot goals and TTY
+sessions: run `kagent "goal"` for a single turn, or run `kagent` or
+`.venv/bin/python -m kagent.cli` with no goal to start the runtime shell. Use
+`--deterministic` only for the legacy LangGraph regression path. Sessions start with
 `Kagent ready  /help`, print live progress while the planner and
 tools run, and then use a compact operator transcript by default: status first,
 answer second, and only real external tool observations under `tools`.

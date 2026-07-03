@@ -31,6 +31,8 @@ def test_operations_runbook_documents_continuous_iteration_and_failure_triage():
     assert "--session-memory PATH" in runbook
     assert "KAGENT_SESSION_MEMORY_PATH" in runbook
     assert "session-memory.json" in runbook
+    assert "`kagent \"goal\"`" in runbook
+    assert "--deterministic" in runbook
     assert "owner-only" in runbook
     assert "progress_event_count" in runbook
     assert "exclude tool inputs" in runbook

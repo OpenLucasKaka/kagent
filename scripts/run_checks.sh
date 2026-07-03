@@ -156,9 +156,9 @@ if grep "Traceback" /tmp/kagent-serve-invalid-env.stderr >/dev/null; then
 fi
 PYTHONWARNINGS=ignore sh scripts/smoke_service.sh
 PYTHONWARNINGS=ignore sh scripts/smoke_internal_runtime.sh >/tmp/kagent-internal-runtime-smoke.json
-PYTHONWARNINGS=ignore .venv/bin/python -m kagent.cli "calculate 2 + 3 then count words in 'ship small reliable agents'" >/tmp/kagent-smoke.json
+PYTHONWARNINGS=ignore .venv/bin/python -m kagent.cli --deterministic "calculate 2 + 3 then count words in 'ship small reliable agents'" >/tmp/kagent-smoke.json
 PYTHONWARNINGS=ignore .venv/bin/python -m kagent.cli "calculate 2 + 3 then subtract 10 - 4" --plan >/tmp/kagent-plan.json
-PYTHONWARNINGS=ignore .venv/bin/python -m kagent.cli "uppercase text in 'agent loop'" --inject-fault "uppercase text in 'agent loop'=empty-answer" --summary --output /tmp/kagent-summary-output.json >/tmp/kagent-summary.json
+PYTHONWARNINGS=ignore .venv/bin/python -m kagent.cli --deterministic "uppercase text in 'agent loop'" --inject-fault "uppercase text in 'agent loop'=empty-answer" --summary --output /tmp/kagent-summary-output.json >/tmp/kagent-summary.json
 rm -f /tmp/kagent-session-memory.json
 printf '我是卡卡\nexit\n' | PYTHONWARNINGS=ignore .venv/bin/python -m kagent.cli \
     --runtime \

@@ -21,12 +21,6 @@ python3 -m venv .venv
 scripts/run_checks.sh
 ```
 
-Run a deterministic goal:
-
-```sh
-.venv/bin/python -m kagent.cli "calculate 2 + 3"
-```
-
 Start the LLM-backed terminal agent after setting provider environment
 variables:
 
@@ -34,7 +28,20 @@ variables:
 # Set KAGENT_LLM_BASE_URL, KAGENT_LLM_API_KEY, and
 # KAGENT_LLM_MODEL in your shell or secret manager.
 
-.venv/bin/python -m kagent.cli
+kagent
+```
+
+Run a one-shot runtime goal through the same default agent path:
+
+```sh
+kagent "draft an internal rollout checklist"
+```
+
+Run the deterministic regression graph explicitly when you need local,
+LLM-free checks:
+
+```sh
+.venv/bin/python -m kagent.cli --deterministic "calculate 2 + 3"
 ```
 
 After package installation, the console entrypoint is the same daily-use
@@ -48,8 +55,9 @@ TTY sessions show live progress and a compact operator transcript by default.
 Use `/json`, `/compact`, `/last`, `/trace`, `/memory`, `/clear`, and `/help`
 inside the shell. Persisted session memory is owner-only and redacts common
 API keys, bearer tokens, and URL credentials before writing to disk. The CLI
-defaults to the runtime interactive shell, with three planning iterations per
-turn. TTY sessions persist memory by default at
+defaults to the runtime for both `kagent` and `kagent "goal"`; use
+`--deterministic` only for the legacy regression graph. Runtime turns use three
+planning iterations by default. TTY sessions persist memory by default at
 `${XDG_STATE_HOME:-~/.local/state}/kagent/session-memory.json`; set
 `KAGENT_SESSION_MEMORY_PATH` to override that path or to an empty value to
 disable default persistence. Use `--max-iterations` to override the iteration
