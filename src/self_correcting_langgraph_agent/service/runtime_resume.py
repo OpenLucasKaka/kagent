@@ -122,6 +122,12 @@ def execute_runtime_resume_request(
             service_errors.INVALID_REQUEST_BODY,
             "runtime run trace is missing resumable plan state",
         )
+    resumable_plan = _pending_approval_plan(plan, pending_action_id)
+    if resumable_plan is None:
+        return 400, failure_payload(
+            service_errors.INVALID_REQUEST_BODY,
+            "runtime run trace is missing pending approval action plan",
+        )
 
     try:
         allowed_tools = service_config.runtime_allowed_tools_for_subject(owner_auth_subject)
@@ -133,7 +139,7 @@ def execute_runtime_resume_request(
         result = run_with_timeout(
             lambda: run_runtime_agent(
                 goal,
-                provider=FakeLLMProvider(json.dumps(plan, sort_keys=True)),
+                provider=FakeLLMProvider(json.dumps(resumable_plan, sort_keys=True)),
                 policy=policy,
                 max_iterations=max_iterations,
                 approved_action_ids=set(approved_action_ids),
@@ -162,3 +168,24 @@ def execute_runtime_resume_request(
             f"could not persist trace: {exc}",
         )
     return 200, json_ready(result)
+
+
+def _pending_approval_plan(
+    plan: Dict[str, Any],
+    pending_action_id: str,
+) -> Dict[str, Any] | None:
+    actions = plan.get("actions")
+    if not isinstance(actions, list):
+        return None
+    matching_actions = [
+        action
+        for action in actions
+        if isinstance(action, dict) and action.get("id") == pending_action_id
+    ]
+    if len(matching_actions) != 1:
+        return None
+    resumable_plan: Dict[str, Any] = {"actions": [matching_actions[0]]}
+    final_answer = plan.get("final_answer")
+    if isinstance(final_answer, str) and final_answer:
+        resumable_plan["final_answer"] = final_answer
+    return resumable_plan

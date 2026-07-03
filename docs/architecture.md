@@ -94,9 +94,9 @@ authority fields.
 and `https://` URLs through Google Chrome automation first, with macOS `open`
 fallbacks, and does not fetch page content into the runtime trace.
 Workspace file tools keep the same local boundary: `read_file` and
-`apply_patch` resolve paths inside the current workspace, while `list_files`
-skips symlink entries so external file metadata cannot be exposed through
-directory listings.
+`apply_patch` resolve paths inside the current workspace and reject symlink
+paths, while `list_files` skips symlink entries so external file metadata
+cannot be exposed through directory listings.
 
 `runtime/policy.py` authorizes each planned tool call before execution. Unknown
 or disallowed tools become `requires_approval` observations, which gives the
@@ -330,8 +330,10 @@ The service intentionally keeps a narrow API:
 - `POST /runtime/resume` loads a persisted `requires_approval` runtime trace by
   `run_id`, applies reviewed `approved_action_ids`, and writes a new resumed
   trace linked by `resumed_from_run_id`; resume accepts only the pending approval action
-  from that trace. Resumed traces keep the original owner `auth_subject` and
-  record the approver in `resumed_by_auth_subject`.
+  from that trace and does not replay earlier actions that
+  already executed before approval was requested. Resumed traces keep the
+  original owner `auth_subject` and record the approver in
+  `resumed_by_auth_subject`.
 - `/runtime/run trace persistence` uses the same configured trace directory as
   `/run`; successful persisted runtime responses include `trace_path`, and HTTP
   responses expose it through `X-Trace-Path`.
