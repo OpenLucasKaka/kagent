@@ -21,6 +21,8 @@ from self_correcting_langgraph_agent.runtime.metadata import (
 )
 from self_correcting_langgraph_agent.utils.json_output import format_and_write_json, json_ready
 
+DEFAULT_RUNTIME_MAX_ITERATIONS = 3
+
 
 def main() -> None:
     warnings.filterwarnings("ignore")
@@ -150,6 +152,7 @@ def main() -> None:
         help="Write the JSON payload to PATH as well as stdout.",
     )
     args = parser.parse_args()
+    _apply_default_cli_mode(args)
 
     if args.max_steps is not None and args.max_steps < 1:
         parser.error("--max-steps must be at least 1")
@@ -159,8 +162,6 @@ def main() -> None:
         parser.error("--max-iterations must be at least 1")
     if args.runtime and args.plan:
         parser.error("--plan is not supported with --runtime")
-    if args.interactive and not args.runtime:
-        parser.error("--interactive requires --runtime")
     if args.interactive_json and not args.interactive:
         parser.error("--interactive-json requires --interactive")
     if args.session_memory and not args.interactive:
@@ -249,7 +250,7 @@ def main() -> None:
                 _run_runtime_interactive(
                     provider=provider,
                     run_runtime_agent=run_runtime_agent,
-                    max_iterations=args.max_iterations or 1,
+                    max_iterations=args.max_iterations or DEFAULT_RUNTIME_MAX_ITERATIONS,
                     fail_on_agent_failure=args.fail_on_agent_failure,
                     full_trace_output=args.interactive_json,
                     metadata=runtime_metadata,
@@ -279,7 +280,7 @@ def main() -> None:
                 result = run_runtime_agent(
                     args.goal,
                     provider=provider,
-                    max_iterations=args.max_iterations or 1,
+                    max_iterations=args.max_iterations or DEFAULT_RUNTIME_MAX_ITERATIONS,
                     metadata=runtime_metadata,
                     tags=runtime_tags,
                 )
@@ -311,6 +312,20 @@ def main() -> None:
     _emit_json_payload(payload, args.output, parser)
     if args.fail_on_agent_failure and not args.plan and payload.get("status") == "failed":
         raise SystemExit(1)
+
+
+def _apply_default_cli_mode(args: argparse.Namespace) -> None:
+    if args.runtime_plan:
+        args.runtime = True
+    if args.interactive:
+        args.runtime = True
+    if args.goal is None and not _is_introspection_command(args):
+        args.runtime = True
+        args.interactive = True
+
+
+def _is_introspection_command(args: argparse.Namespace) -> bool:
+    return bool(args.list_tools or args.list_faults or args.graph or args.version)
 
 
 def _runtime_labels_from_args(

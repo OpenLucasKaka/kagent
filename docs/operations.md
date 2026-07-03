@@ -474,8 +474,8 @@ curl -s -X POST http://127.0.0.1:8000/runtime/run \
 .venv/bin/python -m self_correcting_langgraph_agent.cli "capture hello" \
   --runtime \
   --runtime-plan '{"actions":[{"id":"step-1","tool":"note","input":{"text":"hello"},"reason":"capture"}],"final_answer":"captured"}'
-.venv/bin/python -m self_correcting_langgraph_agent.cli --runtime --interactive
-.venv/bin/python -m self_correcting_langgraph_agent.cli --runtime --interactive --interactive-json
+.venv/bin/python -m self_correcting_langgraph_agent.cli
+.venv/bin/python -m self_correcting_langgraph_agent.cli --interactive-json
 .venv/bin/python -m self_correcting_langgraph_agent.cli "create README" \
   --runtime \
   --runtime-plan '{"actions":[{"id":"step-1","tool":"apply_patch","input":{"patch":"*** Begin Patch\n*** Add File: README.agent.md\n+# Agent file\n+\n+Created through apply_patch.\n*** End Patch\n"},"reason":"create workspace file"}],"final_answer":"created"}'
@@ -486,21 +486,25 @@ curl -s -X POST http://127.0.0.1:8000/runtime/resume \
   -d '{"run_id":"<pending-run-id>","approved_action_ids":["step-1"]}'
 ```
 
-TTY interactive sessions start with `self-correcting agent ready  /help`, print
-live progress while the planner and tools run, and then use a compact operator
-transcript by default: status first, answer second, and only real external tool
-observations under `tools`. Internal `note` observations stay hidden in the
-default view so the shell reads like an agent session instead of a debug trace.
-Use `/json` inside the shell for full trace output, `/compact` to return to the
-operator view, `/last` to replay the most recent compact result,
-`/trace` to print the most recent full JSON trace once, `/memory` to inspect
-the current session memory, `/clear` to clear it, and `/help` to list shell
-commands. Session memory is in-process by default; add `--session-memory PATH`
-to persist compact memory across shell restarts. The memory file is written
-owner-only, and `/clear` also clears the persisted file. Before writing
-session memory to disk, the CLI redacts common API keys, bearer tokens, and URL
-credentials so accidental provider or service secrets are not preserved in the
-memory file.
+TTY interactive sessions are the default CLI mode: run
+`self-correcting-agent` or `.venv/bin/python -m self_correcting_langgraph_agent.cli`
+with no goal to start the runtime shell. Sessions start with
+`self-correcting agent ready  /help`, print live progress while the planner and
+tools run, and then use a compact operator transcript by default: status first,
+answer second, and only real external tool observations under `tools`.
+Internal `note` observations stay hidden in the default view so the shell reads
+like an agent session instead of a debug trace. Use `/json` inside the shell
+for full trace output, `/compact` to return to the operator view, `/last` to
+replay the most recent compact result, `/trace` to print the most recent full
+JSON trace once, `/memory` to inspect the current session memory, `/clear` to
+clear it, and `/help` to list shell commands. The default turn budget is three
+planning iterations; add `--max-iterations N` only when a workflow needs a
+different budget. Session memory is in-process by default; add
+`--session-memory PATH` to persist compact memory across shell restarts. The
+memory file is written owner-only, and `/clear` also clears the persisted file.
+Before writing session memory to disk, the CLI redacts common API keys, bearer
+tokens, and URL credentials so accidental provider or service secrets are not
+preserved in the memory file.
 
 `/openapi.json` includes named schemas for production integration, including
 `RunRequest`, `RunResponse`, readiness, config, tools, version, metrics, and

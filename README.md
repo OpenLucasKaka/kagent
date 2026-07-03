@@ -27,36 +27,32 @@ Run a deterministic goal:
 .venv/bin/python -m self_correcting_langgraph_agent.cli "calculate 2 + 3"
 ```
 
-Run the LLM-backed runtime after setting provider environment variables:
+Start the LLM-backed terminal agent after setting provider environment
+variables:
 
 ```sh
-export SELF_CORRECTING_LLM_BASE_URL="$PROVIDER_BASE_URL"
-export SELF_CORRECTING_LLM_API_KEY="$PROVIDER_API_KEY"
-export SELF_CORRECTING_LLM_MODEL="$PROVIDER_MODEL"
+# Set SELF_CORRECTING_LLM_BASE_URL, SELF_CORRECTING_LLM_API_KEY, and
+# SELF_CORRECTING_LLM_MODEL in your shell or secret manager.
 
-.venv/bin/python -m self_correcting_langgraph_agent.cli \
-  "draft an internal rollout checklist" \
-  --runtime \
-  --max-iterations 3
+.venv/bin/python -m self_correcting_langgraph_agent.cli
 ```
 
-Start the interactive terminal runtime:
+After package installation, the console entrypoint is the same daily-use
+interface:
 
 ```sh
-.venv/bin/python -m self_correcting_langgraph_agent.cli \
-  --runtime \
-  --interactive \
-  --max-iterations 3 \
-  --session-memory PATH
+self-correcting-agent
 ```
 
 TTY sessions show live progress and a compact operator transcript by default.
 Use `/json`, `/compact`, `/last`, `/trace`, `/memory`, `/clear`, and `/help`
 inside the shell. Persisted session memory is owner-only and redacts common
-API keys, bearer tokens, and URL credentials before writing to disk. Add
-`--runtime-plan` for deterministic runtime tests and `--interactive-json` when
-you need full traces. Runtime and service config values must use JSON integers,
-not strings or booleans.
+API keys, bearer tokens, and URL credentials before writing to disk. The CLI
+defaults to the runtime interactive shell, with three planning iterations per
+turn. Use `--max-iterations` to override the iteration budget,
+`--session-memory PATH` to persist memory, `--runtime-plan` for deterministic
+runtime tests, and `--interactive-json` when you need full traces. Runtime and
+service config values must use JSON integers, not strings or booleans.
 
 ## What It Can Do
 

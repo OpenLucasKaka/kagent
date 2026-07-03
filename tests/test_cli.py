@@ -744,6 +744,34 @@ def test_cli_interactive_runtime_runs_goals_from_stdin_with_inline_plan(tmp_path
     )
 
 
+def test_cli_defaults_to_interactive_runtime_when_no_goal_is_provided(tmp_path):
+    project_root = Path(__file__).resolve().parents[1]
+    env = os.environ.copy()
+    env["PYTHONPATH"] = str(project_root / "src")
+
+    completed = subprocess.run(
+        [
+            str(project_root / ".venv/bin/python"),
+            "-m",
+            "self_correcting_langgraph_agent.cli",
+            "--runtime-plan",
+            '{"actions":[],"final_answer":"ready"}',
+        ],
+        input="检查默认交互\nexit\n",
+        cwd=tmp_path,
+        check=True,
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+
+    payload = json.loads(completed.stdout)
+
+    assert completed.stderr == ""
+    assert payload["status"] == "done"
+    assert payload["answer"] == "ready"
+
+
 def test_cli_interactive_runtime_can_update_file_with_inline_plan(tmp_path):
     project_root = Path(__file__).resolve().parents[1]
     env = os.environ.copy()
