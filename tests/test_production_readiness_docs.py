@@ -38,6 +38,7 @@ def test_production_readiness_checklist_documents_release_gates():
     assert "agent run duration histogram" in readiness
     assert "runtime run duration histogram" in readiness
     assert "runtime tool timeout" in readiness
+    assert "url credentials" in readiness
     assert "PodDisruptionBudget" in readiness
     assert "NetworkPolicy" in readiness
     assert "self-correcting-agent-access" in readiness

@@ -570,7 +570,9 @@ targets before opening a socket, including `localhost`, literal private IPs,
 link-local metadata addresses, and hostnames that resolve to blocked
 addresses. It does not follow redirects; 3xx responses are returned as
 observations so a public URL cannot silently redirect execution to a blocked
-target. `artifact` records
+target. Both `http_request` and `open_url` reject url credentials, so userinfo
+tokens or passwords cannot be copied into runtime observations or traces.
+`artifact` records
 structured reports, plans, decisions, data, or messages with a stable
 `artifact_id`, normalized tags, content format, and byte count.
 `decision_matrix` ranks options with weighted criteria for structured tradeoff

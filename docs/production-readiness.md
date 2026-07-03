@@ -368,6 +368,9 @@ ready for SRE review.
   structured `tool_execution_timeout` observations for bounded replanning.
 - Policy-gated `http_request` applies SSRF defense in depth by rejecting
   private, loopback, and link-local targets before opening a socket.
+- Runtime URL tools reject url credentials before execution so userinfo
+  passwords or tokens are not copied into observations, traces, or browser
+  automation commands.
 - Optional full-trace artifact persistence with atomic file replacement.
 - `/ready` validates configured trace persistence with an owner-only
   temporary-file write/delete probe.

@@ -239,6 +239,7 @@ def test_operations_runbook_documents_continuous_iteration_and_failure_triage():
     assert "SSRF" in runbook
     assert "private, loopback, and link-local" in runbook
     assert "does not follow redirects" in runbook
+    assert "url credentials" in runbook
     assert "rubric_score" in runbook
     assert "blocking failures" in runbook
     assert "plans" in runbook

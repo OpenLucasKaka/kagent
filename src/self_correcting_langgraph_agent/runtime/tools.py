@@ -1139,6 +1139,8 @@ def _validate_open_url(url: str) -> None:
         raise ValueError("url must start with http:// or https://")
     if not parsed.hostname:
         raise ValueError("url host is required")
+    if parsed.username or parsed.password:
+        raise ValueError("url must not contain credentials")
 
 
 def _chrome_open_location_script(url: str) -> str:
@@ -1184,6 +1186,8 @@ def _validate_http_request_url(url: str) -> None:
         raise ValueError("url must start with http:// or https://")
     if not parsed.hostname:
         raise ValueError("url host is required")
+    if parsed.username or parsed.password:
+        raise ValueError("url must not contain credentials")
     host = parsed.hostname.strip().lower()
     if host in _BLOCKED_HTTP_HOSTS or host.endswith(".localhost"):
         raise ValueError("url host is not allowed")

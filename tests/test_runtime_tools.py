@@ -461,6 +461,20 @@ def test_http_request_tool_rejects_private_and_loopback_targets():
         assert "url host is not allowed" in observation.error
 
 
+def test_http_request_tool_rejects_url_credentials():
+    observation = execute_runtime_tool(
+        default_runtime_tools(),
+        "http_request",
+        {"url": "https://user:password@example.com/data"},
+        action_id="step-1",
+    )
+
+    assert observation.status == "failed"
+    assert observation.error_code == "invalid_tool_input"
+    assert observation.error == "url must not contain credentials"
+    assert "password" not in str(observation.output)
+
+
 def test_http_request_tool_does_not_follow_redirects(monkeypatch):
     class FakeHeaders:
         def get(self, name, default=""):
@@ -614,6 +628,20 @@ def test_open_url_tool_rejects_non_http_urls():
     assert observation.status == "failed"
     assert observation.error_code == "invalid_tool_input"
     assert "url must start with http:// or https://" in observation.error
+
+
+def test_open_url_tool_rejects_url_credentials():
+    observation = execute_runtime_tool(
+        default_runtime_tools(),
+        "open_url",
+        {"url": "https://user:password@example.com/dashboard"},
+        action_id="step-1",
+    )
+
+    assert observation.status == "failed"
+    assert observation.error_code == "invalid_tool_input"
+    assert observation.error == "url must not contain credentials"
+    assert "password" not in str(observation.output)
 
 
 def test_runtime_tool_observation_includes_timing_metadata():

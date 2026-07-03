@@ -54,6 +54,7 @@ def test_architecture_document_names_runtime_and_operational_boundaries():
     assert "http_request" in architecture
     assert "SSRF" in architecture
     assert "private, loopback, and link-local" in architecture
+    assert "url credentials" in architecture
     assert "does not follow redirects" in architecture
     assert "rubric_score" in architecture
     assert "plans" in architecture
