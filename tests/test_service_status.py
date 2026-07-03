@@ -2,8 +2,8 @@ import os
 from pathlib import Path
 from stat import S_IMODE
 
-from self_correcting_langgraph_agent.service.runtime import ServiceConfig
-from self_correcting_langgraph_agent.service.status import (
+from kagent.service.runtime import ServiceConfig
+from kagent.service.status import (
     readiness_payload,
     service_config_snapshot,
 )

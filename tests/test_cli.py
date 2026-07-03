@@ -7,9 +7,9 @@ from pathlib import Path
 
 
 def test_cli_entrypoint_is_delegated_to_cli_main_module():
-    from self_correcting_langgraph_agent import cli
+    from kagent import cli
 
-    cli_main = importlib.import_module("self_correcting_langgraph_agent.cli.main")
+    cli_main = importlib.import_module("kagent.cli.main")
 
     assert cli.main is cli_main.main
 
@@ -19,7 +19,7 @@ def test_cli_runs_goal_and_prints_json_trace():
         [
             ".venv/bin/python",
             "-m",
-            "self_correcting_langgraph_agent.cli",
+            "kagent.cli",
             "calculate 2 + 3",
         ],
         check=True,
@@ -40,7 +40,7 @@ def test_cli_can_demonstrate_self_correction_with_fault_injection():
         [
             ".venv/bin/python",
             "-m",
-            "self_correcting_langgraph_agent.cli",
+            "kagent.cli",
             "calculate 2 + 3",
             "--inject-wrong-answer",
             "calculate 2 + 3",
@@ -71,7 +71,7 @@ def test_cli_accepts_generic_fault_injection():
         [
             ".venv/bin/python",
             "-m",
-            "self_correcting_langgraph_agent.cli",
+            "kagent.cli",
             "uppercase text in 'agent loop'",
             "--inject-fault",
             "uppercase text in 'agent loop'=empty-answer",
@@ -94,7 +94,7 @@ def test_cli_fault_injection_preserves_quoted_text_case_when_matching():
         [
             ".venv/bin/python",
             "-m",
-            "self_correcting_langgraph_agent.cli",
+            "kagent.cli",
             "Uppercase Text in 'Agent Loop'",
             "--inject-fault",
             "Uppercase Text in 'Agent Loop'=empty-answer",
@@ -117,7 +117,7 @@ def test_cli_lists_registered_tools():
         [
             ".venv/bin/python",
             "-m",
-            "self_correcting_langgraph_agent.cli",
+            "kagent.cli",
             "--list-tools",
         ],
         check=True,
@@ -147,7 +147,7 @@ def test_cli_lists_verbose_tool_metadata():
         [
             ".venv/bin/python",
             "-m",
-            "self_correcting_langgraph_agent.cli",
+            "kagent.cli",
             "--list-tools",
             "--verbose",
         ],
@@ -173,7 +173,7 @@ def test_cli_lists_runtime_tool_metadata_when_runtime_mode_is_enabled():
         [
             ".venv/bin/python",
             "-m",
-            "self_correcting_langgraph_agent.cli",
+            "kagent.cli",
             "--runtime",
             "--list-tools",
             "--verbose",
@@ -256,7 +256,7 @@ def test_cli_lists_supported_faults():
         [
             ".venv/bin/python",
             "-m",
-            "self_correcting_langgraph_agent.cli",
+            "kagent.cli",
             "--list-faults",
         ],
         check=True,
@@ -275,7 +275,7 @@ def test_cli_can_print_graph_topology_without_goal():
         [
             ".venv/bin/python",
             "-m",
-            "self_correcting_langgraph_agent.cli",
+            "kagent.cli",
             "--graph",
         ],
         check=True,
@@ -305,7 +305,7 @@ def test_cli_can_print_package_version_without_goal():
         [
             ".venv/bin/python",
             "-m",
-            "self_correcting_langgraph_agent.cli",
+            "kagent.cli",
             "--version",
         ],
         check=True,
@@ -325,7 +325,7 @@ def test_cli_output_file_also_applies_to_introspection_commands(tmp_path):
         [
             ".venv/bin/python",
             "-m",
-            "self_correcting_langgraph_agent.cli",
+            "kagent.cli",
             "--version",
             "--output",
             str(output_path),
@@ -344,7 +344,7 @@ def test_cli_can_preview_plan_without_execution():
         [
             ".venv/bin/python",
             "-m",
-            "self_correcting_langgraph_agent.cli",
+            "kagent.cli",
             "calculate 2 + 3 then subtract 10 - 4",
             "--plan",
         ],
@@ -364,12 +364,12 @@ def test_cli_can_preview_plan_without_execution():
 
 def test_cli_uses_environment_config_defaults_when_flags_are_omitted():
     env = os.environ.copy()
-    env["SELF_CORRECTING_MAX_STEPS"] = "1"
+    env["KAGENT_MAX_STEPS"] = "1"
     completed = subprocess.run(
         [
             ".venv/bin/python",
             "-m",
-            "self_correcting_langgraph_agent.cli",
+            "kagent.cli",
             "calculate 1 + 1 then calculate 2 + 2",
         ],
         check=True,
@@ -388,12 +388,12 @@ def test_cli_uses_environment_config_defaults_when_flags_are_omitted():
 
 def test_cli_flags_override_environment_config_defaults():
     env = os.environ.copy()
-    env["SELF_CORRECTING_MAX_STEPS"] = "1"
+    env["KAGENT_MAX_STEPS"] = "1"
     completed = subprocess.run(
         [
             ".venv/bin/python",
             "-m",
-            "self_correcting_langgraph_agent.cli",
+            "kagent.cli",
             "calculate 1 + 1 then calculate 2 + 2",
             "--max-steps",
             "2",
@@ -413,12 +413,12 @@ def test_cli_flags_override_environment_config_defaults():
 
 def test_cli_reports_invalid_environment_config_without_traceback():
     env = os.environ.copy()
-    env["SELF_CORRECTING_MAX_STEPS"] = "many"
+    env["KAGENT_MAX_STEPS"] = "many"
     completed = subprocess.run(
         [
             ".venv/bin/python",
             "-m",
-            "self_correcting_langgraph_agent.cli",
+            "kagent.cli",
             "calculate 2 + 3",
         ],
         capture_output=True,
@@ -427,7 +427,7 @@ def test_cli_reports_invalid_environment_config_without_traceback():
     )
 
     assert completed.returncode == 2
-    assert "SELF_CORRECTING_MAX_STEPS must be an integer" in completed.stderr
+    assert "KAGENT_MAX_STEPS must be an integer" in completed.stderr
     assert "Traceback" not in completed.stderr
 
 
@@ -436,7 +436,7 @@ def test_cli_can_exit_nonzero_when_agent_run_fails():
         [
             ".venv/bin/python",
             "-m",
-            "self_correcting_langgraph_agent.cli",
+            "kagent.cli",
             "calculate 1 + 1 then search the web",
             "--fail-on-agent-failure",
         ],
@@ -458,7 +458,7 @@ def test_cli_can_write_json_payload_to_output_file(tmp_path):
         [
             ".venv/bin/python",
             "-m",
-            "self_correcting_langgraph_agent.cli",
+            "kagent.cli",
             "calculate 2 + 3",
             "--summary",
             "--output",
@@ -482,7 +482,7 @@ def test_cli_can_run_codex_style_runtime_with_inline_plan():
         [
             ".venv/bin/python",
             "-m",
-            "self_correcting_langgraph_agent.cli",
+            "kagent.cli",
             "score readiness",
             "--runtime",
             "--runtime-plan",
@@ -511,7 +511,7 @@ def test_cli_runtime_accepts_non_secret_metadata_and_tags():
         [
             ".venv/bin/python",
             "-m",
-            "self_correcting_langgraph_agent.cli",
+            "kagent.cli",
             "score readiness",
             "--runtime",
             "--runtime-plan",
@@ -549,7 +549,7 @@ def test_cli_runtime_can_persist_trace_to_trace_dir(tmp_path):
         [
             ".venv/bin/python",
             "-m",
-            "self_correcting_langgraph_agent.cli",
+            "kagent.cli",
             "score readiness",
             "--runtime",
             "--runtime-plan",
@@ -573,7 +573,7 @@ def test_cli_runtime_can_persist_trace_to_trace_dir(tmp_path):
 
 
 def test_cli_runtime_trace_persistence_writes_once():
-    from self_correcting_langgraph_agent.cli.main import _persist_runtime_cli_trace
+    from kagent.cli.main import _persist_runtime_cli_trace
 
     calls = []
     payload = {"run_id": "run-123", "status": "done"}
@@ -603,7 +603,7 @@ def test_cli_interactive_runtime_can_persist_trace_to_trace_dir(tmp_path):
         [
             ".venv/bin/python",
             "-m",
-            "self_correcting_langgraph_agent.cli",
+            "kagent.cli",
             "--runtime",
             "--interactive",
             "--max-iterations",
@@ -636,7 +636,7 @@ def test_cli_interactive_runtime_trace_dir_failure_has_no_traceback(tmp_path):
         [
             ".venv/bin/python",
             "-m",
-            "self_correcting_langgraph_agent.cli",
+            "kagent.cli",
             "--runtime",
             "--interactive",
             "--max-iterations",
@@ -661,7 +661,7 @@ def test_cli_runtime_rejects_secret_like_metadata_without_traceback():
         [
             ".venv/bin/python",
             "-m",
-            "self_correcting_langgraph_agent.cli",
+            "kagent.cli",
             "score readiness",
             "--runtime",
             "--runtime-plan",
@@ -685,7 +685,7 @@ def test_cli_runtime_rejects_secret_like_metadata_values_without_traceback():
         [
             ".venv/bin/python",
             "-m",
-            "self_correcting_langgraph_agent.cli",
+            "kagent.cli",
             "score readiness",
             "--runtime",
             "--runtime-plan",
@@ -712,7 +712,7 @@ def test_cli_interactive_runtime_runs_goals_from_stdin_with_inline_plan(tmp_path
         [
             str(project_root / ".venv/bin/python"),
             "-m",
-            "self_correcting_langgraph_agent.cli",
+            "kagent.cli",
             "--runtime",
             "--interactive",
             "--max-iterations",
@@ -753,7 +753,7 @@ def test_cli_defaults_to_interactive_runtime_when_no_goal_is_provided(tmp_path):
         [
             str(project_root / ".venv/bin/python"),
             "-m",
-            "self_correcting_langgraph_agent.cli",
+            "kagent.cli",
             "--runtime-plan",
             '{"actions":[],"final_answer":"ready"}',
         ],
@@ -783,7 +783,7 @@ def test_cli_interactive_runtime_can_update_file_with_inline_plan(tmp_path):
         [
             str(project_root / ".venv/bin/python"),
             "-m",
-            "self_correcting_langgraph_agent.cli",
+            "kagent.cli",
             "--runtime",
             "--interactive",
             "--max-iterations",
@@ -816,7 +816,7 @@ def test_cli_interactive_runtime_can_update_file_with_inline_plan(tmp_path):
 
 
 def test_cli_interactive_runtime_prints_prompt_to_real_stderr(monkeypatch, capsys):
-    from self_correcting_langgraph_agent.cli import _run_runtime_interactive
+    from kagent.cli import _run_runtime_interactive
 
     class FakeTTYInput:
         def __init__(self):
@@ -840,12 +840,12 @@ def test_cli_interactive_runtime_prints_prompt_to_real_stderr(monkeypatch, capsy
 
     captured = capsys.readouterr()
     assert "› " in captured.out
-    assert "self-correcting agent ready" in captured.err
+    assert "Kagent ready" in captured.err
     assert "/help" in captured.err
 
 
 def test_cli_interactive_runtime_tty_prints_production_summary(monkeypatch, capsys):
-    from self_correcting_langgraph_agent.cli import _run_runtime_interactive
+    from kagent.cli import _run_runtime_interactive
 
     class FakeTTYInput:
         def __init__(self):
@@ -913,7 +913,7 @@ def test_cli_interactive_runtime_tty_prints_production_summary(monkeypatch, caps
 
 
 def test_cli_interactive_runtime_tty_prints_live_progress(monkeypatch, capsys):
-    from self_correcting_langgraph_agent.cli import _run_runtime_interactive
+    from kagent.cli import _run_runtime_interactive
 
     class FakeTTYInput:
         def __init__(self):
@@ -987,7 +987,7 @@ def test_cli_interactive_runtime_tty_prints_live_progress(monkeypatch, capsys):
 
 
 def test_cli_interactive_runtime_tty_can_toggle_json_output(monkeypatch, capsys):
-    from self_correcting_langgraph_agent.cli import _run_runtime_interactive
+    from kagent.cli import _run_runtime_interactive
 
     class FakeTTYInput:
         def __init__(self):
@@ -1023,7 +1023,7 @@ def test_cli_interactive_runtime_collapses_repeated_tool_observations(
     monkeypatch,
     capsys,
 ):
-    from self_correcting_langgraph_agent.cli import _run_runtime_interactive
+    from kagent.cli import _run_runtime_interactive
 
     class FakeTTYInput:
         def __init__(self):
@@ -1090,7 +1090,7 @@ def test_cli_interactive_runtime_collapses_repeated_tool_observations(
 
 
 def test_cli_interactive_runtime_hides_note_only_activity(monkeypatch, capsys):
-    from self_correcting_langgraph_agent.cli import _run_runtime_interactive
+    from kagent.cli import _run_runtime_interactive
 
     class FakeTTYInput:
         def __init__(self):
@@ -1134,7 +1134,7 @@ def test_cli_interactive_runtime_tty_keeps_debug_details_out_of_default_output(
     monkeypatch,
     capsys,
 ):
-    from self_correcting_langgraph_agent.cli import _run_runtime_interactive
+    from kagent.cli import _run_runtime_interactive
 
     class FakeTTYInput:
         def __init__(self):
@@ -1202,7 +1202,7 @@ def test_cli_interactive_runtime_can_show_and_clear_session_memory(
     monkeypatch,
     capsys,
 ):
-    from self_correcting_langgraph_agent.cli import _run_runtime_interactive
+    from kagent.cli import _run_runtime_interactive
 
     class FakeTTYInput:
         def __init__(self):
@@ -1239,7 +1239,7 @@ def test_cli_interactive_runtime_carries_session_memory_between_turns(
     monkeypatch,
     capsys,
 ):
-    from self_correcting_langgraph_agent.cli import _run_runtime_interactive
+    from kagent.cli import _run_runtime_interactive
 
     class FakeTTYInput:
         def __init__(self):
@@ -1284,7 +1284,7 @@ def test_cli_interactive_runtime_persists_session_memory_between_shells(
     monkeypatch,
     capsys,
 ):
-    from self_correcting_langgraph_agent.cli import _run_runtime_interactive
+    from kagent.cli import _run_runtime_interactive
 
     memory_path = tmp_path / "agent-memory.json"
 
@@ -1358,7 +1358,7 @@ def test_cli_interactive_runtime_clear_persists_empty_session_memory(
     monkeypatch,
     capsys,
 ):
-    from self_correcting_langgraph_agent.cli import _run_runtime_interactive
+    from kagent.cli import _run_runtime_interactive
 
     memory_path = tmp_path / "agent-memory.json"
     memory_path.write_text(
@@ -1394,7 +1394,7 @@ def test_cli_interactive_runtime_clear_persists_empty_session_memory(
 
 
 def test_cli_session_memory_redacts_secret_like_text_before_persisting(tmp_path):
-    from self_correcting_langgraph_agent.cli.memory import save_runtime_session_memory
+    from kagent.cli.memory import save_runtime_session_memory
 
     memory_path = tmp_path / "agent-memory.json"
     api_key = "sk-" + "test-redaction-value"
@@ -1428,7 +1428,7 @@ def test_cli_session_memory_requires_interactive_runtime():
         [
             ".venv/bin/python",
             "-m",
-            "self_correcting_langgraph_agent.cli",
+            "kagent.cli",
             "capture hello",
             "--runtime",
             "--session-memory",
@@ -1447,7 +1447,7 @@ def test_cli_interactive_runtime_passes_metadata_and_tags_to_each_run(
     monkeypatch,
     capsys,
 ):
-    from self_correcting_langgraph_agent.cli import _run_runtime_interactive
+    from kagent.cli import _run_runtime_interactive
 
     class FakeTTYInput:
         def __init__(self):
@@ -1487,7 +1487,7 @@ def test_cli_interactive_runtime_passes_metadata_and_tags_to_each_run(
 
 
 def test_cli_interactive_runtime_can_still_print_full_json(monkeypatch, capsys):
-    from self_correcting_langgraph_agent.cli import _run_runtime_interactive
+    from kagent.cli import _run_runtime_interactive
 
     class FakeTTYInput:
         def __init__(self):
@@ -1519,7 +1519,7 @@ def test_cli_interactive_runtime_can_still_print_full_json(monkeypatch, capsys):
 
 
 def test_cli_interactive_runtime_can_show_last_compact_result(monkeypatch, capsys):
-    from self_correcting_langgraph_agent.cli import _run_runtime_interactive
+    from kagent.cli import _run_runtime_interactive
 
     class FakeTTYInput:
         def __init__(self):
@@ -1567,7 +1567,7 @@ def test_cli_interactive_runtime_can_show_last_compact_result(monkeypatch, capsy
 
 
 def test_cli_interactive_runtime_can_show_last_full_trace_once(monkeypatch, capsys):
-    from self_correcting_langgraph_agent.cli import _run_runtime_interactive
+    from kagent.cli import _run_runtime_interactive
 
     class FakeTTYInput:
         def __init__(self):
@@ -1615,8 +1615,8 @@ def test_cli_interactive_runtime_trace_dir_updates_last_trace(
     monkeypatch,
     capsys,
 ):
-    from self_correcting_langgraph_agent.cli import _run_runtime_interactive
-    from self_correcting_langgraph_agent.service.trace_store import persist_trace
+    from kagent.cli import _run_runtime_interactive
+    from kagent.service.trace_store import persist_trace
 
     trace_dir = tmp_path / "interactive-traces"
 
@@ -1657,7 +1657,7 @@ def test_cli_interactive_runtime_trace_dir_updates_last_trace(
 
 
 def test_cli_interactive_runtime_reports_when_no_last_trace_exists(monkeypatch, capsys):
-    from self_correcting_langgraph_agent.cli import _run_runtime_interactive
+    from kagent.cli import _run_runtime_interactive
 
     class FakeTTYInput:
         def __init__(self):
@@ -1684,7 +1684,7 @@ def test_cli_interactive_runtime_reports_when_no_last_trace_exists(monkeypatch, 
 
 
 def test_cli_interactive_runtime_can_approve_pending_tool(monkeypatch, capsys):
-    from self_correcting_langgraph_agent.cli import _run_runtime_interactive
+    from kagent.cli import _run_runtime_interactive
 
     class FakeTTYInput:
         def __init__(self):
@@ -1739,7 +1739,7 @@ def test_cli_writes_output_file_before_failure_exit(tmp_path):
         [
             ".venv/bin/python",
             "-m",
-            "self_correcting_langgraph_agent.cli",
+            "kagent.cli",
             "calculate 1 + 1 then search the web",
             "--fail-on-agent-failure",
             "--output",
@@ -1758,7 +1758,7 @@ def test_cli_can_print_run_summary():
         [
             ".venv/bin/python",
             "-m",
-            "self_correcting_langgraph_agent.cli",
+            "kagent.cli",
             "uppercase text in 'agent loop'",
             "--inject-fault",
             "uppercase text in 'agent loop'=empty-answer",
@@ -1783,7 +1783,7 @@ def test_cli_reports_invalid_fault_format_without_traceback():
         [
             ".venv/bin/python",
             "-m",
-            "self_correcting_langgraph_agent.cli",
+            "kagent.cli",
             "calculate 2 + 3",
             "--inject-fault",
             "calculate 2 + 3",
@@ -1802,7 +1802,7 @@ def test_cli_reports_unknown_fault_name_without_traceback():
         [
             ".venv/bin/python",
             "-m",
-            "self_correcting_langgraph_agent.cli",
+            "kagent.cli",
             "calculate 2 + 3",
             "--inject-fault",
             "calculate 2 + 3=typo",
@@ -1821,7 +1821,7 @@ def test_cli_reports_invalid_retry_config_without_traceback():
         [
             ".venv/bin/python",
             "-m",
-            "self_correcting_langgraph_agent.cli",
+            "kagent.cli",
             "calculate 2 + 3",
             "--max-retries",
             "-1",
@@ -1840,7 +1840,7 @@ def test_cli_reports_invalid_step_config_without_traceback():
         [
             ".venv/bin/python",
             "-m",
-            "self_correcting_langgraph_agent.cli",
+            "kagent.cli",
             "calculate 2 + 3",
             "--max-steps",
             "0",

@@ -12,8 +12,8 @@ def test_operations_runbook_documents_continuous_iteration_and_failure_triage():
     assert "scripts/continuous_iterate.sh" in runbook
     assert "scripts/smoke_real_llm_runtime.sh" in runbook
     assert "real LLM runtime smoke" in runbook
-    assert "self_correcting_langgraph_agent.ops.metrics" in runbook
-    assert "self-correcting-agent-release-manifest" in runbook
+    assert "kagent.ops.metrics" in runbook
+    assert "kagent-release-manifest" in runbook
     assert "scripts/production_approval_bundle.sh" in runbook
     assert "scripts/production_approval_bundle.sh --strict" in runbook
     assert "unknown_argument" in runbook
@@ -23,9 +23,9 @@ def test_operations_runbook_documents_continuous_iteration_and_failure_triage():
     assert "exit code 1" in runbook
     assert "evidence_secret_detected" in runbook
     assert "evidence_secret_findings" in runbook
-    assert "self-correcting-agent-trace-prune" in runbook
-    assert "self-correcting-agent-trace-replay" in runbook
-    assert "self-correcting agent ready  /help" in runbook
+    assert "kagent-trace-prune" in runbook
+    assert "kagent-trace-replay" in runbook
+    assert "Kagent ready  /help" in runbook
     assert "live progress" in runbook
     assert "compact operator" in runbook
     assert "--session-memory PATH" in runbook
@@ -48,7 +48,7 @@ def test_operations_runbook_documents_continuous_iteration_and_failure_triage():
     assert "artifact path invalid" in runbook
     assert "artifact is not a file" in runbook
     assert "--verify" in runbook
-    assert "self-correcting-agent-doctor" in runbook
+    assert "kagent-doctor" in runbook
     assert "RunRequest" in runbook
     assert "RunResponse" in runbook
     assert "JSON integers" in runbook
@@ -60,7 +60,7 @@ def test_operations_runbook_documents_continuous_iteration_and_failure_triage():
     assert "Content-Security-Policy" in runbook
     assert "X-Frame-Options" in runbook
     assert "security_response_headers" in runbook
-    assert "self_correcting_agent_build_info" in runbook
+    assert "kagent_build_info" in runbook
     assert "content_security_policy_header" in runbook
     assert "x_frame_options_header" in runbook
     assert "WWW-Authenticate" in runbook
@@ -150,22 +150,22 @@ def test_operations_runbook_documents_continuous_iteration_and_failure_triage():
     assert "Idempotency-Key" in runbook
     assert "authenticated internal subject" in runbook
     assert "anonymous scope" in runbook
-    assert "SELF_CORRECTING_SERVICE_IDEMPOTENCY_CACHE_PATH" in runbook
+    assert "KAGENT_SERVICE_IDEMPOTENCY_CACHE_PATH" in runbook
     assert "backend is `memory` or `sqlite`" in runbook
     assert "idempotency_cache_persistence" in runbook
     assert "idempotency_cache_unavailable" in runbook
-    assert "SELF_CORRECTING_SERVICE_RUNTIME_ALLOWED_TOOLS" in runbook
-    assert "SELF_CORRECTING_SERVICE_RUNTIME_ALLOWED_TOOLS_BY_SUBJECT" in runbook
+    assert "KAGENT_SERVICE_RUNTIME_ALLOWED_TOOLS" in runbook
+    assert "KAGENT_SERVICE_RUNTIME_ALLOWED_TOOLS_BY_SUBJECT" in runbook
     assert "runtime_allowed_tools" in runbook
     assert "runtime_allowed_tools_by_subject_count" in runbook
     assert "evictions" in runbook
-    assert "SELF_CORRECTING_SERVICE_MAX_GOAL_CHARS" in runbook
-    assert "SELF_CORRECTING_SERVICE_IDEMPOTENCY_CACHE_SIZE" in runbook
-    assert "SELF_CORRECTING_SERVICE_RUNTIME_MAX_ITERATIONS" in runbook
-    assert "SELF_CORRECTING_SERVICE_ALLOW_FULL_TRACE_RESPONSE" in runbook
+    assert "KAGENT_SERVICE_MAX_GOAL_CHARS" in runbook
+    assert "KAGENT_SERVICE_IDEMPOTENCY_CACHE_SIZE" in runbook
+    assert "KAGENT_SERVICE_RUNTIME_MAX_ITERATIONS" in runbook
+    assert "KAGENT_SERVICE_ALLOW_FULL_TRACE_RESPONSE" in runbook
     assert "full_trace_response_must_be_disabled" in runbook
-    assert "SELF_CORRECTING_SERVICE_PROTECT_DIAGNOSTICS" in runbook
-    assert "SELF_CORRECTING_SERVICE_AUTH_TOKENS" in runbook
+    assert "KAGENT_SERVICE_PROTECT_DIAGNOSTICS" in runbook
+    assert "KAGENT_SERVICE_AUTH_TOKENS" in runbook
     assert "operator/admin diagnostic token" in runbook
     assert "subject-scoped runtime trace reads" in runbook
     assert "subject-scoped runtime resume" in runbook
@@ -210,14 +210,14 @@ def test_operations_runbook_documents_continuous_iteration_and_failure_triage():
     assert "has_errors=true" in runbook
     assert "has_failures=true" in runbook
     assert "has_approvals=true" in runbook
-    assert "SELF_CORRECTING_SERVICE_REQUEST_TIMEOUT_SECONDS" in runbook
+    assert "KAGENT_SERVICE_REQUEST_TIMEOUT_SECONDS" in runbook
     assert "--runtime" in runbook
     assert "--runtime-plan" in runbook
-    assert "SELF_CORRECTING_LLM_BASE_URL" in runbook
-    assert "SELF_CORRECTING_LLM_API_KEY" in runbook
-    assert "SELF_CORRECTING_LLM_MODEL" in runbook
-    assert "SELF_CORRECTING_LLM_MAX_RETRIES" in runbook
-    assert "SELF_CORRECTING_LLM_RETRY_BACKOFF_SECONDS" in runbook
+    assert "KAGENT_LLM_BASE_URL" in runbook
+    assert "KAGENT_LLM_API_KEY" in runbook
+    assert "KAGENT_LLM_MODEL" in runbook
+    assert "KAGENT_LLM_MAX_RETRIES" in runbook
+    assert "KAGENT_LLM_RETRY_BACKOFF_SECONDS" in runbook
     assert "evidence_schema_version" in runbook
     assert "provider_snapshot" in runbook
     assert "missing_required_metrics" in runbook
@@ -287,7 +287,7 @@ def test_operations_runbook_documents_continuous_iteration_and_failure_triage():
     assert "llm_api_key_required" in runbook
     assert "runtime_iterations_too_low" in runbook
     assert "runtime identity boundary" in runbook
-    assert "self-correcting LangGraph agent runtime" in runbook
+    assert "Kagent runtime" in runbook
     assert "underlying model provider" in runbook
     assert "final_answer_guardrail" in runbook
     assert "raw API key is never exposed" in runbook
@@ -301,34 +301,34 @@ def test_operations_runbook_documents_continuous_iteration_and_failure_triage():
     assert "canonical" in runbook
     assert "requests_by_method" in runbook
     assert "requests_by_auth_subject" in runbook
-    assert "self_correcting_agent_requests_by_method_total" in runbook
-    assert "self_correcting_agent_requests_by_auth_subject_total" in runbook
+    assert "kagent_requests_by_method_total" in runbook
+    assert "kagent_requests_by_auth_subject_total" in runbook
     assert "internal usage dashboards" in runbook
-    assert "self_correcting_agent_request_duration_seconds_bucket" in runbook
-    assert "self_correcting_agent_agent_run_duration_seconds_bucket" in runbook
-    assert "self_correcting_agent_runtime_run_duration_seconds_bucket" in runbook
-    assert "self_correcting_agent_runtime_runs_total" in runbook
-    assert "self_correcting_agent_runtime_run_status_total" in runbook
+    assert "kagent_request_duration_seconds_bucket" in runbook
+    assert "kagent_agent_run_duration_seconds_bucket" in runbook
+    assert "kagent_runtime_run_duration_seconds_bucket" in runbook
+    assert "kagent_runtime_runs_total" in runbook
+    assert "kagent_runtime_run_status_total" in runbook
     assert "runtime_runs_by_auth_subject" in runbook
     assert "runtime_runs_by_auth_subject_status" in runbook
     assert "runtime_resumes_by_auth_subject" in runbook
-    assert "self_correcting_agent_runtime_runs_by_auth_subject_total" in runbook
-    assert "self_correcting_agent_runtime_run_status_by_auth_subject_total" in runbook
-    assert "self_correcting_agent_runtime_resumes_by_auth_subject_total" in runbook
-    assert "self_correcting_agent_runtime_failed_observations_total" in runbook
-    assert "self_correcting_agent_runtime_progress_event_sink_failures_total" in runbook
-    assert "self_correcting_agent_runtime_observation_errors_total" in runbook
-    assert "self_correcting_agent_runtime_approval_required_total" in runbook
-    assert "self_correcting_agent_runtime_final_answer_guardrails_total" in runbook
+    assert "kagent_runtime_runs_by_auth_subject_total" in runbook
+    assert "kagent_runtime_run_status_by_auth_subject_total" in runbook
+    assert "kagent_runtime_resumes_by_auth_subject_total" in runbook
+    assert "kagent_runtime_failed_observations_total" in runbook
+    assert "kagent_runtime_progress_event_sink_failures_total" in runbook
+    assert "kagent_runtime_observation_errors_total" in runbook
+    assert "kagent_runtime_approval_required_total" in runbook
+    assert "kagent_runtime_final_answer_guardrails_total" in runbook
     assert (
-        "self_correcting_agent_runtime_final_answer_guardrails_by_reason_total"
+        "kagent_runtime_final_answer_guardrails_by_reason_total"
         in runbook
     )
-    assert "self_correcting_agent_runtime_pending_approvals_current" in runbook
-    assert "self_correcting_agent_runtime_stale_pending_approvals_current" in runbook
-    assert "self_correcting_agent_runtime_max_pending_approval_age_seconds" in runbook
-    assert "self_correcting_agent_runtime_pending_approval_stale_seconds" in runbook
-    assert "self_correcting_agent_runtime_failed_budget_exhaustions_total" in runbook
+    assert "kagent_runtime_pending_approvals_current" in runbook
+    assert "kagent_runtime_stale_pending_approvals_current" in runbook
+    assert "kagent_runtime_max_pending_approval_age_seconds" in runbook
+    assert "kagent_runtime_pending_approval_stale_seconds" in runbook
+    assert "kagent_runtime_failed_budget_exhaustions_total" in runbook
     assert "action-level timing" in runbook
     assert "planner, policy, and executor" in runbook
     assert "run-level duration" in runbook

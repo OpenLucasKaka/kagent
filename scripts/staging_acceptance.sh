@@ -14,8 +14,8 @@ require_env() {
     fi
 }
 
-require_env SELF_CORRECTING_STAGING_BASE_URL
-require_env SELF_CORRECTING_STAGING_TOKEN
+require_env KAGENT_STAGING_BASE_URL
+require_env KAGENT_STAGING_TOKEN
 
 "$PYTHON_BIN" - <<'PY'
 import json
@@ -25,15 +25,15 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-base_url = os.environ["SELF_CORRECTING_STAGING_BASE_URL"].rstrip("/")
-secret = os.environ["SELF_CORRECTING_STAGING_TOKEN"]
-timeout_seconds = float(os.environ.get("SELF_CORRECTING_STAGING_TIMEOUT_SECONDS", "30"))
+base_url = os.environ["KAGENT_STAGING_BASE_URL"].rstrip("/")
+secret = os.environ["KAGENT_STAGING_TOKEN"]
+timeout_seconds = float(os.environ.get("KAGENT_STAGING_TIMEOUT_SECONDS", "30"))
 
 parsed = urllib.parse.urlparse(base_url)
 if parsed.scheme not in {"http", "https"} or not parsed.netloc:
-    raise SystemExit("SELF_CORRECTING_STAGING_BASE_URL must be an http(s) URL")
+    raise SystemExit("KAGENT_STAGING_BASE_URL must be an http(s) URL")
 if parsed.username or parsed.password:
-    raise SystemExit("SELF_CORRECTING_STAGING_BASE_URL must not contain credentials")
+    raise SystemExit("KAGENT_STAGING_BASE_URL must not contain credentials")
 
 
 def request_json(path, *, payload=None, method=None, idempotency_key=""):

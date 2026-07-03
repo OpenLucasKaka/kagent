@@ -11,7 +11,7 @@ import urllib.request
 from pathlib import Path
 from uuid import UUID
 
-from self_correcting_langgraph_agent.service import (
+from kagent.service import (
     ServiceConcurrencyLimiter,
     ServiceConfig,
     ServiceIdempotencyCache,
@@ -22,11 +22,11 @@ from self_correcting_langgraph_agent.service import (
     handle_request,
     readiness_payload,
 )
-from self_correcting_langgraph_agent.service import cli as service_module
-from self_correcting_langgraph_agent.service import router as service_router
-from self_correcting_langgraph_agent.service import runtime as service_runtime
-from self_correcting_langgraph_agent.service import safety as service_safety
-from self_correcting_langgraph_agent.service.trace_store import persist_trace
+from kagent.service import cli as service_module
+from kagent.service import router as service_router
+from kagent.service import runtime as service_runtime
+from kagent.service import safety as service_safety
+from kagent.service.trace_store import persist_trace
 
 
 def test_service_health_endpoint_reports_ok():
@@ -848,12 +848,12 @@ def test_service_metrics_endpoint_reports_rate_limiter_snapshot():
 
 
 def test_service_prometheus_metrics_endpoint_reports_text_exposition(monkeypatch):
-    monkeypatch.setenv("SELF_CORRECTING_LLM_BASE_URL", "https://llm.example.test/v1")
-    monkeypatch.setenv("SELF_CORRECTING_LLM_MODEL", "agent-runtime-model")
-    monkeypatch.setenv("SELF_CORRECTING_LLM_API_KEY", "super-secret-api-key")
-    monkeypatch.setenv("SELF_CORRECTING_LLM_TIMEOUT_SECONDS", "12.5")
-    monkeypatch.setenv("SELF_CORRECTING_LLM_MAX_RETRIES", "2")
-    monkeypatch.setenv("SELF_CORRECTING_LLM_RETRY_BACKOFF_SECONDS", "0.25")
+    monkeypatch.setenv("KAGENT_LLM_BASE_URL", "https://llm.example.test/v1")
+    monkeypatch.setenv("KAGENT_LLM_MODEL", "agent-runtime-model")
+    monkeypatch.setenv("KAGENT_LLM_API_KEY", "redactme")
+    monkeypatch.setenv("KAGENT_LLM_TIMEOUT_SECONDS", "12.5")
+    monkeypatch.setenv("KAGENT_LLM_MAX_RETRIES", "2")
+    monkeypatch.setenv("KAGENT_LLM_RETRY_BACKOFF_SECONDS", "0.25")
     metrics = ServiceMetrics()
     metrics.record(
         method="GET",
@@ -915,7 +915,7 @@ def test_service_prometheus_metrics_endpoint_reports_text_exposition(monkeypatch
                 allow_full_trace_response=True,
                 protect_diagnostics=True,
                 trust_forwarded_for=True,
-                trace_dir="/var/lib/self-correcting-agent/traces",
+                trace_dir="/var/lib/kagent/traces",
                 run_timeout_seconds=6.5,
                 request_timeout_seconds=4.5,
             ),
@@ -930,153 +930,153 @@ def test_service_prometheus_metrics_endpoint_reports_text_exposition(monkeypatch
 
     assert status_code == 200
     assert isinstance(payload, str)
-    assert "# HELP self_correcting_agent_responses_total" in payload
-    assert "# TYPE self_correcting_agent_responses_total counter" in payload
-    assert "# HELP self_correcting_agent_requests_by_method_total" in payload
-    assert "# TYPE self_correcting_agent_requests_by_method_total counter" in payload
-    assert "# HELP self_correcting_agent_requests_by_path_total" in payload
-    assert "# TYPE self_correcting_agent_requests_by_path_total counter" in payload
-    assert "# HELP self_correcting_agent_requests_by_auth_subject_total" in payload
-    assert "# TYPE self_correcting_agent_requests_by_auth_subject_total counter" in payload
-    assert "# HELP self_correcting_agent_error_responses_total" in payload
-    assert "# TYPE self_correcting_agent_error_responses_total counter" in payload
-    assert "# HELP self_correcting_agent_request_duration_seconds" in payload
-    assert "# TYPE self_correcting_agent_request_duration_seconds histogram" in payload
-    assert "# HELP self_correcting_agent_agent_run_duration_seconds" in payload
-    assert "# TYPE self_correcting_agent_agent_run_duration_seconds histogram" in payload
-    assert "# HELP self_correcting_agent_run_status_total" in payload
-    assert "# TYPE self_correcting_agent_run_status_total counter" in payload
-    assert "# HELP self_correcting_agent_runtime_runs_total" in payload
-    assert "# TYPE self_correcting_agent_runtime_runs_total counter" in payload
-    assert "# HELP self_correcting_agent_runtime_run_status_total" in payload
-    assert "# TYPE self_correcting_agent_runtime_run_status_total counter" in payload
-    assert "# HELP self_correcting_agent_runtime_runs_by_auth_subject_total" in payload
-    assert "# TYPE self_correcting_agent_runtime_runs_by_auth_subject_total counter" in payload
-    assert "# HELP self_correcting_agent_runtime_run_status_by_auth_subject_total" in payload
+    assert "# HELP kagent_responses_total" in payload
+    assert "# TYPE kagent_responses_total counter" in payload
+    assert "# HELP kagent_requests_by_method_total" in payload
+    assert "# TYPE kagent_requests_by_method_total counter" in payload
+    assert "# HELP kagent_requests_by_path_total" in payload
+    assert "# TYPE kagent_requests_by_path_total counter" in payload
+    assert "# HELP kagent_requests_by_auth_subject_total" in payload
+    assert "# TYPE kagent_requests_by_auth_subject_total counter" in payload
+    assert "# HELP kagent_error_responses_total" in payload
+    assert "# TYPE kagent_error_responses_total counter" in payload
+    assert "# HELP kagent_request_duration_seconds" in payload
+    assert "# TYPE kagent_request_duration_seconds histogram" in payload
+    assert "# HELP kagent_agent_run_duration_seconds" in payload
+    assert "# TYPE kagent_agent_run_duration_seconds histogram" in payload
+    assert "# HELP kagent_run_status_total" in payload
+    assert "# TYPE kagent_run_status_total counter" in payload
+    assert "# HELP kagent_runtime_runs_total" in payload
+    assert "# TYPE kagent_runtime_runs_total counter" in payload
+    assert "# HELP kagent_runtime_run_status_total" in payload
+    assert "# TYPE kagent_runtime_run_status_total counter" in payload
+    assert "# HELP kagent_runtime_runs_by_auth_subject_total" in payload
+    assert "# TYPE kagent_runtime_runs_by_auth_subject_total counter" in payload
+    assert "# HELP kagent_runtime_run_status_by_auth_subject_total" in payload
     assert (
-        "# TYPE self_correcting_agent_runtime_run_status_by_auth_subject_total counter"
+        "# TYPE kagent_runtime_run_status_by_auth_subject_total counter"
         in payload
     )
-    assert "# HELP self_correcting_agent_runtime_resumes_by_auth_subject_total" in payload
+    assert "# HELP kagent_runtime_resumes_by_auth_subject_total" in payload
     assert (
-        "# TYPE self_correcting_agent_runtime_resumes_by_auth_subject_total counter"
+        "# TYPE kagent_runtime_resumes_by_auth_subject_total counter"
         in payload
     )
-    assert "# HELP self_correcting_agent_runtime_observation_errors_total" in payload
-    assert "# TYPE self_correcting_agent_runtime_observation_errors_total counter" in payload
-    assert "# HELP self_correcting_agent_runtime_progress_event_sink_failures_total" in payload
+    assert "# HELP kagent_runtime_observation_errors_total" in payload
+    assert "# TYPE kagent_runtime_observation_errors_total counter" in payload
+    assert "# HELP kagent_runtime_progress_event_sink_failures_total" in payload
     assert (
-        "# TYPE self_correcting_agent_runtime_progress_event_sink_failures_total counter"
+        "# TYPE kagent_runtime_progress_event_sink_failures_total counter"
         in payload
     )
-    assert "# HELP self_correcting_agent_runtime_final_answer_guardrails_total" in payload
-    assert "# TYPE self_correcting_agent_runtime_final_answer_guardrails_total counter" in payload
+    assert "# HELP kagent_runtime_final_answer_guardrails_total" in payload
+    assert "# TYPE kagent_runtime_final_answer_guardrails_total counter" in payload
     assert (
-        "# HELP self_correcting_agent_runtime_final_answer_guardrails_by_reason_total"
+        "# HELP kagent_runtime_final_answer_guardrails_by_reason_total"
         in payload
     )
     assert (
-        "# TYPE self_correcting_agent_runtime_final_answer_guardrails_by_reason_total "
+        "# TYPE kagent_runtime_final_answer_guardrails_by_reason_total "
         "counter"
         in payload
     )
-    assert "# HELP self_correcting_agent_runtime_run_duration_seconds" in payload
-    assert "# TYPE self_correcting_agent_runtime_run_duration_seconds histogram" in payload
-    assert "# HELP self_correcting_agent_active_concurrent_runs" in payload
-    assert "# TYPE self_correcting_agent_active_concurrent_runs gauge" in payload
-    assert "# HELP self_correcting_agent_idempotency_cache_hits" in payload
-    assert "# TYPE self_correcting_agent_idempotency_cache_hits counter" in payload
-    assert "self_correcting_agent_requests_total 2" in payload
-    assert 'self_correcting_agent_responses_total{status="200"} 1' in payload
-    assert 'self_correcting_agent_error_responses_total{error_code="not_found"} 1' in payload
-    assert 'self_correcting_agent_requests_by_method_total{method="GET"} 1' in payload
-    assert 'self_correcting_agent_requests_by_method_total{method="POST"} 1' in payload
-    assert 'self_correcting_agent_requests_by_path_total{path="/health"} 1' in payload
+    assert "# HELP kagent_runtime_run_duration_seconds" in payload
+    assert "# TYPE kagent_runtime_run_duration_seconds histogram" in payload
+    assert "# HELP kagent_active_concurrent_runs" in payload
+    assert "# TYPE kagent_active_concurrent_runs gauge" in payload
+    assert "# HELP kagent_idempotency_cache_hits" in payload
+    assert "# TYPE kagent_idempotency_cache_hits counter" in payload
+    assert "kagent_requests_total 2" in payload
+    assert 'kagent_responses_total{status="200"} 1' in payload
+    assert 'kagent_error_responses_total{error_code="not_found"} 1' in payload
+    assert 'kagent_requests_by_method_total{method="GET"} 1' in payload
+    assert 'kagent_requests_by_method_total{method="POST"} 1' in payload
+    assert 'kagent_requests_by_path_total{path="/health"} 1' in payload
     assert (
-        'self_correcting_agent_requests_by_auth_subject_total{auth_subject="team-a"} 1'
+        'kagent_requests_by_auth_subject_total{auth_subject="team-a"} 1'
         in payload
     )
     assert (
-        'self_correcting_agent_requests_by_path_total{path="/quoted\\"path\\\\segment"} 1'
+        'kagent_requests_by_path_total{path="/quoted\\"path\\\\segment"} 1'
         in payload
     )
-    assert 'self_correcting_agent_request_duration_seconds_bucket{le="0.05"} 1' in payload
-    assert 'self_correcting_agent_request_duration_seconds_bucket{le="0.1"} 1' in payload
-    assert 'self_correcting_agent_request_duration_seconds_bucket{le="0.25"} 2' in payload
-    assert 'self_correcting_agent_request_duration_seconds_bucket{le="+Inf"} 2' in payload
-    assert "self_correcting_agent_request_duration_seconds_count 2" in payload
-    assert "self_correcting_agent_request_duration_seconds_sum 0.1250" in payload
-    assert 'self_correcting_agent_agent_run_duration_seconds_bucket{le="0.25"} 1' in payload
-    assert 'self_correcting_agent_agent_run_duration_seconds_bucket{le="+Inf"} 1' in payload
-    assert "self_correcting_agent_agent_run_duration_seconds_count 1" in payload
-    assert "self_correcting_agent_agent_run_duration_seconds_sum 0.2500" in payload
-    assert "self_correcting_agent_active_concurrent_runs 1" in payload
-    assert "self_correcting_agent_max_concurrent_runs 2" in payload
-    assert "self_correcting_agent_max_request_bytes 8192" in payload
-    assert "self_correcting_agent_average_duration_seconds 0.0625" in payload
-    assert "self_correcting_agent_max_duration_seconds 0.1250" in payload
-    assert "self_correcting_agent_runs_total 1" in payload
-    assert 'self_correcting_agent_run_status_total{status="done"} 1' in payload
-    assert "self_correcting_agent_runtime_runs_total 2" in payload
+    assert 'kagent_request_duration_seconds_bucket{le="0.05"} 1' in payload
+    assert 'kagent_request_duration_seconds_bucket{le="0.1"} 1' in payload
+    assert 'kagent_request_duration_seconds_bucket{le="0.25"} 2' in payload
+    assert 'kagent_request_duration_seconds_bucket{le="+Inf"} 2' in payload
+    assert "kagent_request_duration_seconds_count 2" in payload
+    assert "kagent_request_duration_seconds_sum 0.1250" in payload
+    assert 'kagent_agent_run_duration_seconds_bucket{le="0.25"} 1' in payload
+    assert 'kagent_agent_run_duration_seconds_bucket{le="+Inf"} 1' in payload
+    assert "kagent_agent_run_duration_seconds_count 1" in payload
+    assert "kagent_agent_run_duration_seconds_sum 0.2500" in payload
+    assert "kagent_active_concurrent_runs 1" in payload
+    assert "kagent_max_concurrent_runs 2" in payload
+    assert "kagent_max_request_bytes 8192" in payload
+    assert "kagent_average_duration_seconds 0.0625" in payload
+    assert "kagent_max_duration_seconds 0.1250" in payload
+    assert "kagent_runs_total 1" in payload
+    assert 'kagent_run_status_total{status="done"} 1' in payload
+    assert "kagent_runtime_runs_total 2" in payload
     assert (
-        'self_correcting_agent_runtime_run_status_total{status="requires_approval"} 1'
+        'kagent_runtime_run_status_total{status="requires_approval"} 1'
         in payload
     )
-    assert 'self_correcting_agent_runtime_run_status_total{status="failed"} 1' in payload
+    assert 'kagent_runtime_run_status_total{status="failed"} 1' in payload
     assert (
-        'self_correcting_agent_runtime_runs_by_auth_subject_total'
+        'kagent_runtime_runs_by_auth_subject_total'
         '{auth_subject="team-a"} 2'
         in payload
     )
     assert (
-        'self_correcting_agent_runtime_run_status_by_auth_subject_total'
+        'kagent_runtime_run_status_by_auth_subject_total'
         '{auth_subject="team-a",status="requires_approval"} 1'
         in payload
     )
     assert (
-        'self_correcting_agent_runtime_run_status_by_auth_subject_total'
+        'kagent_runtime_run_status_by_auth_subject_total'
         '{auth_subject="team-a",status="failed"} 1'
         in payload
     )
     assert (
-        'self_correcting_agent_runtime_resumes_by_auth_subject_total'
+        'kagent_runtime_resumes_by_auth_subject_total'
         '{auth_subject="default"} 1'
         in payload
     )
     assert (
-        'self_correcting_agent_runtime_resumes_by_auth_subject_total'
+        'kagent_runtime_resumes_by_auth_subject_total'
         '{auth_subject="team-a"} 1'
         in payload
     )
-    assert "self_correcting_agent_runtime_failed_observations_total 2" in payload
+    assert "kagent_runtime_failed_observations_total 2" in payload
     assert (
-        'self_correcting_agent_runtime_observation_errors_total'
+        'kagent_runtime_observation_errors_total'
         '{error_code="invalid_tool_input"} 1'
         in payload
     )
     assert (
-        'self_correcting_agent_runtime_observation_errors_total'
+        'kagent_runtime_observation_errors_total'
         '{error_code="tool_execution_timeout"} 1'
         in payload
     )
-    assert "self_correcting_agent_runtime_approval_required_total 1" in payload
-    assert "self_correcting_agent_runtime_progress_event_sink_failures_total 3" in payload
-    assert "self_correcting_agent_runtime_final_answer_guardrails_total 0" in payload
-    assert "self_correcting_agent_runtime_pending_approvals_current 0" in payload
-    assert "self_correcting_agent_runtime_stale_pending_approvals_current 0" in payload
-    assert "self_correcting_agent_runtime_max_pending_approval_age_seconds 0" in payload
-    assert "self_correcting_agent_runtime_pending_approval_stale_seconds 3600" in payload
-    assert "self_correcting_agent_runtime_failed_budget_exhaustions_total 1" in payload
-    assert 'self_correcting_agent_runtime_run_duration_seconds_bucket{le="0.5"} 1' in payload
-    assert 'self_correcting_agent_runtime_run_duration_seconds_bucket{le="5"} 2' in payload
-    assert 'self_correcting_agent_runtime_run_duration_seconds_bucket{le="+Inf"} 2' in payload
-    assert "self_correcting_agent_runtime_run_duration_seconds_count 2" in payload
-    assert "self_correcting_agent_runtime_run_duration_seconds_sum 3.9000" in payload
-    assert "self_correcting_agent_average_agent_run_duration_seconds 0.2500" in payload
-    assert "self_correcting_agent_max_agent_run_duration_seconds 0.2500" in payload
-    assert "self_correcting_agent_uptime_seconds" in payload
+    assert "kagent_runtime_approval_required_total 1" in payload
+    assert "kagent_runtime_progress_event_sink_failures_total 3" in payload
+    assert "kagent_runtime_final_answer_guardrails_total 0" in payload
+    assert "kagent_runtime_pending_approvals_current 0" in payload
+    assert "kagent_runtime_stale_pending_approvals_current 0" in payload
+    assert "kagent_runtime_max_pending_approval_age_seconds 0" in payload
+    assert "kagent_runtime_pending_approval_stale_seconds 3600" in payload
+    assert "kagent_runtime_failed_budget_exhaustions_total 1" in payload
+    assert 'kagent_runtime_run_duration_seconds_bucket{le="0.5"} 1' in payload
+    assert 'kagent_runtime_run_duration_seconds_bucket{le="5"} 2' in payload
+    assert 'kagent_runtime_run_duration_seconds_bucket{le="+Inf"} 2' in payload
+    assert "kagent_runtime_run_duration_seconds_count 2" in payload
+    assert "kagent_runtime_run_duration_seconds_sum 3.9000" in payload
+    assert "kagent_average_agent_run_duration_seconds 0.2500" in payload
+    assert "kagent_max_agent_run_duration_seconds 0.2500" in payload
+    assert "kagent_uptime_seconds" in payload
     assert (
-        'self_correcting_agent_build_info{auth_required="true",'
+        'kagent_build_info{auth_required="true",'
         'auth_subject_count="1",allow_full_trace_response="true",'
         'bind_host="0.0.0.0",bind_port="9001",'
         'idempotency_cache_backend="memory",'
@@ -1100,7 +1100,7 @@ def test_service_prometheus_metrics_endpoint_reports_text_exposition(monkeypatch
     assert 'llm_timeout_seconds="12.5"' in payload
     assert 'llm_max_retries="2"' in payload
     assert 'llm_retry_backoff_seconds="0.25"' in payload
-    assert "super-secret-api-key" not in payload
+    assert "redactme" not in payload
     assert 'cache_control_header="no-store"' in payload
     assert (
         'content_security_policy_header="default-src \'none\'; '
@@ -1314,7 +1314,7 @@ def test_service_metrics_over_http_tracks_named_internal_auth_subject():
 def test_service_config_loads_named_internal_bearer_tokens_from_env():
     config = ServiceConfig.from_env(
         {
-            "SELF_CORRECTING_SERVICE_AUTH_TOKENS": (
+            "KAGENT_SERVICE_AUTH_TOKENS": (
                 '{"team-a":"team-a-token","ops":"ops-token"}'
             )
         }
@@ -1665,27 +1665,27 @@ def test_service_rate_limit_key_normalizes_forwarded_for_ip_values():
 def test_service_config_reads_environment_defaults():
     config = ServiceConfig.from_env(
         {
-            "SELF_CORRECTING_SERVICE_HOST": "0.0.0.0",
-            "SELF_CORRECTING_SERVICE_PORT": "9000",
-            "SELF_CORRECTING_SERVICE_AUTH_TOKEN": "secret",
-            "SELF_CORRECTING_SERVICE_MAX_REQUEST_BYTES": "2048",
-            "SELF_CORRECTING_SERVICE_MAX_GOAL_CHARS": "1234",
-            "SELF_CORRECTING_SERVICE_RATE_LIMIT_PER_MINUTE": "12",
-            "SELF_CORRECTING_SERVICE_MAX_CONCURRENT_RUNS": "3",
-            "SELF_CORRECTING_SERVICE_IDEMPOTENCY_CACHE_SIZE": "5",
-            "SELF_CORRECTING_SERVICE_IDEMPOTENCY_CACHE_PATH": "/tmp/agent-idempotency.sqlite3",
-            "SELF_CORRECTING_SERVICE_RUNTIME_ALLOWED_TOOLS": "note,artifact",
-            "SELF_CORRECTING_SERVICE_RUNTIME_ALLOWED_TOOLS_BY_SUBJECT": (
+            "KAGENT_SERVICE_HOST": "0.0.0.0",
+            "KAGENT_SERVICE_PORT": "9000",
+            "KAGENT_SERVICE_AUTH_TOKEN": "secret",
+            "KAGENT_SERVICE_MAX_REQUEST_BYTES": "2048",
+            "KAGENT_SERVICE_MAX_GOAL_CHARS": "1234",
+            "KAGENT_SERVICE_RATE_LIMIT_PER_MINUTE": "12",
+            "KAGENT_SERVICE_MAX_CONCURRENT_RUNS": "3",
+            "KAGENT_SERVICE_IDEMPOTENCY_CACHE_SIZE": "5",
+            "KAGENT_SERVICE_IDEMPOTENCY_CACHE_PATH": "/tmp/agent-idempotency.sqlite3",
+            "KAGENT_SERVICE_RUNTIME_ALLOWED_TOOLS": "note,artifact",
+            "KAGENT_SERVICE_RUNTIME_ALLOWED_TOOLS_BY_SUBJECT": (
                 '{"team-a":"note,transform_text","ops":["artifact","note"]}'
             ),
-            "SELF_CORRECTING_SERVICE_RUNTIME_MAX_ITERATIONS": "17",
-            "SELF_CORRECTING_SERVICE_RUNTIME_PENDING_APPROVAL_STALE_SECONDS": "1800",
-            "SELF_CORRECTING_SERVICE_ALLOW_FULL_TRACE_RESPONSE": "true",
-            "SELF_CORRECTING_SERVICE_PROTECT_DIAGNOSTICS": "true",
-            "SELF_CORRECTING_SERVICE_TRUST_FORWARDED_FOR": "true",
-            "SELF_CORRECTING_SERVICE_TRACE_DIR": "/tmp/agent-traces",
-            "SELF_CORRECTING_SERVICE_RUN_TIMEOUT_SECONDS": "9.5",
-            "SELF_CORRECTING_SERVICE_REQUEST_TIMEOUT_SECONDS": "4.5",
+            "KAGENT_SERVICE_RUNTIME_MAX_ITERATIONS": "17",
+            "KAGENT_SERVICE_RUNTIME_PENDING_APPROVAL_STALE_SECONDS": "1800",
+            "KAGENT_SERVICE_ALLOW_FULL_TRACE_RESPONSE": "true",
+            "KAGENT_SERVICE_PROTECT_DIAGNOSTICS": "true",
+            "KAGENT_SERVICE_TRUST_FORWARDED_FOR": "true",
+            "KAGENT_SERVICE_TRACE_DIR": "/tmp/agent-traces",
+            "KAGENT_SERVICE_RUN_TIMEOUT_SECONDS": "9.5",
+            "KAGENT_SERVICE_REQUEST_TIMEOUT_SECONDS": "4.5",
         }
     )
 
@@ -1767,13 +1767,13 @@ def test_service_config_rejects_invalid_pending_approval_stale_threshold():
 
 def test_service_module_reports_invalid_environment_config_without_traceback():
     env = os.environ.copy()
-    env["SELF_CORRECTING_SERVICE_PORT"] = "not-a-port"
+    env["KAGENT_SERVICE_PORT"] = "not-a-port"
 
     completed = subprocess.run(
         [
             ".venv/bin/python",
             "-m",
-            "self_correcting_langgraph_agent.service",
+            "kagent.service",
             "--help",
         ],
         check=False,
@@ -1783,7 +1783,7 @@ def test_service_module_reports_invalid_environment_config_without_traceback():
     )
 
     assert completed.returncode == 2
-    assert "SELF_CORRECTING_SERVICE_PORT must be an integer" in completed.stderr
+    assert "KAGENT_SERVICE_PORT must be an integer" in completed.stderr
     assert "Traceback" not in completed.stderr
 
 
@@ -1794,7 +1794,7 @@ def test_service_cli_handles_sigterm_with_graceful_exit():
 
     process = subprocess.Popen(
         [
-            ".venv/bin/self-correcting-agent-serve",
+            ".venv/bin/kagent-serve",
             "--host",
             "127.0.0.1",
             "--port",
@@ -2646,8 +2646,8 @@ def test_service_can_serve_prometheus_metrics_over_http():
         thread.join(timeout=5)
 
     assert content_type.startswith("text/plain")
-    assert "self_correcting_agent_requests_total" in text
-    assert "self_correcting_agent_active_concurrent_runs" in text
+    assert "kagent_requests_total" in text
+    assert "kagent_active_concurrent_runs" in text
 
 
 def test_service_echoes_request_id_header_over_http():

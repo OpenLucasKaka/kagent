@@ -101,11 +101,11 @@ cannot be exposed through directory listings.
 `runtime/policy.py` authorizes each planned tool call before execution. Unknown
 or disallowed tools become `requires_approval` observations, which gives the
 runtime a human-in-the-loop boundary without executing unsafe actions.
-Operators can set `SELF_CORRECTING_SERVICE_RUNTIME_ALLOWED_TOOLS` to configure
+Operators can set `KAGENT_SERVICE_RUNTIME_ALLOWED_TOOLS` to configure
 which runtime tools execute directly in a deployment. Unknown configured tool
 names fail validation before service startup or doctor success, so rollout
 mistakes do not silently weaken the policy.
-`SELF_CORRECTING_SERVICE_RUNTIME_ALLOWED_TOOLS_BY_SUBJECT` adds a subject-level
+`KAGENT_SERVICE_RUNTIME_ALLOWED_TOOLS_BY_SUBJECT` adds a subject-level
 override keyed by authenticated `auth_subject`, so one shared internal service
 can give different teams different direct-execution tool boundaries while
 unmatched subjects fall back to the global or default policy.
@@ -122,7 +122,7 @@ service execution paths. It normalizes `metadata` string maps and `tags` arrays,
 rejects secret-like metadata keys, and keeps run labels small enough for trace
 filtering and low-cardinality dashboards.
 The runtime also enforces a runtime identity boundary: the agent identity is
-`self-correcting LangGraph agent runtime`, running in the user's current CLI or
+`Kagent runtime`, running in the user's current CLI or
 service process, while the underlying model provider is only a replaceable
 OpenAI-compatible planner. The system prompt tells providers not to answer
 identity, deployment, ownership, or hosting questions as Qwen, ChatGPT, Claude,
@@ -142,7 +142,7 @@ approval prompt flow. `cli/ui.py` owns terminal presentation: the compact
 status/answer/tool view, hidden internal `note` observations, session-memory
 printing, last-run replay, one-shot trace printing, help text, color decisions,
 and approval prompt copy. The `cli` package exposes only the CLI entrypoint and
-`python -m self_correcting_langgraph_agent.cli` support, keeping UI code out of
+`python -m kagent.cli` support, keeping UI code out of
 the package root.
 
 ## State and traces
@@ -357,7 +357,7 @@ response. Identical `Idempotency-Key` and body values cannot cross-reuse
 responses between `/run`, `/runtime/run`, `/runtime/resume`, or different
 internal subjects; unauthenticated traffic uses an anonymous scope. The default
 backend is an in-memory per-process LRU cache, while
-`SELF_CORRECTING_SERVICE_IDEMPOTENCY_CACHE_PATH` enables a stdlib SQLite cache
+`KAGENT_SERVICE_IDEMPOTENCY_CACHE_PATH` enables a stdlib SQLite cache
 for restart-safe and same-volume replica retry reuse.
 Runtime trace reads follow the same internal boundary: the primary bearer token
 acts as an operator/admin diagnostic token, while subject-mapped bearer tokens
@@ -489,8 +489,8 @@ without exposing the original misleading provider answer: persisted status and
 list responses carry `final_answer_guardrail`, fleet summaries include
 `final_answer_guardrail_applied_count` and
 `final_answer_guardrail_reason_counts`, and Prometheus exposes
-`self_correcting_agent_runtime_final_answer_guardrails_total` plus
-`self_correcting_agent_runtime_final_answer_guardrails_by_reason_total`.
+`kagent_runtime_final_answer_guardrails_total` plus
+`kagent_runtime_final_answer_guardrails_by_reason_total`.
 Runtime run responses and compact persisted status summaries also carry
 run-level duration as `duration_seconds`, giving dashboards a low-cardinality
 sort key before operators open full traces.
@@ -540,7 +540,7 @@ a JSONL metrics record with the check exit code and any fresh evaluator report.
 
 ## Public surfaces
 
-Stable package-level imports are exposed from `self_correcting_langgraph_agent`
+Stable package-level imports are exposed from `kagent`
 for application code:
 
 - `run_agent`

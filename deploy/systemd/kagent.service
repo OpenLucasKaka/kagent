@@ -1,0 +1,39 @@
+[Unit]
+Description=Kagent Service
+After=network.target
+
+[Service]
+Type=simple
+User=kagent
+Group=kagent
+WorkingDirectory=/opt/kagent
+EnvironmentFile=/etc/kagent.env
+ExecStartPre=/opt/kagent/.venv/bin/kagent-doctor --production --trace-dir /var/lib/kagent/traces
+ExecStart=/opt/kagent/.venv/bin/kagent-serve --trace-dir /var/lib/kagent/traces --host ${KAGENT_SERVICE_HOST} --port ${KAGENT_SERVICE_PORT}
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=45
+MemoryMax=1G
+CPUQuota=100%
+TasksMax=64
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+CapabilityBoundingSet=
+LockPersonality=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictSUIDSGID=true
+RestrictRealtime=true
+SystemCallArchitectures=native
+StateDirectory=kagent
+ReadWritePaths=/var/lib/kagent
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

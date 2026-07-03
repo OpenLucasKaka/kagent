@@ -4,7 +4,7 @@ set -eu
 cd "$(dirname "$0")/.."
 
 PYTHON_BIN="${PYTHON_BIN:-.venv/bin/python}"
-SERVICE_BIN="${SERVICE_BIN:-.venv/bin/self-correcting-agent-serve}"
+SERVICE_BIN="${SERVICE_BIN:-.venv/bin/kagent-serve}"
 PORT="$("$PYTHON_BIN" - <<'PY'
 import socket
 
@@ -15,10 +15,10 @@ sock.close()
 PY
 )"
 
-SERVICE_LOG="${SERVICE_LOG:-/tmp/self-correcting-agent-service-smoke.log}"
-AUTH_TOKEN="${SELF_CORRECTING_SMOKE_AUTH_TOKEN:-smoke-token}"
-TRACE_DIR="$(mktemp -d "${TMPDIR:-/tmp}/self-correcting-agent-traces.XXXXXX")"
-SELF_CORRECTING_SERVICE_AUTH_TOKEN="$AUTH_TOKEN" \
+SERVICE_LOG="${SERVICE_LOG:-/tmp/kagent-service-smoke.log}"
+AUTH_TOKEN="${KAGENT_SMOKE_AUTH_TOKEN:-smoke-token}"
+TRACE_DIR="$(mktemp -d "${TMPDIR:-/tmp}/kagent-traces.XXXXXX")"
+KAGENT_SERVICE_AUTH_TOKEN="$AUTH_TOKEN" \
     "$SERVICE_BIN" --host 127.0.0.1 --port "$PORT" --trace-dir "$TRACE_DIR" \
     --max-request-bytes 2048 --max-goal-chars 64 --idempotency-cache-size 8 \
     --protect-diagnostics --trust-forwarded-for \
@@ -724,40 +724,40 @@ assert float(metrics["max_agent_run_duration_seconds"]) >= 0
 assert float(metrics["uptime_seconds"]) >= 0
 prometheus_metrics, prometheus_content_type = get_text("/metrics.prom")
 assert prometheus_content_type.startswith("text/plain")
-assert "# HELP self_correcting_agent_requests_total" in prometheus_metrics
-assert "# TYPE self_correcting_agent_requests_total counter" in prometheus_metrics
-assert "# HELP self_correcting_agent_responses_total" in prometheus_metrics
-assert "# TYPE self_correcting_agent_responses_total counter" in prometheus_metrics
-assert "# HELP self_correcting_agent_active_concurrent_runs" in prometheus_metrics
-assert "# TYPE self_correcting_agent_active_concurrent_runs gauge" in prometheus_metrics
-assert "# HELP self_correcting_agent_idempotency_cache_hits" in prometheus_metrics
-assert "# TYPE self_correcting_agent_idempotency_cache_hits counter" in prometheus_metrics
-assert "self_correcting_agent_requests_total" in prometheus_metrics
-assert 'self_correcting_agent_requests_by_method_total{method="GET"}' in prometheus_metrics
-assert 'self_correcting_agent_requests_by_method_total{method="POST"}' in prometheus_metrics
-assert 'self_correcting_agent_requests_by_path_total{path="__unknown__"}' in prometheus_metrics
-assert 'self_correcting_agent_error_responses_total{error_code="method_not_allowed"}' in prometheus_metrics
-assert 'self_correcting_agent_error_responses_total{error_code="not_found"}' in prometheus_metrics
-assert 'self_correcting_agent_error_responses_total{error_code="full_trace_disabled"}' in prometheus_metrics
-assert "self_correcting_agent_request_duration_seconds_bucket" in prometheus_metrics
-assert 'self_correcting_agent_request_duration_seconds_bucket{le="+Inf"}' in prometheus_metrics
-assert "self_correcting_agent_request_duration_seconds_count" in prometheus_metrics
-assert "self_correcting_agent_request_duration_seconds_sum" in prometheus_metrics
-assert "self_correcting_agent_agent_run_duration_seconds_bucket" in prometheus_metrics
-assert 'self_correcting_agent_agent_run_duration_seconds_bucket{le="+Inf"}' in prometheus_metrics
-assert "self_correcting_agent_agent_run_duration_seconds_count" in prometheus_metrics
-assert "self_correcting_agent_agent_run_duration_seconds_sum" in prometheus_metrics
-assert "self_correcting_agent_runs_total" in prometheus_metrics
-assert 'self_correcting_agent_run_status_total{status="done"}' in prometheus_metrics
-assert "self_correcting_agent_runtime_pending_approvals_current" in prometheus_metrics
-assert "self_correcting_agent_runtime_stale_pending_approvals_current" in prometheus_metrics
-assert "self_correcting_agent_runtime_max_pending_approval_age_seconds" in prometheus_metrics
-assert "self_correcting_agent_runtime_pending_approval_stale_seconds" in prometheus_metrics
-assert "self_correcting_agent_average_agent_run_duration_seconds" in prometheus_metrics
-assert "self_correcting_agent_uptime_seconds" in prometheus_metrics
-assert "self_correcting_agent_active_concurrent_runs" in prometheus_metrics
-assert "self_correcting_agent_active_rate_limit_windows" in prometheus_metrics
-assert "self_correcting_agent_build_info" in prometheus_metrics
+assert "# HELP kagent_requests_total" in prometheus_metrics
+assert "# TYPE kagent_requests_total counter" in prometheus_metrics
+assert "# HELP kagent_responses_total" in prometheus_metrics
+assert "# TYPE kagent_responses_total counter" in prometheus_metrics
+assert "# HELP kagent_active_concurrent_runs" in prometheus_metrics
+assert "# TYPE kagent_active_concurrent_runs gauge" in prometheus_metrics
+assert "# HELP kagent_idempotency_cache_hits" in prometheus_metrics
+assert "# TYPE kagent_idempotency_cache_hits counter" in prometheus_metrics
+assert "kagent_requests_total" in prometheus_metrics
+assert 'kagent_requests_by_method_total{method="GET"}' in prometheus_metrics
+assert 'kagent_requests_by_method_total{method="POST"}' in prometheus_metrics
+assert 'kagent_requests_by_path_total{path="__unknown__"}' in prometheus_metrics
+assert 'kagent_error_responses_total{error_code="method_not_allowed"}' in prometheus_metrics
+assert 'kagent_error_responses_total{error_code="not_found"}' in prometheus_metrics
+assert 'kagent_error_responses_total{error_code="full_trace_disabled"}' in prometheus_metrics
+assert "kagent_request_duration_seconds_bucket" in prometheus_metrics
+assert 'kagent_request_duration_seconds_bucket{le="+Inf"}' in prometheus_metrics
+assert "kagent_request_duration_seconds_count" in prometheus_metrics
+assert "kagent_request_duration_seconds_sum" in prometheus_metrics
+assert "kagent_agent_run_duration_seconds_bucket" in prometheus_metrics
+assert 'kagent_agent_run_duration_seconds_bucket{le="+Inf"}' in prometheus_metrics
+assert "kagent_agent_run_duration_seconds_count" in prometheus_metrics
+assert "kagent_agent_run_duration_seconds_sum" in prometheus_metrics
+assert "kagent_runs_total" in prometheus_metrics
+assert 'kagent_run_status_total{status="done"}' in prometheus_metrics
+assert "kagent_runtime_pending_approvals_current" in prometheus_metrics
+assert "kagent_runtime_stale_pending_approvals_current" in prometheus_metrics
+assert "kagent_runtime_max_pending_approval_age_seconds" in prometheus_metrics
+assert "kagent_runtime_pending_approval_stale_seconds" in prometheus_metrics
+assert "kagent_average_agent_run_duration_seconds" in prometheus_metrics
+assert "kagent_uptime_seconds" in prometheus_metrics
+assert "kagent_active_concurrent_runs" in prometheus_metrics
+assert "kagent_active_rate_limit_windows" in prometheus_metrics
+assert "kagent_build_info" in prometheus_metrics
 assert "bind_host" in prometheus_metrics
 assert "bind_port" in prometheus_metrics
 assert "security_response_headers" in prometheus_metrics
@@ -769,7 +769,7 @@ assert "x_content_type_options_header" in prometheus_metrics
 assert "allow_full_trace_response" in prometheus_metrics
 assert "trust_forwarded_for" in prometheus_metrics
 assert "max_request_bytes" in prometheus_metrics
-assert "self_correcting_agent_max_request_bytes" in prometheus_metrics
+assert "kagent_max_request_bytes" in prometheus_metrics
 assert "protect_diagnostics" in prometheus_metrics
 assert "idempotency_cache_size" in prometheus_metrics
 assert "idempotency_cache_hits" in prometheus_metrics

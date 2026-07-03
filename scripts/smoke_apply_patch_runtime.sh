@@ -17,7 +17,7 @@ python_bin = os.environ.get("PYTHON_BIN")
 if not python_bin:
     raise SystemExit("PYTHON_BIN is required")
 
-workspace = Path(tempfile.mkdtemp(prefix="self-correcting-apply-patch-smoke."))
+workspace = Path(tempfile.mkdtemp(prefix="kagent-apply-patch-smoke."))
 target = workspace / "docs" / "agent-created.md"
 expected = "# Agent 文件创建测试\n\n这是 runtime 通过 apply_patch 创建的文件。\n"
 patch = (
@@ -44,7 +44,7 @@ completed = subprocess.run(
     [
         python_bin,
         "-m",
-        "self_correcting_langgraph_agent.cli",
+        "kagent.cli",
         "创建一个测试 markdown 文件",
         "--runtime",
         "--max-iterations",

@@ -1,4 +1,4 @@
-from self_correcting_langgraph_agent.core.normalization import normalize_goal, plan_goal
+from kagent.core.normalization import normalize_goal, plan_goal
 
 
 def test_plan_goal_preserves_quoted_text_and_splits_outside_quotes():

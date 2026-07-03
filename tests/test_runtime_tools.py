@@ -1,9 +1,9 @@
 import json
 import time
 
-from self_correcting_langgraph_agent.runtime import tools as runtime_tools
-from self_correcting_langgraph_agent.runtime.policy import RuntimePolicy
-from self_correcting_langgraph_agent.runtime.tools import (
+from kagent.runtime import tools as runtime_tools
+from kagent.runtime.policy import RuntimePolicy
+from kagent.runtime.tools import (
     RuntimeToolSpec,
     default_runtime_tools,
     execute_runtime_tool,

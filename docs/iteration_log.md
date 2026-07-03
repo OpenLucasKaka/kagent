@@ -2,7 +2,7 @@
 
 ## 2026-06-15
 
-- Created `self-correcting-langgraph-agent/` as an isolated LangGraph agent lab.
+- Created `kagent/` as an isolated LangGraph agent lab.
 - Verified `langgraph==0.6.11` installs and imports on the local Python 3.9 runtime.
 - Added failing tests before implementation for graph compilation, successful execution,
   self-correction, retry exhaustion, multi-step plans, CLI output, and a text tool.
@@ -154,7 +154,7 @@
 ## 2026-06-16
 
 - Started a three-hour production-hardening pass with a continuous validation
-  loop writing to `/tmp/self-correcting-agent-three-hour.jsonl`.
+  loop writing to `/tmp/kagent-three-hour.jsonl`.
 - Added run metadata (`run_id`, `started_at`, `completed_at`, and
   `duration_seconds`) to full agent traces and compact summaries for
   production observability.
@@ -173,7 +173,7 @@
 - Added Ruff as a dev dependency and wired `ruff check src tests` into
   `scripts/run_checks.sh` as a production lint gate.
 - Added `AgentConfig.from_env()` plus CLI support for
-  `SELF_CORRECTING_MAX_STEPS` and `SELF_CORRECTING_MAX_RETRIES`, with explicit
+  `KAGENT_MAX_STEPS` and `KAGENT_MAX_RETRIES`, with explicit
   CLI flags taking precedence.
 - Added clean CLI diagnostics for invalid environment configuration values.
 - Split `AgentConfig`, `AgentStatus`, and `AgentState` into `state.py`, keeping
@@ -225,18 +225,18 @@
   summaries can be collected as automation artifacts.
 - Added `recent_health` to metrics summaries so long-running hardening can show
   whether the recent window is healthy, recovering, failing, or unknown.
-- Added console-script smoke coverage for `.venv/bin/self-correcting-agent` in
+- Added console-script smoke coverage for `.venv/bin/kagent` in
   `scripts/run_checks.sh`, validating installed entry points in the standard
   gate.
 - Expanded console-script smoke coverage to
-  `.venv/bin/self-correcting-agent-eval` and
-  `.venv/bin/self-correcting-agent-metrics`.
+  `.venv/bin/kagent-eval` and
+  `.venv/bin/kagent-metrics`.
 - Documented installed console scripts in README so users can run the package
   through distribution entry points, not only `python -m`.
 - Added evaluator `--fail-on-failure` so automation can exit nonzero when an
   evaluator report contains failed cases, and wired it into `scripts/run_checks.sh`.
-- Added a batch JSONL runner (`self_correcting_langgraph_agent.ops.batch` and
-  `self-correcting-agent-batch`) for processing multiple agent goals into
+- Added a batch JSONL runner (`kagent.ops.batch` and
+  `kagent-batch`) for processing multiple agent goals into
   JSONL result summaries with structured per-line failures.
 - Added batch `--fail-on-failure` so schedulers can receive exit code `1` when
   any batch record failed, while preserving all per-line output records.
@@ -262,7 +262,7 @@
   OpenAPI as an enum, and documented the operational meaning of each code.
 - Extracted HTTP response encoding and structured error-code extraction into
   `service/transport.py`, thinning the service handler transport logic.
-- Added `self-correcting-agent-doctor`, a deployment self-check CLI that
+- Added `kagent-doctor`, a deployment self-check CLI that
   reports readiness, redacted config, version, and registered tool count.
 - Added doctor policy checks for public bind without auth and a `--require-auth`
   gate for externally exposed release automation.
@@ -293,14 +293,14 @@
 - Flushed structured access logs after each stderr write to reduce log loss
   during container or process shutdown.
 - Added redacted runtime build info to `/metrics` and
-  `self_correcting_agent_build_info` Prometheus output for version and rollout
+  `kagent_build_info` Prometheus output for version and rollout
   audits without exposing bearer tokens.
 - Added a production HTTP server subclass with bounded request threads,
   `block_on_close`, explicit address reuse, and a larger listen backlog for
   graceful shutdown, safer restarts, and short traffic bursts.
-- Added graceful `SIGTERM` handling for `self-correcting-agent-serve`, closing
+- Added graceful `SIGTERM` handling for `kagent-serve`, closing
   the HTTP server and returning exit status `143` for orchestrator stops.
-- Added `SELF_CORRECTING_SERVICE_REQUEST_TIMEOUT_SECONDS` and per-connection
+- Added `KAGENT_SERVICE_REQUEST_TIMEOUT_SECONDS` and per-connection
   socket timeouts so slow or incomplete HTTP requests cannot hold service
   handler threads indefinitely.
 - Added common response headers to the OpenAPI contract for `X-Request-ID`,
@@ -340,22 +340,22 @@
 - Reused the same JSON integer validation for batch record config, so batch
   jobs reject bad `max_steps` and `max_retries` values as failed records while
   continuing later jobs.
-- Added `self-correcting-agent-release-manifest`, a release manifest generator
+- Added `kagent-release-manifest`, a release manifest generator
   that records artifact file names, sizes, and `sha256` hashes, then wired it
   into `scripts/run_checks.sh` after the release wheel build.
 - Added release manifest `--verify` support and wired it into the standard
   gate so artifact drift after manifest generation fails release checks.
-- Added `SELF_CORRECTING_SERVICE_MAX_GOAL_CHARS` and `goal_too_large` handling
+- Added `KAGENT_SERVICE_MAX_GOAL_CHARS` and `goal_too_large` handling
   so oversized `/run` goals are rejected before agent execution, with config,
   metrics, Prometheus, OpenAPI, deployment, and smoke coverage.
-- Added `SELF_CORRECTING_SERVICE_ALLOW_FULL_TRACE_RESPONSE=false` as the
+- Added `KAGENT_SERVICE_ALLOW_FULL_TRACE_RESPONSE=false` as the
   default HTTP response policy for `full_trace=true`, returning
   `full_trace_disabled` unless explicitly enabled while keeping persisted trace
   artifacts available for operator debugging.
 - Hardened `/run` request parsing so `full_trace` must be a JSON boolean,
   rejecting strings such as `"true"` as `invalid_request_body` before agent
   execution.
-- Added `SELF_CORRECTING_SERVICE_PROTECT_DIAGNOSTICS` so `/config`, `/tools`,
+- Added `KAGENT_SERVICE_PROTECT_DIAGNOSTICS` so `/config`, `/tools`,
   `/metrics`, `/metrics.prom`, and `/openapi.json` can require bearer auth,
   then upgraded `doctor --production`, Kubernetes defaults, and service smoke
   coverage to require the protection for production gates.
@@ -371,7 +371,7 @@
   stores in `/metrics`, Prometheus output, and live service smoke coverage.
 - Added a Prometheus alert for `idempotency_key_conflict` so client retry-key
   misuse is visible through the standard production alert rules.
-- Hardened `self-correcting-agent-doctor --production` to reject common bearer
+- Hardened `kagent-doctor --production` to reject common bearer
   auth placeholders such as `replace-with-a-long-random-token` with
   `auth_token_placeholder`, including CLI/env tests, standard gate coverage,
   and security/deployment documentation.
@@ -388,7 +388,7 @@
   so both rate-limit and run-slot rejections expose the same machine-readable
   client backoff field.
 - Added HTTP method cardinality to JSON and Prometheus service metrics via
-  `requests_by_method` and `self_correcting_agent_requests_by_method_total`.
+  `requests_by_method` and `kagent_requests_by_method_total`.
 - Bounded HTTP path metrics cardinality by aggregating unknown routes under
   `__unknown__` while keeping raw paths in structured access logs.
 - Added a Prometheus unknown route alert using the bounded `__unknown__` path
@@ -401,7 +401,7 @@
 - Added explicit `incomplete_request_body` handling when clients close before
   sending declared `Content-Length` bytes, with HTTP, OpenAPI, smoke, metrics,
   and operations documentation coverage.
-- Added `self-correcting-agent-trace-prune` for dry-run-first persisted trace
+- Added `kagent-trace-prune` for dry-run-first persisted trace
   retention, with delete mode, wheel entrypoint coverage, and deployment
   operations guidance.
 - Promoted trace pruning from entrypoint discovery to an executed
@@ -410,24 +410,24 @@
 - Added structured `408 request_body_timeout` handling for stalled HTTP request
   bodies, with socket-level tests, OpenAPI, live smoke, metrics, operations,
   and security documentation coverage.
-- Added a Kubernetes `CronJob` to run `self-correcting-agent-trace-prune`
+- Added a Kubernetes `CronJob` to run `kagent-trace-prune`
   against the shared trace PVC with 7-day retention, hardened pod security, and
   deployment/readiness documentation coverage.
-- Hardened `self-correcting-agent-doctor --production` to reject enabled full
+- Hardened `kagent-doctor --production` to reject enabled full
   trace HTTP responses with `full_trace_response_must_be_disabled`, including
   CLI/env tests, standard gate coverage, and security/operations docs.
 - Added Prometheus alerting for `request_body_timeout` so slow client or gateway
   request-body stalls become visible through the baseline production alert rules.
 - Added security response header policy labels to
-  `self_correcting_agent_build_info`, including `security_response_headers` and
+  `kagent_build_info`, including `security_response_headers` and
   `content_security_policy_header`, so Prometheus rollout audits can compare
   live service behavior with gateway and OpenAPI expectations.
 - Added trace permission policy fields to `/config`, JSON `/metrics`, and
-  Prometheus `self_correcting_agent_build_info` for rollout audits of trace
+  Prometheus `kagent_build_info` for rollout audits of trace
   directory, trace file, and readiness probe file permissions.
 - Added `X-Frame-Options: DENY` to all HTTP responses, the OpenAPI common
   response headers, runtime config/metrics audit fields, Prometheus
-  `self_correcting_agent_build_info`, smoke coverage, and security/operations
+  `kagent_build_info`, smoke coverage, and security/operations
   documentation for legacy frame-protection checks.
 - Hardened persisted trace writes to use `0700` trace directories, owner-only
   same-directory temporary files, and final `0600` trace JSON permissions
@@ -474,7 +474,7 @@
   runtime, preserving the deterministic `/run` API while reusing the same HTTP
   trust boundary and OpenAPI contract machinery.
 - Added redacted LLM provider audit fields to `/config`, JSON `/metrics`,
-  Prometheus `self_correcting_agent_build_info`, and the OpenAPI
+  Prometheus `kagent_build_info`, and the OpenAPI
   `ConfigResponse`/`MetricsResponse` schemas so deployments can verify provider
   wiring without exposing API keys.
 - Added bounded multi-iteration planning to the Codex-style runtime. Python and
@@ -531,10 +531,10 @@
 - Hardened runtime plan parsing to reject action IDs and tool names with
   surrounding whitespace, preventing visually ambiguous approval and trace
   correlation handles.
-- Added `SELF_CORRECTING_SERVICE_RUNTIME_MAX_ITERATIONS` as a service-level cap
+- Added `KAGENT_SERVICE_RUNTIME_MAX_ITERATIONS` as a service-level cap
   for `/runtime/run` and `/runtime/resume`, with env/CLI/config/metrics/OpenAPI
   and deployment documentation coverage.
-- Applied `SELF_CORRECTING_SERVICE_RUN_TIMEOUT_SECONDS` to `/runtime/run` and
+- Applied `KAGENT_SERVICE_RUN_TIMEOUT_SECONDS` to `/runtime/run` and
   `/runtime/resume` as whole-execution timeouts, returning structured
   `504 agent_run_timeout` responses and documenting the OpenAPI contract.
 - Hardened persisted runtime trace reads: `GET /runtime/runs` now skips
@@ -698,7 +698,7 @@
   fetches with bounded response bytes, response metadata, and text output.
 - Added a direct `open_url` runtime tool for local CLI sessions so browser-open
   requests use Google Chrome automation instead of `http_request`.
-- Added `self-correcting-agent-doctor --require-runtime-provider` so
+- Added `kagent-doctor --require-runtime-provider` so
   provider-backed production gates reject missing LLM base URL, model, API key,
   or one-iteration runtime budgets before a Codex-style runtime deployment is
   promoted.
@@ -734,7 +734,7 @@
   `tool_execution_timeout`, giving operators stable live counters for runtime
   tool, planner, and approval failure classes.
 - Added internal company bearer-token subjects via
-  `SELF_CORRECTING_SERVICE_AUTH_TOKENS`, with redacted `auth_subject` access-log
+  `KAGENT_SERVICE_AUTH_TOKENS`, with redacted `auth_subject` access-log
   audit fields, per-subject rate-limit isolation, production doctor acceptance,
   and `/config`/Prometheus `auth_subject_count` audit visibility without
   logging or returning raw tokens.
@@ -749,7 +749,7 @@
   `metadata_key_counts` aggregates, OpenAPI coverage, operations docs, and
   internal runtime smoke validation.
 - Added status-aware runtime trace retention to
-  `self-correcting-agent-trace-prune --runtime-only`, defaulting to old
+  `kagent-trace-prune --runtime-only`, defaulting to old
   `done`, `failed`, and `cancelled` traces while protecting
   `requires_approval`; run checks, Kubernetes CronJob, deployment docs, and
   operations docs now verify the dry-run-first audit fields.
@@ -802,7 +802,7 @@
 - Added `effective_tool_policy_sha256` to `/runtime/policy` and strict staging
   evidence, giving rollout approvals a stable fingerprint for the current
   subject's effective runtime tool boundary.
-- Added a redacted `runtime_policy` summary to `self-correcting-agent-doctor`
+- Added a redacted `runtime_policy` summary to `kagent-doctor`
   and `run_checks.sh` coverage for its `effective_tool_policy_sha256`, tying
   deployment preflight artifacts to staging policy evidence.
 - Required internal rollout sign-off and strict internal rollout evidence to
@@ -826,7 +826,7 @@
   not fall through to downstream readiness or release-evidence errors when the
   standard gate manifest is absent.
 - Added structured `evidence_max_age_invalid` failures to the strict production
-  approval bundle when `SELF_CORRECTING_EVIDENCE_MAX_AGE_SECONDS` is not a
+  approval bundle when `KAGENT_EVIDENCE_MAX_AGE_SECONDS` is not a
   positive integer, keeping release-window configuration errors machine-readable.
 - Made strict production approval continue through failed readiness and release
   evidence checks when evidence files are present but semantically invalid,

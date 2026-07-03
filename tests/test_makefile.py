@@ -26,4 +26,4 @@ def test_makefile_wheel_target_matches_release_gate():
     makefile = Path("Makefile").read_text()
 
     assert "--no-build-isolation" in makefile
-    assert "self_correcting_langgraph_agent-0.1.0-*.whl" in makefile
+    assert "kagent-0.1.0-*.whl" in makefile

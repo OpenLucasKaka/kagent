@@ -3,9 +3,9 @@ import os
 import subprocess
 import sys
 
-from self_correcting_langgraph_agent.ops.doctor import doctor_payload
-from self_correcting_langgraph_agent.providers.llm import LLMProviderConfig
-from self_correcting_langgraph_agent.service.runtime import ServiceConfig
+from kagent.ops.doctor import doctor_payload
+from kagent.providers.llm import LLMProviderConfig
+from kagent.service.runtime import ServiceConfig
 
 
 def test_doctor_payload_reports_readiness_config_version_and_tool_count(tmp_path):
@@ -270,7 +270,7 @@ def test_doctor_payload_runtime_provider_gate_passes_when_provider_is_configured
         require_runtime_provider=True,
         llm_config=LLMProviderConfig(
             base_url="https://llm.example.test/v1",
-            api_key="provider-token",
+            api_key="x",
             model="agent-runtime-model",
         ),
     )
@@ -285,7 +285,7 @@ def test_doctor_module_require_auth_exits_nonzero_when_auth_is_missing():
         [
             sys.executable,
             "-m",
-            "self_correcting_langgraph_agent.ops.doctor",
+            "kagent.ops.doctor",
             "--require-auth",
         ],
         check=False,
@@ -301,13 +301,13 @@ def test_doctor_module_require_auth_exits_nonzero_when_auth_is_missing():
 
 def test_doctor_module_require_auth_rejects_unsafe_auth_token():
     env = os.environ.copy()
-    env["SELF_CORRECTING_SERVICE_AUTH_TOKEN"] = "long-random-token-é"
+    env["KAGENT_SERVICE_AUTH_TOKEN"] = "long-random-token-é"
 
     completed = subprocess.run(
         [
             sys.executable,
             "-m",
-            "self_correcting_langgraph_agent.ops.doctor",
+            "kagent.ops.doctor",
             "--require-auth",
         ],
         check=False,
@@ -324,13 +324,13 @@ def test_doctor_module_require_auth_rejects_unsafe_auth_token():
 
 def test_doctor_module_require_auth_rejects_placeholder_auth_token():
     env = os.environ.copy()
-    env["SELF_CORRECTING_SERVICE_AUTH_TOKEN"] = "replace-with-a-long-random-token"
+    env["KAGENT_SERVICE_AUTH_TOKEN"] = "replace-with-a-long-random-token"
 
     completed = subprocess.run(
         [
             sys.executable,
             "-m",
-            "self_correcting_langgraph_agent.ops.doctor",
+            "kagent.ops.doctor",
             "--require-auth",
         ],
         check=False,
@@ -350,7 +350,7 @@ def test_doctor_module_production_exits_nonzero_when_controls_are_missing():
         [
             sys.executable,
             "-m",
-            "self_correcting_langgraph_agent.ops.doctor",
+            "kagent.ops.doctor",
             "--production",
         ],
         check=False,
@@ -373,11 +373,11 @@ def test_doctor_module_production_rejects_full_trace_http_responses(tmp_path):
     env = os.environ.copy()
     env.update(
         {
-            "SELF_CORRECTING_SERVICE_AUTH_TOKEN": "long-random-token",
-            "SELF_CORRECTING_SERVICE_RATE_LIMIT_PER_MINUTE": "60",
-            "SELF_CORRECTING_SERVICE_MAX_CONCURRENT_RUNS": "4",
-            "SELF_CORRECTING_SERVICE_PROTECT_DIAGNOSTICS": "true",
-            "SELF_CORRECTING_SERVICE_ALLOW_FULL_TRACE_RESPONSE": "true",
+            "KAGENT_SERVICE_AUTH_TOKEN": "long-random-token",
+            "KAGENT_SERVICE_RATE_LIMIT_PER_MINUTE": "60",
+            "KAGENT_SERVICE_MAX_CONCURRENT_RUNS": "4",
+            "KAGENT_SERVICE_PROTECT_DIAGNOSTICS": "true",
+            "KAGENT_SERVICE_ALLOW_FULL_TRACE_RESPONSE": "true",
         }
     )
 
@@ -385,7 +385,7 @@ def test_doctor_module_production_rejects_full_trace_http_responses(tmp_path):
         [
             sys.executable,
             "-m",
-            "self_correcting_langgraph_agent.ops.doctor",
+            "kagent.ops.doctor",
             "--production",
             "--trace-dir",
             str(tmp_path / "traces"),
@@ -406,10 +406,10 @@ def test_doctor_module_production_rejects_placeholder_auth_token(tmp_path):
     env = os.environ.copy()
     env.update(
         {
-            "SELF_CORRECTING_SERVICE_AUTH_TOKEN": "replace-with-a-long-random-token",
-            "SELF_CORRECTING_SERVICE_RATE_LIMIT_PER_MINUTE": "60",
-            "SELF_CORRECTING_SERVICE_MAX_CONCURRENT_RUNS": "4",
-            "SELF_CORRECTING_SERVICE_PROTECT_DIAGNOSTICS": "true",
+            "KAGENT_SERVICE_AUTH_TOKEN": "replace-with-a-long-random-token",
+            "KAGENT_SERVICE_RATE_LIMIT_PER_MINUTE": "60",
+            "KAGENT_SERVICE_MAX_CONCURRENT_RUNS": "4",
+            "KAGENT_SERVICE_PROTECT_DIAGNOSTICS": "true",
         }
     )
 
@@ -417,7 +417,7 @@ def test_doctor_module_production_rejects_placeholder_auth_token(tmp_path):
         [
             sys.executable,
             "-m",
-            "self_correcting_langgraph_agent.ops.doctor",
+            "kagent.ops.doctor",
             "--production",
             "--trace-dir",
             str(tmp_path / "traces"),
@@ -438,10 +438,10 @@ def test_doctor_module_production_rejects_unsafe_auth_token(tmp_path):
     env = os.environ.copy()
     env.update(
         {
-            "SELF_CORRECTING_SERVICE_AUTH_TOKEN": "long-random-token-é",
-            "SELF_CORRECTING_SERVICE_RATE_LIMIT_PER_MINUTE": "60",
-            "SELF_CORRECTING_SERVICE_MAX_CONCURRENT_RUNS": "4",
-            "SELF_CORRECTING_SERVICE_PROTECT_DIAGNOSTICS": "true",
+            "KAGENT_SERVICE_AUTH_TOKEN": "long-random-token-é",
+            "KAGENT_SERVICE_RATE_LIMIT_PER_MINUTE": "60",
+            "KAGENT_SERVICE_MAX_CONCURRENT_RUNS": "4",
+            "KAGENT_SERVICE_PROTECT_DIAGNOSTICS": "true",
         }
     )
 
@@ -449,7 +449,7 @@ def test_doctor_module_production_rejects_unsafe_auth_token(tmp_path):
         [
             sys.executable,
             "-m",
-            "self_correcting_langgraph_agent.ops.doctor",
+            "kagent.ops.doctor",
             "--production",
             "--trace-dir",
             str(tmp_path / "traces"),
@@ -470,14 +470,14 @@ def test_doctor_module_runtime_provider_gate_reads_llm_environment(tmp_path):
     env = os.environ.copy()
     env.update(
         {
-            "SELF_CORRECTING_SERVICE_AUTH_TOKEN": "long-random-token",
-            "SELF_CORRECTING_SERVICE_RATE_LIMIT_PER_MINUTE": "60",
-            "SELF_CORRECTING_SERVICE_MAX_CONCURRENT_RUNS": "4",
-            "SELF_CORRECTING_SERVICE_PROTECT_DIAGNOSTICS": "true",
-            "SELF_CORRECTING_SERVICE_RUNTIME_MAX_ITERATIONS": "2",
-            "SELF_CORRECTING_LLM_BASE_URL": "https://llm.example.test/v1",
-            "SELF_CORRECTING_LLM_API_KEY": "provider-token",
-            "SELF_CORRECTING_LLM_MODEL": "agent-runtime-model",
+            "KAGENT_SERVICE_AUTH_TOKEN": "long-random-token",
+            "KAGENT_SERVICE_RATE_LIMIT_PER_MINUTE": "60",
+            "KAGENT_SERVICE_MAX_CONCURRENT_RUNS": "4",
+            "KAGENT_SERVICE_PROTECT_DIAGNOSTICS": "true",
+            "KAGENT_SERVICE_RUNTIME_MAX_ITERATIONS": "2",
+            "KAGENT_LLM_BASE_URL": "https://llm.example.test/v1",
+            "KAGENT_LLM_API_KEY": "x",
+            "KAGENT_LLM_MODEL": "agent-runtime-model",
         }
     )
 
@@ -485,7 +485,7 @@ def test_doctor_module_runtime_provider_gate_reads_llm_environment(tmp_path):
         [
             sys.executable,
             "-m",
-            "self_correcting_langgraph_agent.ops.doctor",
+            "kagent.ops.doctor",
             "--production",
             "--require-runtime-provider",
             "--trace-dir",
@@ -508,11 +508,11 @@ def test_doctor_module_runtime_provider_gate_exits_nonzero_when_missing_provider
     env = os.environ.copy()
     env.update(
         {
-            "SELF_CORRECTING_SERVICE_AUTH_TOKEN": "long-random-token",
-            "SELF_CORRECTING_SERVICE_RATE_LIMIT_PER_MINUTE": "60",
-            "SELF_CORRECTING_SERVICE_MAX_CONCURRENT_RUNS": "4",
-            "SELF_CORRECTING_SERVICE_PROTECT_DIAGNOSTICS": "true",
-            "SELF_CORRECTING_SERVICE_RUNTIME_MAX_ITERATIONS": "1",
+            "KAGENT_SERVICE_AUTH_TOKEN": "long-random-token",
+            "KAGENT_SERVICE_RATE_LIMIT_PER_MINUTE": "60",
+            "KAGENT_SERVICE_MAX_CONCURRENT_RUNS": "4",
+            "KAGENT_SERVICE_PROTECT_DIAGNOSTICS": "true",
+            "KAGENT_SERVICE_RUNTIME_MAX_ITERATIONS": "1",
         }
     )
 
@@ -520,7 +520,7 @@ def test_doctor_module_runtime_provider_gate_exits_nonzero_when_missing_provider
         [
             sys.executable,
             "-m",
-            "self_correcting_langgraph_agent.ops.doctor",
+            "kagent.ops.doctor",
             "--production",
             "--require-runtime-provider",
             "--trace-dir",
@@ -545,8 +545,8 @@ def test_doctor_module_runtime_provider_gate_exits_nonzero_when_missing_provider
 
 def test_doctor_module_preserves_idempotency_cache_size_from_environment(tmp_path):
     env = os.environ.copy()
-    env["SELF_CORRECTING_SERVICE_IDEMPOTENCY_CACHE_SIZE"] = "17"
-    env["SELF_CORRECTING_SERVICE_IDEMPOTENCY_CACHE_PATH"] = str(
+    env["KAGENT_SERVICE_IDEMPOTENCY_CACHE_SIZE"] = "17"
+    env["KAGENT_SERVICE_IDEMPOTENCY_CACHE_PATH"] = str(
         tmp_path / "idempotency.sqlite3"
     )
 
@@ -554,7 +554,7 @@ def test_doctor_module_preserves_idempotency_cache_size_from_environment(tmp_pat
         [
             sys.executable,
             "-m",
-            "self_correcting_langgraph_agent.ops.doctor",
+            "kagent.ops.doctor",
             "--trace-dir",
             str(tmp_path / "traces"),
         ],
@@ -573,13 +573,13 @@ def test_doctor_module_preserves_idempotency_cache_size_from_environment(tmp_pat
 
 def test_doctor_module_reports_invalid_environment_config_without_traceback():
     env = os.environ.copy()
-    env["SELF_CORRECTING_SERVICE_PORT"] = "not-a-port"
+    env["KAGENT_SERVICE_PORT"] = "not-a-port"
 
     completed = subprocess.run(
         [
             sys.executable,
             "-m",
-            "self_correcting_langgraph_agent.ops.doctor",
+            "kagent.ops.doctor",
             "--production",
         ],
         check=False,
@@ -589,7 +589,7 @@ def test_doctor_module_reports_invalid_environment_config_without_traceback():
     )
 
     assert completed.returncode == 2
-    assert "SELF_CORRECTING_SERVICE_PORT must be an integer" in completed.stderr
+    assert "KAGENT_SERVICE_PORT must be an integer" in completed.stderr
     assert "Traceback" not in completed.stderr
 
 
@@ -601,7 +601,7 @@ def test_doctor_module_exits_nonzero_when_self_check_fails(tmp_path):
         [
             sys.executable,
             "-m",
-            "self_correcting_langgraph_agent.ops.doctor",
+            "kagent.ops.doctor",
             "--trace-dir",
             str(blocking_file / "traces"),
         ],

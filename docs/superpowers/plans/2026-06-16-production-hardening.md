@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Harden the LangGraph self-correcting agent into a readable,
+**Goal:** Harden the LangGraph Kagent into a readable,
 production-oriented library and CLI.
 
 **Architecture:** Keep the existing deterministic LangGraph loop. Add
@@ -16,8 +16,8 @@ refactor internals only where tests already protect behavior.
 ### Task 1: Run Metadata
 
 **Files:**
-- Modify: `src/self_correcting_langgraph_agent/agent.py`
-- Modify: `src/self_correcting_langgraph_agent/summary.py`
+- Modify: `src/kagent/agent.py`
+- Modify: `src/kagent/summary.py`
 - Test: `tests/test_agent_graph.py`
 - Test: `tests/test_summary.py`
 
@@ -31,8 +31,8 @@ refactor internals only where tests already protect behavior.
 ### Task 2: Structured Tool Metadata
 
 **Files:**
-- Modify: `src/self_correcting_langgraph_agent/tools.py`
-- Modify: `src/self_correcting_langgraph_agent/cli.py`
+- Modify: `src/kagent/tools.py`
+- Modify: `src/kagent/cli.py`
 - Modify: `README.md`
 - Test: `tests/test_tools.py`
 - Test: `tests/test_cli.py`
@@ -47,7 +47,7 @@ refactor internals only where tests already protect behavior.
 ### Task 3: CLI Failure Exit Semantics
 
 **Files:**
-- Modify: `src/self_correcting_langgraph_agent/cli.py`
+- Modify: `src/kagent/cli.py`
 - Modify: `README.md`
 - Test: `tests/test_cli.py`
 
@@ -60,7 +60,7 @@ refactor internals only where tests already protect behavior.
 ### Task 4: Evaluator Filtering
 
 **Files:**
-- Modify: `src/self_correcting_langgraph_agent/evaluator.py`
+- Modify: `src/kagent/evaluator.py`
 - Modify: `pyproject.toml` only if entry points need changes
 - Modify: `README.md`
 - Test: `tests/test_evaluator.py`
@@ -80,4 +80,4 @@ refactor internals only where tests already protect behavior.
 - [ ] Re-read touched modules and remove duplication introduced by the tasks.
 - [ ] Update `docs/iteration_log.md` with verified changes.
 - [ ] Run `scripts/run_checks.sh`.
-- [ ] Check `/tmp/self-correcting-agent-three-hour.jsonl` with metrics CLI.
+- [ ] Check `/tmp/kagent-three-hour.jsonl` with metrics CLI.

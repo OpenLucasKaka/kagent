@@ -12,17 +12,17 @@
 
 ## File Structure
 
-- Create `src/self_correcting_langgraph_agent/llm_provider.py`
+- Create `src/kagent/llm_provider.py`
   - Owns provider config, fake provider, OpenAI-compatible request/response handling, redacted config snapshots, and JSON extraction errors.
-- Create `src/self_correcting_langgraph_agent/runtime_types.py`
+- Create `src/kagent/runtime_types.py`
   - Owns `AgentAction`, `AgentPlan`, `AgentObservation`, `AgentRuntimeResult`, and parsing helpers.
-- Create `src/self_correcting_langgraph_agent/runtime_tools.py`
+- Create `src/kagent/runtime_tools.py`
   - Owns generic tool registry independent of regex deterministic tools.
-- Create `src/self_correcting_langgraph_agent/runtime_policy.py`
+- Create `src/kagent/runtime_policy.py`
   - Owns allow/deny/requires-approval decisions before tool execution.
-- Create `src/self_correcting_langgraph_agent/runtime.py`
+- Create `src/kagent/runtime.py`
   - Owns `run_runtime_agent(goal, provider, policy)` orchestration for phase 1.
-- Modify `src/self_correcting_langgraph_agent/__init__.py`
+- Modify `src/kagent/__init__.py`
   - Export stable runtime APIs after tests prove behavior.
 - Modify `docs/architecture.md`, `README.md`, `docs/operations.md`, and `docs/iteration_log.md`
   - Document the new runtime layer and provider environment variables.
@@ -30,13 +30,13 @@
 ## Task 1: Provider Configuration And Fake Provider
 
 **Files:**
-- Create: `src/self_correcting_langgraph_agent/llm_provider.py`
+- Create: `src/kagent/llm_provider.py`
 - Test: `tests/test_llm_provider.py`
 
 - [ ] **Step 1: Write failing provider tests**
 
 ```python
-from self_correcting_langgraph_agent.llm_provider import (
+from kagent.llm_provider import (
     FakeLLMProvider,
     LLMProviderConfig,
 )
@@ -45,10 +45,10 @@ from self_correcting_langgraph_agent.llm_provider import (
 def test_provider_config_reads_openai_compatible_environment_without_exposing_key():
     config = LLMProviderConfig.from_env(
         {
-            "SELF_CORRECTING_LLM_BASE_URL": "https://llm.example/v1",
-            "SELF_CORRECTING_LLM_API_KEY": "secret-key",
-            "SELF_CORRECTING_LLM_MODEL": "agent-model",
-            "SELF_CORRECTING_LLM_TIMEOUT_SECONDS": "12.5",
+            "KAGENT_LLM_BASE_URL": "https://llm.example/v1",
+            "KAGENT_LLM_API_KEY": "x",
+            "KAGENT_LLM_MODEL": "agent-model",
+            "KAGENT_LLM_TIMEOUT_SECONDS": "12.5",
         }
     )
 
@@ -62,7 +62,7 @@ def test_provider_config_reads_openai_compatible_environment_without_exposing_ke
         "llm_api_key_configured": "true",
         "llm_timeout_seconds": "12.5",
     }
-    assert "secret-key" not in str(config.redacted_snapshot())
+    assert "x" not in str(config.redacted_snapshot())
 
 
 def test_fake_llm_provider_returns_configured_text_response():
@@ -76,7 +76,7 @@ def test_fake_llm_provider_returns_configured_text_response():
 
 Run: `.venv/bin/python -m pytest tests/test_llm_provider.py`
 
-Expected: import failure for `self_correcting_langgraph_agent.llm_provider`.
+Expected: import failure for `kagent.llm_provider`.
 
 - [ ] **Step 3: Implement provider config and fake provider**
 
@@ -109,7 +109,7 @@ Expected: all tests pass.
 ## Task 2: Runtime Plan Types
 
 **Files:**
-- Create: `src/self_correcting_langgraph_agent/runtime_types.py`
+- Create: `src/kagent/runtime_types.py`
 - Test: `tests/test_runtime_types.py`
 
 - [ ] **Step 1: Write failing plan parser tests**
@@ -117,7 +117,7 @@ Expected: all tests pass.
 ```python
 import pytest
 
-from self_correcting_langgraph_agent.runtime_types import parse_agent_plan
+from kagent.runtime_types import parse_agent_plan
 
 
 def test_parse_agent_plan_accepts_strict_action_json():
@@ -156,15 +156,15 @@ Expected: all tests pass.
 ## Task 3: Tool Runtime And Policy Gate
 
 **Files:**
-- Create: `src/self_correcting_langgraph_agent/runtime_tools.py`
-- Create: `src/self_correcting_langgraph_agent/runtime_policy.py`
+- Create: `src/kagent/runtime_tools.py`
+- Create: `src/kagent/runtime_policy.py`
 - Test: `tests/test_runtime_tools.py`
 
 - [ ] **Step 1: Write failing tool/policy tests**
 
 ```python
-from self_correcting_langgraph_agent.runtime_policy import RuntimePolicy
-from self_correcting_langgraph_agent.runtime_tools import default_runtime_tools, execute_runtime_tool
+from kagent.runtime_policy import RuntimePolicy
+from kagent.runtime_tools import default_runtime_tools, execute_runtime_tool
 
 
 def test_note_tool_returns_structured_observation():
@@ -209,15 +209,15 @@ Expected: all tests pass.
 ## Task 4: Runtime Orchestrator Vertical Slice
 
 **Files:**
-- Create: `src/self_correcting_langgraph_agent/runtime.py`
+- Create: `src/kagent/runtime.py`
 - Test: `tests/test_runtime.py`
-- Modify: `src/self_correcting_langgraph_agent/__init__.py`
+- Modify: `src/kagent/__init__.py`
 
 - [ ] **Step 1: Write failing runtime orchestration tests**
 
 ```python
-from self_correcting_langgraph_agent.llm_provider import FakeLLMProvider
-from self_correcting_langgraph_agent.runtime import run_runtime_agent
+from kagent.llm_provider import FakeLLMProvider
+from kagent.runtime import run_runtime_agent
 
 
 def test_runtime_agent_runs_fake_llm_plan_through_policy_and_tools():
@@ -279,7 +279,7 @@ Expected: all tests pass.
 Document:
 - The deterministic `/run` path remains stable.
 - The new runtime layer supports fake provider testing.
-- OpenAI-compatible env vars are `SELF_CORRECTING_LLM_BASE_URL`, `SELF_CORRECTING_LLM_API_KEY`, `SELF_CORRECTING_LLM_MODEL`, `SELF_CORRECTING_LLM_TIMEOUT_SECONDS`.
+- OpenAI-compatible env vars are `KAGENT_LLM_BASE_URL`, `KAGENT_LLM_API_KEY`, `KAGENT_LLM_MODEL`, `KAGENT_LLM_TIMEOUT_SECONDS`.
 - API keys are never written to config snapshots or traces.
 
 - [ ] **Step 2: Run docs and full checks**

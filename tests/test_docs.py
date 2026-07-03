@@ -91,12 +91,12 @@ def test_architecture_document_names_runtime_and_operational_boundaries():
     assert "subject-mapped bearer tokens" in architecture
     assert "cross-subject run IDs" in architecture
     assert "subject-scoped runtime resume" in architecture
-    assert "SELF_CORRECTING_SERVICE_IDEMPOTENCY_CACHE_PATH" in architecture
+    assert "KAGENT_SERVICE_IDEMPOTENCY_CACHE_PATH" in architecture
     assert "stdlib SQLite cache" in architecture
     assert "SQLite idempotency readiness" in architecture
     assert "anonymous scope" in architecture
-    assert "SELF_CORRECTING_SERVICE_RUNTIME_ALLOWED_TOOLS" in architecture
-    assert "SELF_CORRECTING_SERVICE_RUNTIME_ALLOWED_TOOLS_BY_SUBJECT" in architecture
+    assert "KAGENT_SERVICE_RUNTIME_ALLOWED_TOOLS" in architecture
+    assert "KAGENT_SERVICE_RUNTIME_ALLOWED_TOOLS_BY_SUBJECT" in architecture
     assert "approved_action_id=step-1" in architecture
     assert "resumed_from_run_id=pending-run" in architecture
     assert "resumed_by_auth_subject" in architecture
@@ -121,26 +121,28 @@ def test_architecture_document_names_runtime_and_operational_boundaries():
     assert "unreadable trace files" in architecture
     assert "trace_read_failed" in architecture
     assert "runtime identity boundary" in architecture
-    assert "self-correcting LangGraph agent runtime" in architecture
+    assert "Kagent runtime" in architecture
     assert "underlying model provider" in architecture
     assert "final_answer_guardrail" in architecture
     assert "final_answer_guardrail_applied_count" in architecture
     assert "final_answer_guardrail_reason_counts" in architecture
-    assert "self_correcting_agent_runtime_final_answer_guardrails_total" in architecture
+    assert "kagent_runtime_final_answer_guardrails_total" in architecture
 
 
 def test_readme_documents_console_script_entrypoints():
     readme = Path("README.md").read_text()
 
-    assert "self-correcting-agent" in readme
-    assert "self-correcting-agent-batch" in readme
-    assert "self-correcting-agent-eval" in readme
-    assert "self-correcting-agent-metrics" in readme
-    assert "self-correcting-agent-doctor" in readme
-    assert "self-correcting-agent-release-manifest" in readme
-    assert "self-correcting-agent-serve" in readme
-    assert "self-correcting-agent-trace-prune" in readme
-    assert "self-correcting-agent-trace-replay" in readme
+    assert "kagent" in readme
+    assert "kagent-batch" in readme
+    assert "kagent-eval" in readme
+    assert "kagent-metrics" in readme
+    assert "kagent-doctor" in readme
+    assert "kagent-release-manifest" in readme
+    assert "kagent-serve" in readme
+    assert "kagent-trace-prune" in readme
+    assert "kagent-trace-replay" in readme
+    old_console_name = "-".join(["self", "correcting", "agent"])
+    assert old_console_name not in readme
     assert "live progress" in readme
     assert "compact operator transcript" in readme
     assert "--session-memory PATH" in readme

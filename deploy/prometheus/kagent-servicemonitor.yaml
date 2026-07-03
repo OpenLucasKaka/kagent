@@ -1,0 +1,15 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: kagent
+  labels:
+    app.kubernetes.io/name: kagent
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: kagent
+  endpoints:
+    - port: http
+      path: /metrics.prom
+      interval: 30s
+      scrapeTimeout: 5s

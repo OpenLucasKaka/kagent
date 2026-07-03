@@ -5,10 +5,10 @@ import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from self_correcting_langgraph_agent.ops.release_evidence import (
+from kagent.ops.release_evidence import (
     REQUIRED_OBSERVABILITY_ACCEPTANCE_METRICS_SHA256,
 )
-from self_correcting_langgraph_agent.service import ServiceConfig, create_server
+from kagent.service import ServiceConfig, create_server
 
 
 def test_continuous_iterate_writes_jsonl_metrics(tmp_path):
@@ -19,7 +19,7 @@ def test_continuous_iterate_writes_jsonl_metrics(tmp_path):
     fake_check.write_text(
         "#!/usr/bin/env sh\n"
         "set -eu\n"
-        "cat > \"$SELF_CORRECTING_EVAL_FILE\" <<'JSON'\n"
+        "cat > \"$KAGENT_EVAL_FILE\" <<'JSON'\n"
         "{\"passed\": 6, \"failed\": 0, \"slowest_case\": \"multi_step_success\", "
         "\"recovered_cases\": \"2\", \"recovery_rate\": \"0.33\", "
         "\"category_counts\": {\"tool\": \"3\", \"recovery\": \"2\", \"failure\": \"1\"}}\n"
@@ -27,8 +27,8 @@ def test_continuous_iterate_writes_jsonl_metrics(tmp_path):
     )
     fake_check.chmod(0o755)
     env = os.environ.copy()
-    env["SELF_CORRECTING_CHECK_COMMAND"] = str(fake_check)
-    env["SELF_CORRECTING_EVAL_FILE"] = str(eval_path)
+    env["KAGENT_CHECK_COMMAND"] = str(fake_check)
+    env["KAGENT_EVAL_FILE"] = str(eval_path)
 
     subprocess.run(
         [
@@ -84,13 +84,13 @@ def test_continuous_iterate_survives_malformed_evaluator_json(tmp_path):
     fake_check.write_text(
         "#!/usr/bin/env sh\n"
         "set -eu\n"
-        "printf '{not-json}\\n' > \"$SELF_CORRECTING_EVAL_FILE\"\n"
+        "printf '{not-json}\\n' > \"$KAGENT_EVAL_FILE\"\n"
         "exit 1\n"
     )
     fake_check.chmod(0o755)
     env = os.environ.copy()
-    env["SELF_CORRECTING_CHECK_COMMAND"] = str(fake_check)
-    env["SELF_CORRECTING_EVAL_FILE"] = str(eval_path)
+    env["KAGENT_CHECK_COMMAND"] = str(fake_check)
+    env["KAGENT_EVAL_FILE"] = str(eval_path)
 
     completed = subprocess.run(
         [
@@ -130,8 +130,8 @@ def test_continuous_iterate_does_not_reuse_stale_evaluator_json(tmp_path):
     fake_check.write_text("#!/usr/bin/env sh\nset -eu\nexit 1\n")
     fake_check.chmod(0o755)
     env = os.environ.copy()
-    env["SELF_CORRECTING_CHECK_COMMAND"] = str(fake_check)
-    env["SELF_CORRECTING_EVAL_FILE"] = str(eval_path)
+    env["KAGENT_CHECK_COMMAND"] = str(fake_check)
+    env["KAGENT_EVAL_FILE"] = str(eval_path)
 
     completed = subprocess.run(
         [
@@ -165,23 +165,23 @@ def test_run_checks_metrics_smoke_includes_slowest_case():
     assert "evaluator_recovered_cases" in run_checks
     assert "evaluator_recovery_rate" in run_checks
     assert "evaluator_category_counts" in run_checks
-    assert "self_correcting_langgraph_agent.ops.metrics" in run_checks
-    assert "--output /tmp/self-correcting-agent-metrics-summary-output.json" in run_checks
+    assert "kagent.ops.metrics" in run_checks
+    assert "--output /tmp/kagent-metrics-summary-output.json" in run_checks
     assert "--require-recent-health healthy" in run_checks
 
 
 def test_run_checks_smoke_exercises_cli_introspection():
     run_checks = Path("scripts/run_checks.sh").read_text()
 
-    assert "self-correcting-agent --version" in run_checks
-    assert "self-correcting-agent-batch" in run_checks
-    assert "self-correcting-agent-eval --list-cases" in run_checks
-    assert "self-correcting-agent-metrics" in run_checks
-    assert "self-correcting-agent-serve --help" in run_checks
+    assert "kagent --version" in run_checks
+    assert "kagent-batch" in run_checks
+    assert "kagent-eval --list-cases" in run_checks
+    assert "kagent-metrics" in run_checks
+    assert "kagent-serve --help" in run_checks
     assert "--version" in run_checks
     assert "--plan" in run_checks
-    assert "--session-memory /tmp/self-correcting-agent-session-memory.json" in run_checks
-    assert "/tmp/self-correcting-agent-session-memory-smoke.json" in run_checks
+    assert "--session-memory /tmp/kagent-session-memory.json" in run_checks
+    assert "/tmp/kagent-session-memory-smoke.json" in run_checks
     assert "unexpected session memory file mode" in run_checks
 
 
@@ -190,9 +190,9 @@ def test_run_checks_starts_real_service_smoke():
     smoke = Path("scripts/smoke_service.sh").read_text()
 
     assert "scripts/smoke_service.sh" in run_checks
-    assert "self-correcting-agent-serve" in smoke
-    assert "SELF_CORRECTING_SERVICE_AUTH_TOKEN" in smoke
-    assert "SELF_CORRECTING_SMOKE_AUTH_TOKEN" in smoke
+    assert "kagent-serve" in smoke
+    assert "KAGENT_SERVICE_AUTH_TOKEN" in smoke
+    assert "KAGENT_SMOKE_AUTH_TOKEN" in smoke
     assert "Authorization" in smoke
     assert "duplicate_auth_response" in smoke
     assert "WWW-Authenticate" in smoke
@@ -206,9 +206,9 @@ def test_run_checks_starts_real_service_smoke():
     assert "/metrics" in smoke
     assert "/metrics.prom" in smoke
     assert "text/plain" in smoke
-    assert "self_correcting_agent_requests_total" in smoke
+    assert "kagent_requests_total" in smoke
     assert "requests_by_method" in smoke
-    assert "self_correcting_agent_requests_by_method_total" in smoke
+    assert "kagent_requests_by_method_total" in smoke
     assert "__unknown__" in smoke
     assert "service_version" in smoke
     assert "bind_host" in smoke
@@ -216,13 +216,13 @@ def test_run_checks_starts_real_service_smoke():
     assert "auth_required" in smoke
     assert "allow_full_trace_response" in smoke
     assert "protect_diagnostics" in smoke
-    assert "self_correcting_agent_build_info" in smoke
+    assert "kagent_build_info" in smoke
     assert "security_response_headers" in smoke
     assert "content_security_policy_header" in smoke
     assert "x_frame_options_header" in smoke
     assert "max_concurrent_runs" in smoke
     assert "max_request_bytes" in smoke
-    assert "self_correcting_agent_max_request_bytes" in smoke
+    assert "kagent_max_request_bytes" in smoke
     assert "idempotency_cache_size" in smoke
     assert "idempotency_cache_hits" in smoke
     assert "idempotency_cache_misses" in smoke
@@ -269,13 +269,13 @@ def test_run_checks_starts_real_service_smoke():
     assert "request_body_bytes" in smoke
     assert "method_not_allowed" in smoke
     assert "error_responses_by_code" in smoke
-    assert "self_correcting_agent_error_responses_total" in smoke
-    assert "self_correcting_agent_request_duration_seconds_bucket" in smoke
-    assert "self_correcting_agent_request_duration_seconds_count" in smoke
-    assert "self_correcting_agent_request_duration_seconds_sum" in smoke
-    assert "self_correcting_agent_agent_run_duration_seconds_bucket" in smoke
-    assert "self_correcting_agent_agent_run_duration_seconds_count" in smoke
-    assert "self_correcting_agent_agent_run_duration_seconds_sum" in smoke
+    assert "kagent_error_responses_total" in smoke
+    assert "kagent_request_duration_seconds_bucket" in smoke
+    assert "kagent_request_duration_seconds_count" in smoke
+    assert "kagent_request_duration_seconds_sum" in smoke
+    assert "kagent_agent_run_duration_seconds_bucket" in smoke
+    assert "kagent_agent_run_duration_seconds_count" in smoke
+    assert "kagent_agent_run_duration_seconds_sum" in smoke
     assert "--trace-dir" in smoke
     assert "trace_persistence" in smoke
     assert "average_duration_seconds" in smoke
@@ -283,12 +283,12 @@ def test_run_checks_starts_real_service_smoke():
     assert "agent_runs_total" in smoke
     assert "agent_runs_by_status" in smoke
     assert "average_agent_run_duration_seconds" in smoke
-    assert "self_correcting_agent_runs_total" in smoke
-    assert "self_correcting_agent_run_status_total" in smoke
-    assert "self_correcting_agent_runtime_pending_approvals_current" in smoke
-    assert "self_correcting_agent_runtime_stale_pending_approvals_current" in smoke
-    assert "self_correcting_agent_runtime_max_pending_approval_age_seconds" in smoke
-    assert "self_correcting_agent_runtime_pending_approval_stale_seconds" in smoke
+    assert "kagent_runs_total" in smoke
+    assert "kagent_run_status_total" in smoke
+    assert "kagent_runtime_pending_approvals_current" in smoke
+    assert "kagent_runtime_stale_pending_approvals_current" in smoke
+    assert "kagent_runtime_max_pending_approval_age_seconds" in smoke
+    assert "kagent_runtime_pending_approval_stale_seconds" in smoke
     assert "uptime_seconds" in smoke
     assert "Cache-Control" in smoke
     assert "no-store" in smoke
@@ -314,7 +314,7 @@ def test_production_readiness_audit_reports_required_artifacts():
     assert "scripts/production_readiness_audit.py" in makefile
     assert "scripts/production_readiness_audit.py" in readme
     assert "scripts/production_readiness_audit.py" in rollout
-    assert "self_correcting_agent_runtime_progress_event_sink_failures_total" in script_text
+    assert "kagent_runtime_progress_event_sink_failures_total" in script_text
     assert "SelfCorrectingAgentRuntimeProgressSinkFailures" in script_text
 
     completed = subprocess.run(
@@ -341,7 +341,7 @@ def test_production_readiness_audit_reports_required_artifacts():
     assert len(payload["configuration"]["env_example"]["sha256"]) == 64
     assert payload["observability"]["grafana_dashboard"]["status"] == "passed"
     assert payload["observability"]["grafana_dashboard"]["title"] == (
-        "Self-Correcting Agent Runtime"
+        "Kagent Runtime"
     )
     assert int(payload["observability"]["grafana_dashboard"]["panel_count"]) >= 8
     assert payload["observability"]["grafana_dashboard"][
@@ -395,11 +395,11 @@ def test_production_readiness_audit_reports_required_artifacts():
     assert "scripts/smoke_internal_runtime.sh" in payload["artifacts"]
     assert "scripts/smoke_real_llm_runtime.sh" in payload["artifacts"]
     assert "scripts/staging_acceptance.sh" in payload["artifacts"]
-    assert "deploy/prometheus/self-correcting-agent-rules.yaml" in payload["artifacts"]
-    assert "deploy/grafana/self-correcting-agent-dashboard.json" in payload["artifacts"]
+    assert "deploy/prometheus/kagent-rules.yaml" in payload["artifacts"]
+    assert "deploy/grafana/kagent-dashboard.json" in payload["artifacts"]
     assert "examples/internal_runtime_client.py" in payload["artifacts"]
     assert payload["artifacts"]["scripts/run_checks.sh"]["exists"] is True
-    assert payload["artifacts"]["deploy/grafana/self-correcting-agent-dashboard.json"][
+    assert payload["artifacts"]["deploy/grafana/kagent-dashboard.json"][
         "exists"
     ] is True
     assert "sha256" in payload["artifacts"]["scripts/run_checks.sh"]
@@ -422,8 +422,8 @@ def test_staging_acceptance_script_is_secret_safe_and_documented():
     assert "scripts/staging_acceptance.sh" in readiness
 
     script = script_path.read_text()
-    assert "SELF_CORRECTING_STAGING_BASE_URL" in script
-    assert "SELF_CORRECTING_STAGING_TOKEN" in script
+    assert "KAGENT_STAGING_BASE_URL" in script
+    assert "KAGENT_STAGING_TOKEN" in script
     assert "Authorization" in script
     assert "Bearer" in script
     assert "/runtime/policy" in script
@@ -449,8 +449,8 @@ def test_staging_acceptance_script_exercises_production_shaped_service(tmp_path)
     thread.start()
     host, port = server.server_address
     env = os.environ.copy()
-    env["SELF_CORRECTING_STAGING_BASE_URL"] = f"http://{host}:{port}"
-    env["SELF_CORRECTING_STAGING_TOKEN"] = "team-a-staging-token"
+    env["KAGENT_STAGING_BASE_URL"] = f"http://{host}:{port}"
+    env["KAGENT_STAGING_TOKEN"] = "team-a-staging-token"
 
     try:
         completed = subprocess.run(
@@ -499,15 +499,15 @@ def test_observability_acceptance_script_is_secret_safe_and_documented():
     assert "scripts/observability_acceptance.sh" in operations
 
     script = script_path.read_text()
-    assert "SELF_CORRECTING_OBSERVABILITY_BASE_URL" in script
-    assert "SELF_CORRECTING_OBSERVABILITY_TOKEN" in script
+    assert "KAGENT_OBSERVABILITY_BASE_URL" in script
+    assert "KAGENT_OBSERVABILITY_TOKEN" in script
     assert "Authorization" in script
     assert "Bearer" in script
     assert "/metrics.prom" in script
-    assert "self_correcting_agent_runtime_stale_pending_approvals_current" in script
-    assert "self_correcting_agent_runtime_progress_event_sink_failures_total" in script
-    assert "deploy/grafana/self-correcting-agent-dashboard.json" in script
-    assert "deploy/prometheus/self-correcting-agent-rules.yaml" in script
+    assert "kagent_runtime_stale_pending_approvals_current" in script
+    assert "kagent_runtime_progress_event_sink_failures_total" in script
+    assert "deploy/grafana/kagent-dashboard.json" in script
+    assert "deploy/prometheus/kagent-rules.yaml" in script
     assert "observability_token" not in script
     assert "sk-" not in script
 
@@ -527,8 +527,8 @@ def test_observability_acceptance_script_verifies_live_metrics(tmp_path):
     thread.start()
     host, port = server.server_address
     env = os.environ.copy()
-    env["SELF_CORRECTING_OBSERVABILITY_BASE_URL"] = f"http://{host}:{port}"
-    env["SELF_CORRECTING_OBSERVABILITY_TOKEN"] = "sre-observability-token"
+    env["KAGENT_OBSERVABILITY_BASE_URL"] = f"http://{host}:{port}"
+    env["KAGENT_OBSERVABILITY_TOKEN"] = "sre-observability-token"
 
     try:
         completed = subprocess.run(
@@ -576,7 +576,7 @@ def test_observability_acceptance_script_verifies_prometheus_query(tmp_path):
                     "resultType": "vector",
                     "result": [
                         {
-                            "metric": {"job": "self-correcting-agent"},
+                            "metric": {"job": "kagent"},
                             "value": [123, "1"],
                         }
                     ],
@@ -612,14 +612,14 @@ def test_observability_acceptance_script_verifies_prometheus_query(tmp_path):
     service_host, service_port = service.server_address
     prometheus_host, prometheus_port = prometheus.server_address
     env = os.environ.copy()
-    env["SELF_CORRECTING_OBSERVABILITY_BASE_URL"] = (
+    env["KAGENT_OBSERVABILITY_BASE_URL"] = (
         f"http://{service_host}:{service_port}"
     )
-    env["SELF_CORRECTING_OBSERVABILITY_TOKEN"] = "sre-observability-token"
-    env["SELF_CORRECTING_PROMETHEUS_BASE_URL"] = (
+    env["KAGENT_OBSERVABILITY_TOKEN"] = "sre-observability-token"
+    env["KAGENT_PROMETHEUS_BASE_URL"] = (
         f"http://{prometheus_host}:{prometheus_port}"
     )
-    env["SELF_CORRECTING_PROMETHEUS_QUERY"] = "self_correcting_agent_build_info"
+    env["KAGENT_PROMETHEUS_QUERY"] = "kagent_build_info"
 
     try:
         completed = subprocess.run(
@@ -641,7 +641,7 @@ def test_observability_acceptance_script_verifies_prometheus_query(tmp_path):
 
     assert payload["status"] == "passed"
     assert payload["prometheus_query_status"] == "passed"
-    assert payload["prometheus_query"] == "self_correcting_agent_build_info"
+    assert payload["prometheus_query"] == "kagent_build_info"
     assert payload["prometheus_result_count"] == "1"
     assert "sre-observability-token" not in completed.stdout
     assert "sre-observability-token" not in completed.stderr
@@ -905,11 +905,11 @@ def test_production_approval_bundle_script_is_secret_safe_and_documented():
     assert "production-approval-bundle:" in makefile
 
     script = script_path.read_text()
-    assert "SELF_CORRECTING_PROVIDER_SMOKE_EVIDENCE" in script
-    assert "SELF_CORRECTING_STAGING_ACCEPTANCE_EVIDENCE" in script
-    assert "SELF_CORRECTING_OBSERVABILITY_ACCEPTANCE_EVIDENCE" in script
-    assert "SELF_CORRECTING_INTERNAL_ROLLOUT_EVIDENCE" in script
-    assert "SELF_CORRECTING_EVIDENCE_MAX_AGE_SECONDS" in script
+    assert "KAGENT_PROVIDER_SMOKE_EVIDENCE" in script
+    assert "KAGENT_STAGING_ACCEPTANCE_EVIDENCE" in script
+    assert "KAGENT_OBSERVABILITY_ACCEPTANCE_EVIDENCE" in script
+    assert "KAGENT_INTERNAL_ROLLOUT_EVIDENCE" in script
+    assert "KAGENT_EVIDENCE_MAX_AGE_SECONDS" in script
     assert "evidence_missing" in script
     assert "evidence_stale" in script
     assert "evidence_max_age_invalid" in script
@@ -1049,14 +1049,14 @@ def test_production_approval_bundle_script_builds_strict_release_evidence(tmp_pa
         )
         + "\n"
     )
-    wheel = tmp_path / "self_correcting_langgraph_agent-0.1.0-py3-none-any.whl"
+    wheel = tmp_path / "kagent-0.1.0-py3-none-any.whl"
     wheel.write_text("wheel-bytes\n")
     manifest = tmp_path / "release-manifest.json"
     subprocess.run(
         [
             ".venv/bin/python",
             "-m",
-            "self_correcting_langgraph_agent.ops.release_manifest",
+            "kagent.ops.release_manifest",
             str(wheel),
             "--output",
             str(manifest),
@@ -1068,16 +1068,16 @@ def test_production_approval_bundle_script_builds_strict_release_evidence(tmp_pa
     readiness_output = tmp_path / "readiness.json"
     evidence_output = tmp_path / "release-evidence.json"
     env = os.environ.copy()
-    env["SELF_CORRECTING_PROVIDER_SMOKE_EVIDENCE"] = str(provider_smoke)
-    env["SELF_CORRECTING_STAGING_ACCEPTANCE_EVIDENCE"] = str(staging_acceptance)
-    env["SELF_CORRECTING_OBSERVABILITY_ACCEPTANCE_EVIDENCE"] = str(
+    env["KAGENT_PROVIDER_SMOKE_EVIDENCE"] = str(provider_smoke)
+    env["KAGENT_STAGING_ACCEPTANCE_EVIDENCE"] = str(staging_acceptance)
+    env["KAGENT_OBSERVABILITY_ACCEPTANCE_EVIDENCE"] = str(
         observability_acceptance
     )
-    env["SELF_CORRECTING_INTERNAL_ROLLOUT_EVIDENCE"] = str(internal_rollout)
-    env["SELF_CORRECTING_RELEASE_MANIFEST"] = str(manifest)
-    env["SELF_CORRECTING_RUN_CHECKS_EXIT_CODE"] = "0"
-    env["SELF_CORRECTING_READINESS_AUDIT_OUTPUT"] = str(readiness_output)
-    env["SELF_CORRECTING_RELEASE_EVIDENCE_OUTPUT"] = str(evidence_output)
+    env["KAGENT_INTERNAL_ROLLOUT_EVIDENCE"] = str(internal_rollout)
+    env["KAGENT_RELEASE_MANIFEST"] = str(manifest)
+    env["KAGENT_RUN_CHECKS_EXIT_CODE"] = "0"
+    env["KAGENT_READINESS_AUDIT_OUTPUT"] = str(readiness_output)
+    env["KAGENT_RELEASE_EVIDENCE_OUTPUT"] = str(evidence_output)
 
     completed = subprocess.run(
         ["sh", "scripts/production_approval_bundle.sh", "--strict"],
@@ -1117,16 +1117,16 @@ def test_production_approval_bundle_script_builds_strict_release_evidence(tmp_pa
 
 def test_production_approval_bundle_script_reports_all_missing_evidence(tmp_path):
     env = os.environ.copy()
-    env["SELF_CORRECTING_PROVIDER_SMOKE_EVIDENCE"] = str(
+    env["KAGENT_PROVIDER_SMOKE_EVIDENCE"] = str(
         tmp_path / "missing-provider-smoke.json"
     )
-    env["SELF_CORRECTING_STAGING_ACCEPTANCE_EVIDENCE"] = str(
+    env["KAGENT_STAGING_ACCEPTANCE_EVIDENCE"] = str(
         tmp_path / "missing-staging-acceptance.json"
     )
-    env["SELF_CORRECTING_OBSERVABILITY_ACCEPTANCE_EVIDENCE"] = str(
+    env["KAGENT_OBSERVABILITY_ACCEPTANCE_EVIDENCE"] = str(
         tmp_path / "missing-observability-acceptance.json"
     )
-    env["SELF_CORRECTING_INTERNAL_ROLLOUT_EVIDENCE"] = str(
+    env["KAGENT_INTERNAL_ROLLOUT_EVIDENCE"] = str(
         tmp_path / "missing-internal-rollout.json"
     )
 
@@ -1174,13 +1174,13 @@ def test_production_approval_bundle_script_blocks_stale_evidence(tmp_path):
     old_timestamp = 1_000.0
     os.utime(provider_smoke, (old_timestamp, old_timestamp))
     env = os.environ.copy()
-    env["SELF_CORRECTING_PROVIDER_SMOKE_EVIDENCE"] = str(provider_smoke)
-    env["SELF_CORRECTING_STAGING_ACCEPTANCE_EVIDENCE"] = str(staging_acceptance)
-    env["SELF_CORRECTING_OBSERVABILITY_ACCEPTANCE_EVIDENCE"] = str(
+    env["KAGENT_PROVIDER_SMOKE_EVIDENCE"] = str(provider_smoke)
+    env["KAGENT_STAGING_ACCEPTANCE_EVIDENCE"] = str(staging_acceptance)
+    env["KAGENT_OBSERVABILITY_ACCEPTANCE_EVIDENCE"] = str(
         observability_acceptance
     )
-    env["SELF_CORRECTING_INTERNAL_ROLLOUT_EVIDENCE"] = str(internal_rollout)
-    env["SELF_CORRECTING_EVIDENCE_MAX_AGE_SECONDS"] = "60"
+    env["KAGENT_INTERNAL_ROLLOUT_EVIDENCE"] = str(internal_rollout)
+    env["KAGENT_EVIDENCE_MAX_AGE_SECONDS"] = "60"
 
     completed = subprocess.run(
         ["sh", "scripts/production_approval_bundle.sh"],
@@ -1206,13 +1206,13 @@ def test_production_approval_bundle_script_rejects_invalid_evidence_max_age(
     internal_rollout = tmp_path / "internal-rollout.json"
     internal_rollout.write_text(json.dumps({"status": "passed"}) + "\n")
     env = os.environ.copy()
-    env["SELF_CORRECTING_PROVIDER_SMOKE_EVIDENCE"] = str(provider_smoke)
-    env["SELF_CORRECTING_STAGING_ACCEPTANCE_EVIDENCE"] = str(staging_acceptance)
-    env["SELF_CORRECTING_OBSERVABILITY_ACCEPTANCE_EVIDENCE"] = str(
+    env["KAGENT_PROVIDER_SMOKE_EVIDENCE"] = str(provider_smoke)
+    env["KAGENT_STAGING_ACCEPTANCE_EVIDENCE"] = str(staging_acceptance)
+    env["KAGENT_OBSERVABILITY_ACCEPTANCE_EVIDENCE"] = str(
         observability_acceptance
     )
-    env["SELF_CORRECTING_INTERNAL_ROLLOUT_EVIDENCE"] = str(internal_rollout)
-    env["SELF_CORRECTING_EVIDENCE_MAX_AGE_SECONDS"] = "tomorrow"
+    env["KAGENT_INTERNAL_ROLLOUT_EVIDENCE"] = str(internal_rollout)
+    env["KAGENT_EVIDENCE_MAX_AGE_SECONDS"] = "tomorrow"
 
     completed = subprocess.run(
         ["sh", "scripts/production_approval_bundle.sh", "--strict"],
@@ -1225,7 +1225,7 @@ def test_production_approval_bundle_script_rejects_invalid_evidence_max_age(
     assert completed.returncode == 2
     assert payload == {
         "error": "evidence_max_age_invalid",
-        "environment_variable": "SELF_CORRECTING_EVIDENCE_MAX_AGE_SECONDS",
+        "environment_variable": "KAGENT_EVIDENCE_MAX_AGE_SECONDS",
         "reason": "must_be_integer",
         "value": "tomorrow",
     }
@@ -1244,13 +1244,13 @@ def test_production_approval_bundle_script_rejects_non_positive_evidence_max_age
     internal_rollout = tmp_path / "internal-rollout.json"
     internal_rollout.write_text(json.dumps({"status": "passed"}) + "\n")
     env = os.environ.copy()
-    env["SELF_CORRECTING_PROVIDER_SMOKE_EVIDENCE"] = str(provider_smoke)
-    env["SELF_CORRECTING_STAGING_ACCEPTANCE_EVIDENCE"] = str(staging_acceptance)
-    env["SELF_CORRECTING_OBSERVABILITY_ACCEPTANCE_EVIDENCE"] = str(
+    env["KAGENT_PROVIDER_SMOKE_EVIDENCE"] = str(provider_smoke)
+    env["KAGENT_STAGING_ACCEPTANCE_EVIDENCE"] = str(staging_acceptance)
+    env["KAGENT_OBSERVABILITY_ACCEPTANCE_EVIDENCE"] = str(
         observability_acceptance
     )
-    env["SELF_CORRECTING_INTERNAL_ROLLOUT_EVIDENCE"] = str(internal_rollout)
-    env["SELF_CORRECTING_EVIDENCE_MAX_AGE_SECONDS"] = "0"
+    env["KAGENT_INTERNAL_ROLLOUT_EVIDENCE"] = str(internal_rollout)
+    env["KAGENT_EVIDENCE_MAX_AGE_SECONDS"] = "0"
 
     completed = subprocess.run(
         ["sh", "scripts/production_approval_bundle.sh", "--strict"],
@@ -1263,7 +1263,7 @@ def test_production_approval_bundle_script_rejects_non_positive_evidence_max_age
     assert completed.returncode == 2
     assert payload == {
         "error": "evidence_max_age_invalid",
-        "environment_variable": "SELF_CORRECTING_EVIDENCE_MAX_AGE_SECONDS",
+        "environment_variable": "KAGENT_EVIDENCE_MAX_AGE_SECONDS",
         "reason": "must_be_positive",
         "value": "0",
     }
@@ -1281,13 +1281,13 @@ def test_production_approval_bundle_script_reports_missing_release_manifest(tmp_
     internal_rollout.write_text(json.dumps({"status": "passed"}) + "\n")
     missing_manifest = tmp_path / "missing-release-manifest.json"
     env = os.environ.copy()
-    env["SELF_CORRECTING_PROVIDER_SMOKE_EVIDENCE"] = str(provider_smoke)
-    env["SELF_CORRECTING_STAGING_ACCEPTANCE_EVIDENCE"] = str(staging_acceptance)
-    env["SELF_CORRECTING_OBSERVABILITY_ACCEPTANCE_EVIDENCE"] = str(
+    env["KAGENT_PROVIDER_SMOKE_EVIDENCE"] = str(provider_smoke)
+    env["KAGENT_STAGING_ACCEPTANCE_EVIDENCE"] = str(staging_acceptance)
+    env["KAGENT_OBSERVABILITY_ACCEPTANCE_EVIDENCE"] = str(
         observability_acceptance
     )
-    env["SELF_CORRECTING_INTERNAL_ROLLOUT_EVIDENCE"] = str(internal_rollout)
-    env["SELF_CORRECTING_RELEASE_MANIFEST"] = str(missing_manifest)
+    env["KAGENT_INTERNAL_ROLLOUT_EVIDENCE"] = str(internal_rollout)
+    env["KAGENT_RELEASE_MANIFEST"] = str(missing_manifest)
 
     completed = subprocess.run(
         ["sh", "scripts/production_approval_bundle.sh", "--strict"],
@@ -1316,14 +1316,14 @@ def test_production_approval_bundle_script_reports_blocked_release_evidence(
     observability_acceptance.write_text(json.dumps({"status": "passed"}) + "\n")
     internal_rollout = tmp_path / "internal-rollout.json"
     internal_rollout.write_text(json.dumps({"status": "passed"}) + "\n")
-    wheel = tmp_path / "self_correcting_langgraph_agent-0.1.0-py3-none-any.whl"
+    wheel = tmp_path / "kagent-0.1.0-py3-none-any.whl"
     wheel.write_text("wheel-bytes\n")
     manifest = tmp_path / "release-manifest.json"
     subprocess.run(
         [
             ".venv/bin/python",
             "-m",
-            "self_correcting_langgraph_agent.ops.release_manifest",
+            "kagent.ops.release_manifest",
             str(wheel),
             "--output",
             str(manifest),
@@ -1335,15 +1335,15 @@ def test_production_approval_bundle_script_reports_blocked_release_evidence(
     readiness_output = tmp_path / "readiness.json"
     evidence_output = tmp_path / "release-evidence.json"
     env = os.environ.copy()
-    env["SELF_CORRECTING_PROVIDER_SMOKE_EVIDENCE"] = str(provider_smoke)
-    env["SELF_CORRECTING_STAGING_ACCEPTANCE_EVIDENCE"] = str(staging_acceptance)
-    env["SELF_CORRECTING_OBSERVABILITY_ACCEPTANCE_EVIDENCE"] = str(
+    env["KAGENT_PROVIDER_SMOKE_EVIDENCE"] = str(provider_smoke)
+    env["KAGENT_STAGING_ACCEPTANCE_EVIDENCE"] = str(staging_acceptance)
+    env["KAGENT_OBSERVABILITY_ACCEPTANCE_EVIDENCE"] = str(
         observability_acceptance
     )
-    env["SELF_CORRECTING_INTERNAL_ROLLOUT_EVIDENCE"] = str(internal_rollout)
-    env["SELF_CORRECTING_RELEASE_MANIFEST"] = str(manifest)
-    env["SELF_CORRECTING_READINESS_AUDIT_OUTPUT"] = str(readiness_output)
-    env["SELF_CORRECTING_RELEASE_EVIDENCE_OUTPUT"] = str(evidence_output)
+    env["KAGENT_INTERNAL_ROLLOUT_EVIDENCE"] = str(internal_rollout)
+    env["KAGENT_RELEASE_MANIFEST"] = str(manifest)
+    env["KAGENT_READINESS_AUDIT_OUTPUT"] = str(readiness_output)
+    env["KAGENT_RELEASE_EVIDENCE_OUTPUT"] = str(evidence_output)
 
     completed = subprocess.run(
         ["sh", "scripts/production_approval_bundle.sh", "--strict"],
@@ -1920,7 +1920,7 @@ def test_production_readiness_audit_rejects_observability_missing_metric_list(
                 "required_metrics_present": "true",
                 "required_metric_count": "10",
                 "missing_required_metrics": [
-                    "self_correcting_agent_runtime_progress_event_sink_failures_total"
+                    "kagent_runtime_progress_event_sink_failures_total"
                 ],
                 "required_metrics_sha256": (
                     REQUIRED_OBSERVABILITY_ACCEPTANCE_METRICS_SHA256
@@ -1952,7 +1952,7 @@ def test_production_readiness_audit_rejects_observability_missing_metric_list(
     assert completed.returncode == 1
     assert payload["observability_acceptance"]["status"] == "invalid_evidence"
     assert payload["observability_acceptance"]["missing_required_metrics"] == [
-        "self_correcting_agent_runtime_progress_event_sink_failures_total"
+        "kagent_runtime_progress_event_sink_failures_total"
     ]
     assert payload["observability_acceptance"]["missing_fields"] == [
         "missing_required_metrics"
@@ -2256,9 +2256,9 @@ def test_run_checks_starts_internal_runtime_smoke():
     assert smoke_path.exists()
     smoke = smoke_path.read_text()
     assert "scripts/smoke_internal_runtime.sh" in run_checks
-    assert "SELF_CORRECTING_SERVICE_AUTH_TOKEN" in smoke
-    assert "SELF_CORRECTING_SERVICE_AUTH_TOKENS" in smoke
-    assert "SELF_CORRECTING_SERVICE_RUNTIME_ALLOWED_TOOLS_BY_SUBJECT" in smoke
+    assert "KAGENT_SERVICE_AUTH_TOKEN" in smoke
+    assert "KAGENT_SERVICE_AUTH_TOKENS" in smoke
+    assert "KAGENT_SERVICE_RUNTIME_ALLOWED_TOOLS_BY_SUBJECT" in smoke
     assert "protect-diagnostics" in smoke
     assert "/runtime/run" in smoke
     assert "/runtime/resume" in smoke
@@ -2288,7 +2288,7 @@ def test_run_checks_starts_internal_runtime_smoke():
     assert "runtime_stale_pending_approvals_current" in smoke
     assert "runtime_max_pending_approval_age_seconds" in smoke
     assert "runtime_pending_approval_stale_seconds" in smoke
-    assert "self_correcting_agent_runtime_stale_pending_approvals_current" in smoke
+    assert "kagent_runtime_stale_pending_approvals_current" in smoke
     assert "runtime_owner_auth_subject" in smoke
     assert "resumed_by_auth_subject" in smoke
     assert "runtime_runs_by_auth_subject" in smoke
@@ -2333,11 +2333,11 @@ def test_real_llm_runtime_smoke_is_opt_in_and_secret_safe():
 
     assert script_path.exists()
     smoke = script_path.read_text()
-    assert "SELF_CORRECTING_LLM_BASE_URL" in smoke
-    assert "SELF_CORRECTING_LLM_API_KEY" in smoke
-    assert "SELF_CORRECTING_LLM_MODEL" in smoke
-    assert "SELF_CORRECTING_LLM_TIMEOUT_SECONDS" in smoke
-    assert "self-correcting-agent" in smoke
+    assert "KAGENT_LLM_BASE_URL" in smoke
+    assert "KAGENT_LLM_API_KEY" in smoke
+    assert "KAGENT_LLM_MODEL" in smoke
+    assert "KAGENT_LLM_TIMEOUT_SECONDS" in smoke
+    assert "kagent" in smoke
     assert "--runtime" in smoke
     assert "/runtime/run" in smoke
     assert "/runtime/resume" in smoke
@@ -2388,11 +2388,11 @@ def test_run_checks_smoke_exercises_cli_output_file():
 def test_run_checks_smoke_exercises_evaluator_category_filter():
     run_checks = Path("scripts/run_checks.sh").read_text()
 
-    assert "self_correcting_langgraph_agent.eval.evaluator --fail-on-failure" in run_checks
-    assert "self_correcting_langgraph_agent.eval.evaluator --list-cases" in run_checks
-    assert "self_correcting_langgraph_agent.eval.evaluator --category recovery" in run_checks
+    assert "kagent.eval.evaluator --fail-on-failure" in run_checks
+    assert "kagent.eval.evaluator --list-cases" in run_checks
+    assert "kagent.eval.evaluator --category recovery" in run_checks
     assert (
-        "self_correcting_langgraph_agent.eval.evaluator --case subtraction_tool_success"
+        "kagent.eval.evaluator --case subtraction_tool_success"
         in run_checks
     )
 
@@ -2408,7 +2408,7 @@ def test_run_checks_includes_ruff_lint_gate():
 def test_run_checks_uses_isolated_pycache_for_compileall():
     run_checks = Path("scripts/run_checks.sh").read_text()
 
-    assert "PYTHONPYCACHEPREFIX=/tmp/self-correcting-agent-pycache" in run_checks
+    assert "PYTHONPYCACHEPREFIX=/tmp/kagent-pycache" in run_checks
     assert "-m compileall -q src tests" in run_checks
 
 
@@ -2418,20 +2418,20 @@ def test_run_checks_builds_release_wheel():
     assert "-m pip wheel" in run_checks
     assert "--no-deps" in run_checks
     assert "--no-build-isolation" in run_checks
-    assert "/tmp/self-correcting-agent-wheelhouse" in run_checks
-    assert "self_correcting_langgraph_agent-0.1.0-*.whl" in run_checks
-    assert "self-correcting-agent-release-manifest" in run_checks
-    assert "self-correcting-agent-release-evidence" in run_checks
-    assert "/tmp/self-correcting-agent-release-manifest.json" in run_checks
-    assert "--verify /tmp/self-correcting-agent-release-manifest.json" in run_checks
-    assert "/tmp/self-correcting-agent-release-manifest-invalid.json" in run_checks
+    assert "/tmp/kagent-wheelhouse" in run_checks
+    assert "kagent-0.1.0-*.whl" in run_checks
+    assert "kagent-release-manifest" in run_checks
+    assert "kagent-release-evidence" in run_checks
+    assert "/tmp/kagent-release-manifest.json" in run_checks
+    assert "--verify /tmp/kagent-release-manifest.json" in run_checks
+    assert "/tmp/kagent-release-manifest-invalid.json" in run_checks
     assert "invalid release manifest JSON" in run_checks
     assert "release manifest unexpectedly emitted traceback for invalid JSON" in run_checks
-    assert "/tmp/self-correcting-agent-release-manifest-missing-path.json" in run_checks
+    assert "/tmp/kagent-release-manifest-missing-path.json" in run_checks
     assert "artifact path missing" in run_checks
-    assert "/tmp/self-correcting-agent-release-manifest-invalid-path.json" in run_checks
+    assert "/tmp/kagent-release-manifest-invalid-path.json" in run_checks
     assert "artifact path invalid" in run_checks
-    assert "/tmp/self-correcting-agent-release-manifest-directory-path.json" in run_checks
+    assert "/tmp/kagent-release-manifest-directory-path.json" in run_checks
     assert "artifact is not a file" in run_checks
     assert '"sha256"' in run_checks
 
@@ -2447,42 +2447,42 @@ def test_run_checks_cleans_local_build_metadata_on_exit():
 def test_run_checks_builds_isolated_release_wheel():
     run_checks = Path("scripts/run_checks.sh").read_text()
 
-    assert "/tmp/self-correcting-agent-isolated-wheelhouse" in run_checks
-    assert "/tmp/self-correcting-agent-isolated-wheel-build.log" in run_checks
+    assert "/tmp/kagent-isolated-wheelhouse" in run_checks
+    assert "/tmp/kagent-isolated-wheel-build.log" in run_checks
 
 
 def test_run_checks_has_offline_fallback_for_isolated_wheel_build():
     run_checks = Path("scripts/run_checks.sh").read_text()
 
-    assert "/tmp/self-correcting-agent-isolated-wheel-build-fallback.log" in run_checks
+    assert "/tmp/kagent-isolated-wheel-build-fallback.log" in run_checks
     assert "isolated wheel build failed; retrying without build isolation" in run_checks
-    assert "--no-build-isolation . -w /tmp/self-correcting-agent-isolated-wheelhouse" in run_checks
+    assert "--no-build-isolation . -w /tmp/kagent-isolated-wheelhouse" in run_checks
 
 
 def test_run_checks_installs_built_wheel_in_clean_venv():
     run_checks = Path("scripts/run_checks.sh").read_text()
 
-    assert "/tmp/self-correcting-agent-wheel-install-venv" in run_checks
-    assert "-m venv /tmp/self-correcting-agent-wheel-install-venv" in run_checks
-    assert "-m pip install --no-deps /tmp/self-correcting-agent-wheelhouse/" in run_checks
+    assert "/tmp/kagent-wheel-install-venv" in run_checks
+    assert "-m venv /tmp/kagent-wheel-install-venv" in run_checks
+    assert "-m pip install --no-deps /tmp/kagent-wheelhouse/" in run_checks
     assert "importlib.metadata" in run_checks
-    assert "self-correcting-agent-serve" in run_checks
-    assert "self-correcting-agent-doctor" in run_checks
-    assert "self-correcting-agent-trace-prune" in run_checks
-    assert "self-correcting-agent-trace-replay" in run_checks
-    assert '"self-correcting-agent-release-evidence",' in run_checks
-    assert '"self-correcting-agent-release-manifest",' in run_checks
+    assert "kagent-serve" in run_checks
+    assert "kagent-doctor" in run_checks
+    assert "kagent-trace-prune" in run_checks
+    assert "kagent-trace-replay" in run_checks
+    assert '"kagent-release-evidence",' in run_checks
+    assert '"kagent-release-manifest",' in run_checks
 
 
 def test_run_checks_smokes_trace_prune_dry_run_and_delete():
     run_checks = Path("scripts/run_checks.sh").read_text()
 
-    assert "/tmp/self-correcting-agent-trace-prune-smoke" in run_checks
-    assert "self-correcting-agent-trace-prune" in run_checks
-    assert "/tmp/self-correcting-agent-trace-prune-dry-run.json" in run_checks
-    assert "/tmp/self-correcting-agent-trace-prune-delete.json" in run_checks
-    assert "/tmp/self-correcting-agent-runtime-trace-prune-dry-run.json" in run_checks
-    assert "/tmp/self-correcting-agent-runtime-trace-prune-delete.json" in run_checks
+    assert "/tmp/kagent-trace-prune-smoke" in run_checks
+    assert "kagent-trace-prune" in run_checks
+    assert "/tmp/kagent-trace-prune-dry-run.json" in run_checks
+    assert "/tmp/kagent-trace-prune-delete.json" in run_checks
+    assert "/tmp/kagent-runtime-trace-prune-dry-run.json" in run_checks
+    assert "/tmp/kagent-runtime-trace-prune-delete.json" in run_checks
     assert "--max-age-days 1" in run_checks
     assert "--runtime-only" in run_checks
     assert "--delete" in run_checks
@@ -2494,9 +2494,9 @@ def test_run_checks_smokes_trace_prune_dry_run_and_delete():
 def test_run_checks_smokes_trace_replay_redacted_summary():
     run_checks = Path("scripts/run_checks.sh").read_text()
 
-    assert "/tmp/self-correcting-agent-trace-replay.json" in run_checks
-    assert "self-correcting-agent-trace-replay" in run_checks
-    assert "/tmp/self-correcting-agent-trace-replay-summary.json" in run_checks
+    assert "/tmp/kagent-trace-replay.json" in run_checks
+    assert "kagent-trace-replay" in run_checks
+    assert "/tmp/kagent-trace-replay-summary.json" in run_checks
     assert '"tool_counts"] != {"apply_patch": "1", "read_file": "1"}' in run_checks
     assert 'summary["progress_event_count"] != "4"' in run_checks
     assert "trace replay leaked read_file content" in run_checks
@@ -2507,41 +2507,41 @@ def test_run_checks_smokes_trace_replay_redacted_summary():
 def test_run_checks_runs_doctor_self_check():
     run_checks = Path("scripts/run_checks.sh").read_text()
 
-    assert "self-correcting-agent-doctor" in run_checks
-    assert "/tmp/self-correcting-agent-doctor.json" in run_checks
-    assert "SELF_CORRECTING_SERVICE_IDEMPOTENCY_CACHE_SIZE=17" in run_checks
+    assert "kagent-doctor" in run_checks
+    assert "/tmp/kagent-doctor.json" in run_checks
+    assert "KAGENT_SERVICE_IDEMPOTENCY_CACHE_SIZE=17" in run_checks
     assert '"idempotency_cache_size": "17"' in run_checks
     assert '"runtime_policy"' in run_checks
     assert '"effective_tool_policy_sha256"' in run_checks
     assert "--require-auth" in run_checks
-    assert "/tmp/self-correcting-agent-doctor-require-auth.json" in run_checks
-    assert "/tmp/self-correcting-agent-doctor-require-auth-unsafe-token.json" in run_checks
+    assert "/tmp/kagent-doctor-require-auth.json" in run_checks
+    assert "/tmp/kagent-doctor-require-auth-unsafe-token.json" in run_checks
     assert "doctor --require-auth unexpectedly passed with unsafe auth token" in run_checks
-    assert "/tmp/self-correcting-agent-doctor-require-auth-placeholder-token.json" in run_checks
+    assert "/tmp/kagent-doctor-require-auth-placeholder-token.json" in run_checks
     assert "doctor --require-auth unexpectedly passed with placeholder auth token" in run_checks
     assert "--production" in run_checks
-    assert "/tmp/self-correcting-agent-doctor-production.json" in run_checks
-    assert "SELF_CORRECTING_SERVICE_AUTH_TOKEN=replace-with-a-long-random-token" in run_checks
-    assert "/tmp/self-correcting-agent-doctor-placeholder-token-production.json" in run_checks
+    assert "/tmp/kagent-doctor-production.json" in run_checks
+    assert "KAGENT_SERVICE_AUTH_TOKEN=replace-with-a-long-random-token" in run_checks
+    assert "/tmp/kagent-doctor-placeholder-token-production.json" in run_checks
     assert "doctor --production unexpectedly passed with placeholder auth token" in run_checks
     assert "auth_token_unsafe" in run_checks
-    assert "/tmp/self-correcting-agent-doctor-unsafe-token-production.json" in run_checks
+    assert "/tmp/kagent-doctor-unsafe-token-production.json" in run_checks
     assert "doctor --production unexpectedly passed with unsafe auth token" in run_checks
-    assert "SELF_CORRECTING_SERVICE_ALLOW_FULL_TRACE_RESPONSE=true" in run_checks
-    assert "/tmp/self-correcting-agent-doctor-full-trace-production.json" in run_checks
+    assert "KAGENT_SERVICE_ALLOW_FULL_TRACE_RESPONSE=true" in run_checks
+    assert "/tmp/kagent-doctor-full-trace-production.json" in run_checks
     assert "doctor --production unexpectedly passed with full trace responses enabled" in run_checks
     assert "--require-runtime-provider" in run_checks
-    assert "SELF_CORRECTING_LLM_BASE_URL=configured-provider-base" in run_checks
-    assert "SELF_CORRECTING_LLM_MODEL=agent-runtime-model" in run_checks
-    assert "/tmp/self-correcting-agent-doctor-runtime-provider.json" in run_checks
-    assert "/tmp/self-correcting-agent-doctor-runtime-provider-missing.json" in run_checks
+    assert "KAGENT_LLM_BASE_URL=configured-provider-base" in run_checks
+    assert "KAGENT_LLM_MODEL=agent-runtime-model" in run_checks
+    assert "/tmp/kagent-doctor-runtime-provider.json" in run_checks
+    assert "/tmp/kagent-doctor-runtime-provider-missing.json" in run_checks
     assert "llm_base_url_required" in run_checks
     assert "llm_model_required" in run_checks
     assert "llm_api_key_required" in run_checks
     assert "runtime_iterations_too_low" in run_checks
-    assert "SELF_CORRECTING_SERVICE_PORT=not-a-port" in run_checks
-    assert "/tmp/self-correcting-agent-doctor-invalid-env.stderr" in run_checks
+    assert "KAGENT_SERVICE_PORT=not-a-port" in run_checks
+    assert "/tmp/kagent-doctor-invalid-env.stderr" in run_checks
     assert "Traceback" in run_checks
     assert "doctor unexpectedly emitted traceback for invalid env config" in run_checks
-    assert "/tmp/self-correcting-agent-serve-invalid-env.stderr" in run_checks
+    assert "/tmp/kagent-serve-invalid-env.stderr" in run_checks
     assert "serve unexpectedly emitted traceback for invalid env config" in run_checks

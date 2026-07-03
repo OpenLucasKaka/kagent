@@ -8,7 +8,7 @@ from hashlib import sha256
 from pathlib import Path
 from typing import Any, Dict, List
 
-from self_correcting_langgraph_agent.ops.release_evidence import (
+from kagent.ops.release_evidence import (
     _internal_rollout_missing_fields,
     _observability_acceptance_missing_fields,
     _staging_acceptance_missing_fields,
@@ -24,11 +24,11 @@ REQUIRED_ARTIFACTS = (
     "scripts/observability_acceptance.sh",
     "scripts/internal_rollout_acceptance.py",
     "deploy/env.example",
-    "deploy/kubernetes/self-correcting-agent.yaml",
-    "deploy/prometheus/self-correcting-agent-rules.yaml",
-    "deploy/prometheus/self-correcting-agent-servicemonitor.yaml",
-    "deploy/grafana/self-correcting-agent-dashboard.json",
-    "deploy/systemd/self-correcting-agent.service",
+    "deploy/kubernetes/kagent.yaml",
+    "deploy/prometheus/kagent-rules.yaml",
+    "deploy/prometheus/kagent-servicemonitor.yaml",
+    "deploy/grafana/kagent-dashboard.json",
+    "deploy/systemd/kagent.service",
     "docs/deployment.md",
     "docs/internal-rollout.md",
     "docs/operations.md",
@@ -54,54 +54,54 @@ REQUIRED_OPENAPI_PATHS = (
 )
 
 REQUIRED_ENV_SERVICE_KEYS = (
-    "SELF_CORRECTING_SERVICE_HOST",
-    "SELF_CORRECTING_SERVICE_PORT",
-    "SELF_CORRECTING_SERVICE_MAX_REQUEST_BYTES",
-    "SELF_CORRECTING_SERVICE_MAX_GOAL_CHARS",
-    "SELF_CORRECTING_SERVICE_AUTH_TOKEN",
-    "SELF_CORRECTING_SERVICE_AUTH_TOKENS",
-    "SELF_CORRECTING_SERVICE_RATE_LIMIT_PER_MINUTE",
-    "SELF_CORRECTING_SERVICE_MAX_CONCURRENT_RUNS",
-    "SELF_CORRECTING_SERVICE_IDEMPOTENCY_CACHE_SIZE",
-    "SELF_CORRECTING_SERVICE_IDEMPOTENCY_CACHE_PATH",
-    "SELF_CORRECTING_SERVICE_ALLOW_FULL_TRACE_RESPONSE",
-    "SELF_CORRECTING_SERVICE_PROTECT_DIAGNOSTICS",
-    "SELF_CORRECTING_SERVICE_TRUST_FORWARDED_FOR",
-    "SELF_CORRECTING_SERVICE_TRACE_DIR",
-    "SELF_CORRECTING_SERVICE_RUN_TIMEOUT_SECONDS",
-    "SELF_CORRECTING_SERVICE_REQUEST_TIMEOUT_SECONDS",
+    "KAGENT_SERVICE_HOST",
+    "KAGENT_SERVICE_PORT",
+    "KAGENT_SERVICE_MAX_REQUEST_BYTES",
+    "KAGENT_SERVICE_MAX_GOAL_CHARS",
+    "KAGENT_SERVICE_AUTH_TOKEN",
+    "KAGENT_SERVICE_AUTH_TOKENS",
+    "KAGENT_SERVICE_RATE_LIMIT_PER_MINUTE",
+    "KAGENT_SERVICE_MAX_CONCURRENT_RUNS",
+    "KAGENT_SERVICE_IDEMPOTENCY_CACHE_SIZE",
+    "KAGENT_SERVICE_IDEMPOTENCY_CACHE_PATH",
+    "KAGENT_SERVICE_ALLOW_FULL_TRACE_RESPONSE",
+    "KAGENT_SERVICE_PROTECT_DIAGNOSTICS",
+    "KAGENT_SERVICE_TRUST_FORWARDED_FOR",
+    "KAGENT_SERVICE_TRACE_DIR",
+    "KAGENT_SERVICE_RUN_TIMEOUT_SECONDS",
+    "KAGENT_SERVICE_REQUEST_TIMEOUT_SECONDS",
 )
 
 REQUIRED_ENV_RUNTIME_KEYS = (
-    "SELF_CORRECTING_SERVICE_RUNTIME_ALLOWED_TOOLS",
-    "SELF_CORRECTING_SERVICE_RUNTIME_ALLOWED_TOOLS_BY_SUBJECT",
-    "SELF_CORRECTING_SERVICE_RUNTIME_MAX_ITERATIONS",
-    "SELF_CORRECTING_SERVICE_RUNTIME_PENDING_APPROVAL_STALE_SECONDS",
-    "SELF_CORRECTING_MAX_STEPS",
-    "SELF_CORRECTING_MAX_RETRIES",
+    "KAGENT_SERVICE_RUNTIME_ALLOWED_TOOLS",
+    "KAGENT_SERVICE_RUNTIME_ALLOWED_TOOLS_BY_SUBJECT",
+    "KAGENT_SERVICE_RUNTIME_MAX_ITERATIONS",
+    "KAGENT_SERVICE_RUNTIME_PENDING_APPROVAL_STALE_SECONDS",
+    "KAGENT_MAX_STEPS",
+    "KAGENT_MAX_RETRIES",
 )
 
 REQUIRED_ENV_PROVIDER_KEYS = (
-    "SELF_CORRECTING_LLM_BASE_URL",
-    "SELF_CORRECTING_LLM_API_KEY",
-    "SELF_CORRECTING_LLM_MODEL",
-    "SELF_CORRECTING_LLM_TIMEOUT_SECONDS",
-    "SELF_CORRECTING_LLM_MAX_RETRIES",
-    "SELF_CORRECTING_LLM_RETRY_BACKOFF_SECONDS",
+    "KAGENT_LLM_BASE_URL",
+    "KAGENT_LLM_API_KEY",
+    "KAGENT_LLM_MODEL",
+    "KAGENT_LLM_TIMEOUT_SECONDS",
+    "KAGENT_LLM_MAX_RETRIES",
+    "KAGENT_LLM_RETRY_BACKOFF_SECONDS",
 )
 
 REQUIRED_GRAFANA_METRICS = (
     "up",
-    "self_correcting_agent_responses_total",
-    "self_correcting_agent_requests_total",
-    "self_correcting_agent_runtime_run_duration_seconds_bucket",
-    "self_correcting_agent_runtime_approval_required_total",
-    "self_correcting_agent_runtime_stale_pending_approvals_current",
-    "self_correcting_agent_runtime_progress_event_sink_failures_total",
-    "self_correcting_agent_runtime_runs_by_auth_subject_total",
-    "self_correcting_agent_runtime_run_status_by_auth_subject_total",
-    "self_correcting_agent_runtime_resumes_by_auth_subject_total",
-    "self_correcting_agent_runtime_observation_errors_total",
+    "kagent_responses_total",
+    "kagent_requests_total",
+    "kagent_runtime_run_duration_seconds_bucket",
+    "kagent_runtime_approval_required_total",
+    "kagent_runtime_stale_pending_approvals_current",
+    "kagent_runtime_progress_event_sink_failures_total",
+    "kagent_runtime_runs_by_auth_subject_total",
+    "kagent_runtime_run_status_by_auth_subject_total",
+    "kagent_runtime_resumes_by_auth_subject_total",
+    "kagent_runtime_observation_errors_total",
 )
 
 REQUIRED_PROMETHEUS_ALERTS = (
@@ -123,16 +123,16 @@ REQUIRED_PROMETHEUS_ALERTS = (
 
 REQUIRED_PROMETHEUS_RULE_METRICS = (
     "up",
-    "self_correcting_agent_responses_total",
-    "self_correcting_agent_requests_total",
-    "self_correcting_agent_runtime_run_duration_seconds_bucket",
-    "self_correcting_agent_runtime_run_status_by_auth_subject_total",
-    "self_correcting_agent_runtime_resumes_by_auth_subject_total",
-    "self_correcting_agent_runtime_stale_pending_approvals_current",
-    "self_correcting_agent_runtime_progress_event_sink_failures_total",
-    "self_correcting_agent_runtime_observation_errors_total",
-    "self_correcting_agent_error_responses_total",
-    "self_correcting_agent_idempotency_cache_evictions",
+    "kagent_responses_total",
+    "kagent_requests_total",
+    "kagent_runtime_run_duration_seconds_bucket",
+    "kagent_runtime_run_status_by_auth_subject_total",
+    "kagent_runtime_resumes_by_auth_subject_total",
+    "kagent_runtime_stale_pending_approvals_current",
+    "kagent_runtime_progress_event_sink_failures_total",
+    "kagent_runtime_observation_errors_total",
+    "kagent_error_responses_total",
+    "kagent_idempotency_cache_evictions",
     "tool_execution_timeout",
     "trace_persistence_failed",
     "request_body_timeout",
@@ -142,8 +142,8 @@ REQUIRED_PROMETHEUS_RULE_METRICS = (
 REQUIRED_SERVICEMONITOR_SCRAPE_MARKERS = (
     "apiVersion: monitoring.coreos.com/v1",
     "kind: ServiceMonitor",
-    "name: self-correcting-agent",
-    "app.kubernetes.io/name: self-correcting-agent",
+    "name: kagent",
+    "app.kubernetes.io/name: kagent",
     "port: http",
     "path: /metrics.prom",
     "interval: 30s",
@@ -181,7 +181,7 @@ REQUIRED_KUBERNETES_HARDENING_MARKERS = (
 
 REQUIRED_KUBERNETES_ROLLOUT_MARKERS = (
     "replicas: 2",
-    "self-correcting-agent-doctor",
+    "kagent-doctor",
     "--production",
     "readinessProbe:",
     "startupProbe:",
@@ -193,15 +193,15 @@ REQUIRED_KUBERNETES_ROLLOUT_MARKERS = (
     "terminationGracePeriodSeconds: 45",
     "topologySpreadConstraints:",
     "CronJob",
-    "self-correcting-agent-trace-prune",
+    "kagent-trace-prune",
     "--delete",
 )
 
 REQUIRED_SYSTEMD_SERVICE_MARKERS = (
     "ExecStartPre=",
-    "self-correcting-agent-doctor --production",
+    "kagent-doctor --production",
     "ExecStart=",
-    "self-correcting-agent-serve",
+    "kagent-serve",
     "Restart=on-failure",
     "EnvironmentFile=",
     "TimeoutStopSec=45",
@@ -232,10 +232,10 @@ REQUIRED_SYSTEMD_RESOURCE_MARKERS = (
 )
 
 REQUIRED_SYSTEMD_TRACE_STATE_MARKERS = (
-    "StateDirectory=self-correcting-agent",
-    "ReadWritePaths=/var/lib/self-correcting-agent",
+    "StateDirectory=kagent",
+    "ReadWritePaths=/var/lib/kagent",
     "UMask=0077",
-    "--trace-dir /var/lib/self-correcting-agent/traces",
+    "--trace-dir /var/lib/kagent/traces",
 )
 
 REQUIRED_INTERNAL_CLIENT_COMMAND_MARKERS = (
@@ -268,8 +268,8 @@ REQUIRED_INTERNAL_CLIENT_ROUTE_MARKERS = (
 REQUIRED_INTERNAL_CLIENT_AUTH_MARKERS = (
     "Authorization",
     "Bearer",
-    "SELF_CORRECTING_CLIENT_BASE_URL",
-    "SELF_CORRECTING_CLIENT_TOKEN",
+    "KAGENT_CLIENT_BASE_URL",
+    "KAGENT_CLIENT_TOKEN",
 )
 
 REQUIRED_INTERNAL_CLIENT_AUDIT_MARKERS = (
@@ -334,7 +334,7 @@ def main() -> int:
     args = parser.parse_args()
     repo_root = Path(__file__).resolve().parents[1]
     _add_repo_src_to_import_path(repo_root)
-    from self_correcting_langgraph_agent.ops.release_evidence import (
+    from kagent.ops.release_evidence import (
         _external_evidence_secret_findings,
         _runtime_policy_fingerprint_mismatch,
     )
@@ -561,7 +561,7 @@ def _env_template_keys(text: str) -> List[str]:
 
 def _openapi_contract_record() -> Dict[str, Any]:
     try:
-        from self_correcting_langgraph_agent.service.contract import service_openapi
+        from kagent.service.contract import service_openapi
     except Exception as exc:  # pragma: no cover - defensive audit guard
         return {
             "status": "unavailable",
@@ -625,13 +625,13 @@ def _openapi_operation_ids(paths: Dict[str, Any]) -> List[str]:
 def _observability_record(repo_root: Path) -> Dict[str, Any]:
     return {
         "grafana_dashboard": _grafana_dashboard_record(
-            repo_root / "deploy/grafana/self-correcting-agent-dashboard.json"
+            repo_root / "deploy/grafana/kagent-dashboard.json"
         ),
         "prometheus_alert_rules": _prometheus_alert_rules_record(
-            repo_root / "deploy/prometheus/self-correcting-agent-rules.yaml"
+            repo_root / "deploy/prometheus/kagent-rules.yaml"
         ),
         "prometheus_servicemonitor": _prometheus_servicemonitor_record(
-            repo_root / "deploy/prometheus/self-correcting-agent-servicemonitor.yaml"
+            repo_root / "deploy/prometheus/kagent-servicemonitor.yaml"
         ),
     }
 
@@ -782,7 +782,7 @@ def _prometheus_servicemonitor_record(path: Path) -> Dict[str, Any]:
         for marker in (
             "selector:",
             "matchLabels:",
-            "app.kubernetes.io/name: self-correcting-agent",
+            "app.kubernetes.io/name: kagent",
         )
     )
     return {
@@ -797,10 +797,10 @@ def _prometheus_servicemonitor_record(path: Path) -> Dict[str, Any]:
 def _deployment_record(repo_root: Path) -> Dict[str, Any]:
     return {
         "kubernetes_manifest": _kubernetes_manifest_record(
-            repo_root / "deploy/kubernetes/self-correcting-agent.yaml"
+            repo_root / "deploy/kubernetes/kagent.yaml"
         ),
         "systemd_unit": _systemd_unit_record(
-            repo_root / "deploy/systemd/self-correcting-agent.service"
+            repo_root / "deploy/systemd/kagent.service"
         ),
     }
 
@@ -1045,7 +1045,7 @@ def _provider_smoke_record(evidence_path: str) -> Dict[str, Any]:
             "sha256": sha256(content).hexdigest(),
         }
     status = str(payload.get("status", "missing_status"))
-    from self_correcting_langgraph_agent.ops.release_evidence import (
+    from kagent.ops.release_evidence import (
         _provider_smoke_missing_fields,
         _provider_snapshot_record,
     )

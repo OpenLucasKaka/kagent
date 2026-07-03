@@ -11,9 +11,9 @@ def test_internal_rollout_guide_is_linked_and_actionable():
     guide = rollout.read_text()
     assert "Internal Rollout Guide" in guide
     assert "Team Access Model" in guide
-    assert "SELF_CORRECTING_SERVICE_AUTH_TOKEN" in guide
-    assert "SELF_CORRECTING_SERVICE_AUTH_TOKENS" in guide
-    assert "SELF_CORRECTING_SERVICE_RUNTIME_ALLOWED_TOOLS_BY_SUBJECT" in guide
+    assert "KAGENT_SERVICE_AUTH_TOKEN" in guide
+    assert "KAGENT_SERVICE_AUTH_TOKENS" in guide
+    assert "KAGENT_SERVICE_RUNTIME_ALLOWED_TOOLS_BY_SUBJECT" in guide
     assert "Runtime Tool Policy" in guide
     assert "Provider Smoke" in guide
     assert "scripts/smoke_internal_runtime.sh" in guide
@@ -26,7 +26,7 @@ def test_internal_rollout_guide_is_linked_and_actionable():
     assert "timeline" in guide
     assert "invalid_evidence" in guide
     assert "scripts/staging_acceptance.sh" in guide
-    assert "self_correcting_agent_runtime_stale_pending_approvals_current" in guide
+    assert "kagent_runtime_stale_pending_approvals_current" in guide
     assert "SelfCorrectingAgentRuntimeStalePendingApprovals" in guide
     assert "--provider-smoke-evidence" in guide
     assert "--require-provider-smoke" in guide
@@ -37,7 +37,7 @@ def test_internal_rollout_guide_is_linked_and_actionable():
     assert "evidence_secret_findings" in guide
     assert "Preflight Gates" in guide
     assert "release evidence bundle" in guide
-    assert "self-correcting-agent-release-evidence" in guide
+    assert "kagent-release-evidence" in guide
     assert "scripts/production_approval_bundle.sh --strict" in guide
     assert "unknown_argument" in guide
     assert "release_manifest_missing" in guide
@@ -45,18 +45,18 @@ def test_internal_rollout_guide_is_linked_and_actionable():
     assert "blocked" in guide
     assert "exit code 1" in guide
     assert "--run-checks-exit-code" in guide
-    assert "self-correcting-agent-doctor --production --require-runtime-provider" in guide
+    assert "kagent-doctor --production --require-runtime-provider" in guide
     assert "Staging Acceptance" in guide
     assert "subject-scoped runtime trace reads" in guide
     assert "subject-scoped runtime resume" in guide
     assert "Observability Wiring" in guide
-    assert "deploy/prometheus/self-correcting-agent-rules.yaml" in guide
-    assert "deploy/prometheus/self-correcting-agent-servicemonitor.yaml" in guide
+    assert "deploy/prometheus/kagent-rules.yaml" in guide
+    assert "deploy/prometheus/kagent-servicemonitor.yaml" in guide
     assert "Grafana" in guide
     assert "missing_required_metrics" in guide
     assert "required_metrics_sha256" in guide
-    assert "self_correcting_agent_runtime_runs_by_auth_subject_total" in guide
-    assert "self_correcting_agent_runtime_resumes_by_auth_subject_total" in guide
+    assert "kagent_runtime_runs_by_auth_subject_total" in guide
+    assert "kagent_runtime_resumes_by_auth_subject_total" in guide
     assert "runtime_owner_auth_subject" in guide
     assert "Rollback" in guide
     assert "Sign-off" in guide

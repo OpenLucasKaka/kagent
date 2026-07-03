@@ -1,7 +1,7 @@
 import json
 import subprocess
 
-from self_correcting_langgraph_agent.ops.trace_replay import summarize_runtime_trace
+from kagent.ops.trace_replay import summarize_runtime_trace
 
 
 def _runtime_trace():
@@ -143,7 +143,7 @@ def test_trace_replay_module_prints_json_summary(tmp_path):
         [
             ".venv/bin/python",
             "-m",
-            "self_correcting_langgraph_agent.ops.trace_replay",
+            "kagent.ops.trace_replay",
             str(trace_path),
         ],
         check=True,

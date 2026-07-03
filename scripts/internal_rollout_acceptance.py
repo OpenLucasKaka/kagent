@@ -8,7 +8,7 @@ import re
 from pathlib import Path
 from typing import Any, Dict, List
 
-from self_correcting_langgraph_agent import __version__
+from kagent import __version__
 
 DEFAULT_EXPECTED_ENVIRONMENT = "internal-production"
 

@@ -187,18 +187,18 @@ class RuntimeClient:
 def main(argv: Optional[list[str]] = None) -> int:
     parser = argparse.ArgumentParser(
         description=(
-            "Internal client example for the self-correcting LangGraph runtime. "
-            "Set SELF_CORRECTING_CLIENT_BASE_URL and SELF_CORRECTING_CLIENT_TOKEN "
+            "Internal client example for the Kagent runtime. "
+            "Set KAGENT_CLIENT_BASE_URL and KAGENT_CLIENT_TOKEN "
             "or pass --base-url and --token."
         )
     )
     parser.add_argument(
         "--base-url",
-        default=os.environ.get("SELF_CORRECTING_CLIENT_BASE_URL", "http://127.0.0.1:8000"),
+        default=os.environ.get("KAGENT_CLIENT_BASE_URL", "http://127.0.0.1:8000"),
     )
     parser.add_argument(
         "--token",
-        default=os.environ.get("SELF_CORRECTING_CLIENT_TOKEN", ""),
+        default=os.environ.get("KAGENT_CLIENT_TOKEN", ""),
         help="Bearer token for the default or named internal auth_subject.",
     )
     parser.add_argument(
@@ -280,7 +280,7 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     args = parser.parse_args(argv)
     if not args.token:
-        parser.error("--token or SELF_CORRECTING_CLIENT_TOKEN is required")
+        parser.error("--token or KAGENT_CLIENT_TOKEN is required")
 
     client = RuntimeClient(
         base_url=args.base_url,

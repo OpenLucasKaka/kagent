@@ -18,7 +18,7 @@ Initial production-oriented LangGraph agent package.
 - Batch JSONL job runner for processing multiple agent goals with per-line
   result summaries and structured bad-input records.
 - Local HTTP service with `GET /health`, `POST /run`, structured JSON errors,
-  and a `self-correcting-agent-serve` console script.
+  and a `kagent-serve` console script.
 - Production service hardening with request size limits, optional bearer auth,
   request ID propagation, structured access logs, `/metrics`, and OpenAPI
   discovery.
@@ -27,7 +27,7 @@ Initial production-oriented LangGraph agent package.
 - Real service smoke script wired into `scripts/run_checks.sh` so the standard
   gate starts the HTTP service and exercises `/health`, `/run`, and `/metrics`.
 - Optional service trace artifact persistence through
-  `SELF_CORRECTING_SERVICE_TRACE_DIR`.
+  `KAGENT_SERVICE_TRACE_DIR`.
 - GitHub Actions now runs the standard gate across Python 3.9 and 3.12.
 - Dependabot configuration for Python dependencies and GitHub Actions.
 - systemd unit example for VM or bare-metal deployments.
@@ -50,7 +50,7 @@ Initial production-oriented LangGraph agent package.
   agent results, and structured error payloads.
 - `/run` access log correlation fields for `run_id` and persisted `trace_path`.
 - Structured access logs are flushed after each stderr write.
-- Redacted runtime build info in `/metrics` and `self_correcting_agent_build_info`
+- Redacted runtime build info in `/metrics` and `kagent_build_info`
   in Prometheus output for rollout and configuration audits.
 - Production HTTP server defaults for daemon request threads, address reuse,
   and explicit listen backlog.

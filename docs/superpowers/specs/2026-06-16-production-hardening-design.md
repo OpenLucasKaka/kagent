@@ -2,7 +2,7 @@
 
 ## Goal
 
-Make the bounded LangGraph self-correcting agent feel like a small production
+Make the bounded LangGraph Kagent feel like a small production
 library and CLI instead of a demo: observable runs, clear failure semantics,
 discoverable tools, maintainable modules, and repeatable verification.
 

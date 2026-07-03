@@ -1,0 +1,328 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: kagent-secret
+  labels:
+    app.kubernetes.io/name: kagent
+type: Opaque
+stringData:
+  KAGENT_SERVICE_AUTH_TOKEN: "replace-with-a-long-random-token"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kagent-config
+  labels:
+    app.kubernetes.io/name: kagent
+data:
+  KAGENT_SERVICE_HOST: "0.0.0.0"
+  KAGENT_SERVICE_PORT: "8000"
+  KAGENT_SERVICE_MAX_REQUEST_BYTES: "65536"
+  KAGENT_SERVICE_MAX_GOAL_CHARS: "4096"
+  KAGENT_SERVICE_RATE_LIMIT_PER_MINUTE: "60"
+  KAGENT_SERVICE_MAX_CONCURRENT_RUNS: "4"
+  KAGENT_SERVICE_IDEMPOTENCY_CACHE_SIZE: "256"
+  KAGENT_SERVICE_IDEMPOTENCY_CACHE_PATH: "/var/lib/kagent/traces/.idempotency.sqlite3"
+  KAGENT_SERVICE_RUNTIME_ALLOWED_TOOLS: ""
+  KAGENT_SERVICE_RUNTIME_ALLOWED_TOOLS_BY_SUBJECT: ""
+  KAGENT_SERVICE_RUNTIME_MAX_ITERATIONS: "10"
+  KAGENT_SERVICE_RUNTIME_PENDING_APPROVAL_STALE_SECONDS: "3600"
+  KAGENT_SERVICE_ALLOW_FULL_TRACE_RESPONSE: "false"
+  KAGENT_SERVICE_PROTECT_DIAGNOSTICS: "true"
+  KAGENT_SERVICE_TRUST_FORWARDED_FOR: "false"
+  KAGENT_SERVICE_TRACE_DIR: "/var/lib/kagent/traces"
+  KAGENT_SERVICE_RUN_TIMEOUT_SECONDS: "30"
+  KAGENT_SERVICE_REQUEST_TIMEOUT_SECONDS: "10"
+  KAGENT_MAX_STEPS: "6"
+  KAGENT_MAX_RETRIES: "2"
+  PYTHONDONTWRITEBYTECODE: "1"
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: kagent-traces
+  labels:
+    app.kubernetes.io/name: kagent
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kagent
+  labels:
+    app.kubernetes.io/name: kagent
+spec:
+  replicas: 2
+  revisionHistoryLimit: 3
+  minReadySeconds: 5
+  progressDeadlineSeconds: 120
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: kagent
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: kagent
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/path: /metrics.prom
+        prometheus.io/port: "8000"
+    spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 45
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: kagent
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      initContainers:
+        - name: production-doctor
+          image: kagent:0.1.0
+          imagePullPolicy: IfNotPresent
+          command:
+            - kagent-doctor
+            - --production
+          envFrom:
+            - configMapRef:
+                name: kagent-config
+            - secretRef:
+                name: kagent-secret
+          volumeMounts:
+            - name: traces
+              mountPath: /var/lib/kagent/traces
+            - name: tmp
+              mountPath: /tmp
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+              ephemeral-storage: 32Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+              ephemeral-storage: 64Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            seccompProfile:
+              type: RuntimeDefault
+            capabilities:
+              drop:
+                - ALL
+      containers:
+        - name: service
+          image: kagent:0.1.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8000
+          envFrom:
+            - configMapRef:
+                name: kagent-config
+            - secretRef:
+                name: kagent-secret
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+          startupProbe:
+            httpGet:
+              path: /ready
+              port: http
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 12
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 20
+            timeoutSeconds: 2
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+              ephemeral-storage: 64Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+              ephemeral-storage: 128Mi
+          volumeMounts:
+            - name: traces
+              mountPath: /var/lib/kagent/traces
+            - name: tmp
+              mountPath: /tmp
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            seccompProfile:
+              type: RuntimeDefault
+            capabilities:
+              drop:
+                - ALL
+      volumes:
+        - name: traces
+          persistentVolumeClaim:
+            claimName: kagent-traces
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kagent
+  labels:
+    app.kubernetes.io/name: kagent
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: kagent
+  ports:
+    - name: http
+      port: 8000
+      targetPort: http
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: kagent
+  labels:
+    app.kubernetes.io/name: kagent
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: kagent
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: kagent
+  labels:
+    app.kubernetes.io/name: kagent
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: kagent
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kagent-access: "true"
+          podSelector:
+            matchLabels:
+              kagent-access: "true"
+      ports:
+        - protocol: TCP
+          port: 8000
+  egress:
+    - ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    - ports:
+        - protocol: TCP
+          port: 443
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: kagent-trace-prune
+  labels:
+    app.kubernetes.io/name: kagent
+spec:
+  schedule: "17 3 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: kagent
+            app.kubernetes.io/component: trace-prune
+        spec:
+          automountServiceAccountToken: false
+          restartPolicy: OnFailure
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+            fsGroup: 10001
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: trace-prune
+              image: kagent:0.1.0
+              imagePullPolicy: IfNotPresent
+              command:
+                - kagent-trace-prune
+              args:
+                - /var/lib/kagent/traces
+                - --max-age-days
+                - "7"
+                - --runtime-only
+                - --delete
+              env:
+                - name: PYTHONDONTWRITEBYTECODE
+                  value: "1"
+              resources:
+                requests:
+                  cpu: 25m
+                  memory: 64Mi
+                  ephemeral-storage: 32Mi
+                limits:
+                  cpu: 250m
+                  memory: 256Mi
+                  ephemeral-storage: 64Mi
+              volumeMounts:
+                - name: traces
+                  mountPath: /var/lib/kagent/traces
+                - name: tmp
+                  mountPath: /tmp
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                seccompProfile:
+                  type: RuntimeDefault
+                capabilities:
+                  drop:
+                    - ALL
+          volumes:
+            - name: traces
+              persistentVolumeClaim:
+                claimName: kagent-traces
+            - name: tmp
+              emptyDir:
+                sizeLimit: 64Mi

@@ -1,8 +1,8 @@
-from self_correcting_langgraph_agent.service.contract import (
+from kagent.service.contract import (
     ALLOWED_HTTP_METHODS,
     service_openapi,
 )
-from self_correcting_langgraph_agent.service.errors import ERROR_CODES
+from kagent.service.errors import ERROR_CODES
 
 
 def test_service_contract_reports_openapi_paths_and_allowed_methods():

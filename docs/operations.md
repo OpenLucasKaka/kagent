@@ -15,10 +15,10 @@ CLI smoke checks, a real service smoke check, evaluator smoke checks, metrics
 smoke checks, no-build-isolation and isolated wheel builds, an offline fallback
 for local package-index outages during the isolated build, and clean wheel
 install metadata smoke. It also writes
-`/tmp/self-correcting-agent-release-manifest.json` with artifact `sha256`
-hashes through `self-correcting-agent-release-manifest` so release automation
+`/tmp/kagent-release-manifest.json` with artifact `sha256`
+hashes through `kagent-release-manifest` so release automation
 can compare the shipped wheel against the gate output. Use
-`self-correcting-agent-release-manifest --verify /tmp/self-correcting-agent-release-manifest.json`
+`kagent-release-manifest --verify /tmp/kagent-release-manifest.json`
 to verify that the artifact still matches the manifest before publishing or
 rolling back. Verification fails on `package mismatch`, `version mismatch`,
 `sha256`, size, missing artifact, `artifact_count mismatch`, and
@@ -37,9 +37,8 @@ Run the opt-in real LLM runtime smoke before promoting a provider-backed
 deployment:
 
 ```sh
-SELF_CORRECTING_LLM_BASE_URL="${PROVIDER_BASE_URL}" \
-SELF_CORRECTING_LLM_API_KEY="${PROVIDER_API_KEY}" \
-SELF_CORRECTING_LLM_MODEL="agent-runtime-model" \
+# KAGENT_LLM_BASE_URL, KAGENT_LLM_API_KEY, and KAGENT_LLM_MODEL
+# must already be set in your shell or secret manager.
 scripts/smoke_real_llm_runtime.sh
 ```
 
@@ -62,10 +61,10 @@ Use the staging acceptance script after deploying the service and before
 opening it to internal users:
 
 ```sh
-SELF_CORRECTING_STAGING_BASE_URL="https://staging.example.internal" \
-SELF_CORRECTING_STAGING_TOKEN="$TEAM_A_STAGING_TOKEN" \
+KAGENT_STAGING_BASE_URL="https://staging.example.internal" \
+KAGENT_STAGING_TOKEN="$TEAM_A_STAGING_TOKEN" \
 scripts/staging_acceptance.sh \
-  >/tmp/self-correcting-agent-staging-acceptance.json
+  >/tmp/kagent-staging-acceptance.json
 ```
 
 It verifies authenticated diagnostics, runtime policy, deterministic runtime
@@ -88,16 +87,16 @@ Run observability acceptance after the deployment is reachable from the same
 network path Prometheus will use:
 
 ```sh
-SELF_CORRECTING_OBSERVABILITY_BASE_URL="https://staging.example.internal" \
-SELF_CORRECTING_OBSERVABILITY_TOKEN="$TEAM_A_STAGING_TOKEN" \
+KAGENT_OBSERVABILITY_BASE_URL="https://staging.example.internal" \
+KAGENT_OBSERVABILITY_TOKEN="$TEAM_A_STAGING_TOKEN" \
 scripts/observability_acceptance.sh \
-  >/tmp/self-correcting-agent-observability-acceptance.json
+  >/tmp/kagent-observability-acceptance.json
 ```
 
 The script verifies live `GET /metrics.prom`, required Prometheus metric names,
 and packaged Grafana/Prometheus artifacts. When
-`SELF_CORRECTING_PROMETHEUS_BASE_URL` is set, it also calls Prometheus
-`/api/v1/query` with `SELF_CORRECTING_PROMETHEUS_QUERY` and requires at least
+`KAGENT_PROMETHEUS_BASE_URL` is set, it also calls Prometheus
+`/api/v1/query` with `KAGENT_PROMETHEUS_QUERY` and requires at least
 one result. It prints redacted JSON only, so the observability acceptance output
 can be attached to the release evidence bundle. Strict gates require metrics
 schema `1`, metrics status, required metric count, metrics scrape hash, Grafana
@@ -110,8 +109,8 @@ Validate internal rollout sign-off before company-wide enablement:
 
 ```sh
 scripts/internal_rollout_acceptance.py \
-  --signoff /tmp/self-correcting-agent-internal-rollout-signoff.json \
-  >/tmp/self-correcting-agent-internal-rollout.json
+  --signoff /tmp/kagent-internal-rollout-signoff.json \
+  >/tmp/kagent-internal-rollout.json
 ```
 
 The validator requires TL, SRE, security, and business owner roles plus
@@ -132,15 +131,15 @@ Build the final approval bundle after all external evidence exists:
 scripts/production_approval_bundle.sh --strict
 ```
 
-Use `SELF_CORRECTING_PROVIDER_SMOKE_EVIDENCE`,
-`SELF_CORRECTING_STAGING_ACCEPTANCE_EVIDENCE`,
-`SELF_CORRECTING_OBSERVABILITY_ACCEPTANCE_EVIDENCE`,
-`SELF_CORRECTING_INTERNAL_ROLLOUT_EVIDENCE`, and output-path environment
+Use `KAGENT_PROVIDER_SMOKE_EVIDENCE`,
+`KAGENT_STAGING_ACCEPTANCE_EVIDENCE`,
+`KAGENT_OBSERVABILITY_ACCEPTANCE_EVIDENCE`,
+`KAGENT_INTERNAL_ROLLOUT_EVIDENCE`, and output-path environment
 variables when release automation stores artifacts outside `/tmp`.
 The bundle reports all missing external evidence files as `evidence_missing`
 with their labels and paths. It rejects stale evidence older than 24 hours by
 default and reports `evidence_stale` with the affected evidence labels. Override
-`SELF_CORRECTING_EVIDENCE_MAX_AGE_SECONDS` only when the release window is
+`KAGENT_EVIDENCE_MAX_AGE_SECONDS` only when the release window is
 explicitly approved.
 If that freshness window is not a positive integer, the script reports
 `evidence_max_age_invalid` as structured JSON.
@@ -170,18 +169,17 @@ For provider-backed production promotion, run the static doctor gate before the
 live smoke:
 
 ```sh
-SELF_CORRECTING_LLM_BASE_URL="${PROVIDER_BASE_URL}" \
-SELF_CORRECTING_LLM_API_KEY="${PROVIDER_API_KEY}" \
-SELF_CORRECTING_LLM_MODEL="agent-runtime-model" \
-SELF_CORRECTING_SERVICE_RUNTIME_MAX_ITERATIONS=2 \
-self-correcting-agent-doctor --production --require-runtime-provider \
-  --trace-dir /tmp/self-correcting-agent-traces
+# KAGENT_LLM_BASE_URL, KAGENT_LLM_API_KEY, and KAGENT_LLM_MODEL
+# must already be set in your shell or secret manager.
+KAGENT_SERVICE_RUNTIME_MAX_ITERATIONS=2 \
+kagent-doctor --production --require-runtime-provider \
+  --trace-dir /tmp/kagent-traces
 ```
 
 `--require-runtime-provider` fails without provider configuration using
 `llm_base_url_required`, `llm_model_required`, or `llm_api_key_required`. It
 also fails with `runtime_iterations_too_low` when
-`SELF_CORRECTING_SERVICE_RUNTIME_MAX_ITERATIONS` is lower than `2`, because a
+`KAGENT_SERVICE_RUNTIME_MAX_ITERATIONS` is lower than `2`, because a
 single-iteration runtime cannot perform a corrective replan after an
 observation.
 
@@ -190,7 +188,7 @@ observation.
 Use `scripts/continuous_iterate.sh` for long hardening loops:
 
 ```sh
-scripts/continuous_iterate.sh 10800 60 /tmp/self-correcting-agent.log /tmp/self-correcting-agent.jsonl
+scripts/continuous_iterate.sh 10800 60 /tmp/kagent.log /tmp/kagent.jsonl
 ```
 
 Arguments are duration seconds, interval seconds, text log path, and JSONL
@@ -200,8 +198,8 @@ check command, then appends a metrics record.
 Custom check commands are supported:
 
 ```sh
-SELF_CORRECTING_CHECK_COMMAND="scripts/run_checks.sh" \
-SELF_CORRECTING_EVAL_FILE="/tmp/self-correcting-agent-eval.json" \
+KAGENT_CHECK_COMMAND="scripts/run_checks.sh" \
+KAGENT_EVAL_FILE="/tmp/kagent-eval.json" \
 scripts/continuous_iterate.sh 3600 60 /tmp/agent.log /tmp/agent.jsonl
 ```
 
@@ -210,10 +208,10 @@ scripts/continuous_iterate.sh 3600 60 /tmp/agent.log /tmp/agent.jsonl
 Summarize a JSONL metrics file with:
 
 ```sh
-.venv/bin/python -m self_correcting_langgraph_agent.ops.metrics /tmp/self-correcting-agent.jsonl --output /tmp/metrics-summary.json --require-recent-health healthy
+.venv/bin/python -m kagent.ops.metrics /tmp/kagent.jsonl --output /tmp/metrics-summary.json --require-recent-health healthy
 ```
 
-The `self_correcting_langgraph_agent.ops.metrics` report includes:
+The `kagent.ops.metrics` report includes:
 
 - `latest_status`
 - `recent_health`
@@ -241,10 +239,10 @@ Use this order when an iteration fails:
 Targeted evaluator examples:
 
 ```sh
-.venv/bin/python -m self_correcting_langgraph_agent.eval.evaluator --list-cases
-.venv/bin/python -m self_correcting_langgraph_agent.eval.evaluator --category recovery
-.venv/bin/python -m self_correcting_langgraph_agent.eval.evaluator --case subtraction_tool_success --output /tmp/evaluator.json
-.venv/bin/python -m self_correcting_langgraph_agent.eval.evaluator --fail-on-failure
+.venv/bin/python -m kagent.eval.evaluator --list-cases
+.venv/bin/python -m kagent.eval.evaluator --category recovery
+.venv/bin/python -m kagent.eval.evaluator --case subtraction_tool_success --output /tmp/evaluator.json
+.venv/bin/python -m kagent.eval.evaluator --fail-on-failure
 ```
 
 ## Artifact capture
@@ -253,7 +251,7 @@ The CLI writes JSON to stdout by default. Use `--output PATH` to also write the
 same payload to an artifact file:
 
 ```sh
-.venv/bin/python -m self_correcting_langgraph_agent.cli "calculate 2 + 3" --summary --output /tmp/agent-summary.json
+.venv/bin/python -m kagent.cli "calculate 2 + 3" --summary --output /tmp/agent-summary.json
 ```
 
 When paired with `--fail-on-agent-failure`, the output file is written before
@@ -271,7 +269,7 @@ and `goal`, then run the batch entry point:
 
 ```sh
 printf '{"id":"sum","goal":"calculate 2 + 3"}\n' >/tmp/goals.jsonl
-self-correcting-agent-batch /tmp/goals.jsonl /tmp/results.jsonl --fail-on-failure
+kagent-batch /tmp/goals.jsonl /tmp/results.jsonl --fail-on-failure
 ```
 
 Malformed JSON and missing goals become failed output records. The batch keeps
@@ -288,7 +286,7 @@ floats, and booleans become failed batch records without stopping later jobs.
 Start the local HTTP service with the installed console script:
 
 ```sh
-self-correcting-agent-serve --host 127.0.0.1 --port 8000
+kagent-serve --host 127.0.0.1 --port 8000
 ```
 
 ## Codex-style runtime configuration
@@ -297,20 +295,20 @@ The Codex-style runtime can use a fake provider for deterministic tests or an
 OpenAI-compatible chat-completions endpoint for real planning. Configure real
 planning with:
 
-- `SELF_CORRECTING_LLM_BASE_URL`: base URL such as `https://api.example.com/v1`.
-- `SELF_CORRECTING_LLM_API_KEY`: bearer token for the provider.
-- `SELF_CORRECTING_LLM_MODEL`: model name sent to the chat-completions API.
-- `SELF_CORRECTING_LLM_TIMEOUT_SECONDS`: provider request timeout, default `30`.
-- `SELF_CORRECTING_LLM_MAX_RETRIES`: retry count for transient 429 and 5xx
+- `KAGENT_LLM_BASE_URL`: base URL such as `https://api.example.com/v1`.
+- `KAGENT_LLM_API_KEY`: bearer token for the provider.
+- `KAGENT_LLM_MODEL`: model name sent to the chat-completions API.
+- `KAGENT_LLM_TIMEOUT_SECONDS`: provider request timeout, default `30`.
+- `KAGENT_LLM_MAX_RETRIES`: retry count for transient 429 and 5xx
   provider errors, default `2`.
-- `SELF_CORRECTING_LLM_RETRY_BACKOFF_SECONDS`: fixed sleep between provider
+- `KAGENT_LLM_RETRY_BACKOFF_SECONDS`: fixed sleep between provider
   retry attempts, default `0.25`. Numeric provider `Retry-After` response
   headers take precedence for retryable HTTP failures.
 
 Provider config snapshots expose only whether an API key is configured; the key
 value is never returned in snapshots, traces, logs, metrics, or docs examples.
 Keep the runtime identity boundary clear during operator testing: the product
-identity is `self-correcting LangGraph agent runtime`, running in the current
+identity is `Kagent runtime`, running in the current
 CLI or service process. The underlying model provider is only a replaceable
 OpenAI-compatible planner. Identity and deployment questions should describe
 the runtime and its local/service process boundary, not the provider's model
@@ -318,7 +316,7 @@ brand or hosting location. If the runtime corrects a provider-branded identity
 or deployment answer, responses include `final_answer_guardrail` with a
 machine-readable reason and `original_answer_omitted=true`, so operators can
 audit the correction without replaying the misleading provider answer.
-Use `self-correcting-agent-doctor --production --require-runtime-provider` to
+Use `kagent-doctor --production --require-runtime-provider` to
 turn these settings into a release gate. Missing provider settings report
 `llm_base_url_required`, `llm_model_required`, or `llm_api_key_required`; a
 runtime budget lower than two iterations reports `runtime_iterations_too_low`.
@@ -374,7 +372,7 @@ Action `reason` fields and planner `final_answer` are capped by
 `MAX_ACTION_REASON_CHARS` and `MAX_PLAN_FINAL_ANSWER_CHARS`; oversized plan
 metadata fails as `invalid_plan`. Long-form reports, decisions, data, and
 messages should be returned through the bounded `artifact` tool.
-`SELF_CORRECTING_SERVICE_RUNTIME_MAX_ITERATIONS` caps accepted
+`KAGENT_SERVICE_RUNTIME_MAX_ITERATIONS` caps accepted
 `max_iterations` for `/runtime/run` and `/runtime/resume`; requests above that
 cap return `400 invalid_request_body` before the provider is called.
 When a runtime action is blocked by policy, the response status is
@@ -392,7 +390,7 @@ execution resumes. Resumed responses include
 `resumed_from_run_id` and a new `trace_path`. Operator/admin resumes keep the
 original run owner in `auth_subject` and record the approver in
 `resumed_by_auth_subject`.
-`/runtime/run trace persistence` uses `SELF_CORRECTING_SERVICE_TRACE_DIR` too:
+`/runtime/run trace persistence` uses `KAGENT_SERVICE_TRACE_DIR` too:
 persisted runtime responses include `trace_path`, HTTP responses include
 `X-Trace-Path`, and write failures return `trace_persistence_failed`. Runtime
 trace files include `trace_type: "codex_runtime"`. `GET /runtime/runs`,
@@ -409,7 +407,7 @@ return `trace_read_failed`.
 Run the deployment self-check before or after service startup:
 
 ```sh
-self-correcting-agent-doctor --trace-dir /tmp/self-correcting-agent-traces
+kagent-doctor --trace-dir /tmp/kagent-traces
 ```
 
 The doctor command returns JSON with `status`, `version`, readiness checks,
@@ -471,12 +469,12 @@ curl -i -X OPTIONS http://127.0.0.1:8000/run
 curl -s -X POST http://127.0.0.1:8000/runtime/run \
   -H 'Content-Type: application/json' \
   -d '{"goal":"capture hello","max_iterations":1,"plan":{"actions":[{"id":"step-1","tool":"note","input":{"text":"hello"}}]}}'
-.venv/bin/python -m self_correcting_langgraph_agent.cli "capture hello" \
+.venv/bin/python -m kagent.cli "capture hello" \
   --runtime \
   --runtime-plan '{"actions":[{"id":"step-1","tool":"note","input":{"text":"hello"},"reason":"capture"}],"final_answer":"captured"}'
-.venv/bin/python -m self_correcting_langgraph_agent.cli
-.venv/bin/python -m self_correcting_langgraph_agent.cli --interactive-json
-.venv/bin/python -m self_correcting_langgraph_agent.cli "create README" \
+.venv/bin/python -m kagent.cli
+.venv/bin/python -m kagent.cli --interactive-json
+.venv/bin/python -m kagent.cli "create README" \
   --runtime \
   --runtime-plan '{"actions":[{"id":"step-1","tool":"apply_patch","input":{"patch":"*** Begin Patch\n*** Add File: README.agent.md\n+# Agent file\n+\n+Created through apply_patch.\n*** End Patch\n"},"reason":"create workspace file"}],"final_answer":"created"}'
 curl -s 'http://127.0.0.1:8000/runtime/runs?tag=internal-smoke&limit=20'
@@ -487,9 +485,9 @@ curl -s -X POST http://127.0.0.1:8000/runtime/resume \
 ```
 
 TTY interactive sessions are the default CLI mode: run
-`self-correcting-agent` or `.venv/bin/python -m self_correcting_langgraph_agent.cli`
+`kagent` or `.venv/bin/python -m kagent.cli`
 with no goal to start the runtime shell. Sessions start with
-`self-correcting agent ready  /help`, print live progress while the planner and
+`Kagent ready  /help`, print live progress while the planner and
 tools run, and then use a compact operator transcript by default: status first,
 answer second, and only real external tool observations under `tools`.
 Internal `note` observations stay hidden in the default view so the shell reads
@@ -515,7 +513,7 @@ generated clients and gateway checks can validate the same contract the
 service emits. `ReadinessResponse` includes a structured `failed_checks` array
 so probes and release automation can identify failing dependencies without
 parsing human-readable check strings.
-`/config`, `/metrics`, and Prometheus `self_correcting_agent_build_info` also
+`/config`, `/metrics`, and Prometheus `kagent_build_info` also
 expose `security_response_headers` plus the current header policy values such
 as `content_security_policy_header` and `x_frame_options_header`, so rollout
 audits can compare the live runtime against gateway and OpenAPI expectations.
@@ -540,13 +538,13 @@ smoke tests.
 Use `GET /runtime/tools` to inspect Codex-style runtime tool names,
 descriptions, `input_schema`, `output_schema`, and `timeout_seconds` values
 before generating or validating plans.
-Set `SELF_CORRECTING_SERVICE_RUNTIME_ALLOWED_TOOLS` to a comma-separated
+Set `KAGENT_SERVICE_RUNTIME_ALLOWED_TOOLS` to a comma-separated
 allowlist when a deployment should execute only selected runtime tools without
 human approval. Leave it empty for the default policy. Unknown tool names fail
 service and doctor configuration before startup, and `/config`, `/metrics`,
-and Prometheus `self_correcting_agent_build_info` expose the active
+and Prometheus `kagent_build_info` expose the active
 `runtime_allowed_tools` value as non-secret audit metadata.
-Set `SELF_CORRECTING_SERVICE_RUNTIME_ALLOWED_TOOLS_BY_SUBJECT` to a JSON object
+Set `KAGENT_SERVICE_RUNTIME_ALLOWED_TOOLS_BY_SUBJECT` to a JSON object
 when different internal teams need different direct-execution boundaries. Keys
 are authenticated `auth_subject` values, and values are comma-separated tool
 lists or arrays of tool names. Matching subject entries override the global
@@ -663,7 +661,7 @@ endpoint also skips unreadable trace files instead of failing the whole list.
 When diagnostic endpoints are protected, the primary token is treated as an
 operator/admin diagnostic token and can list all persisted runtime traces.
 Tokens from
-`SELF_CORRECTING_SERVICE_AUTH_TOKENS` are subject-scoped: `team-a` can list only
+`KAGENT_SERVICE_AUTH_TOKENS` are subject-scoped: `team-a` can list only
 runtime traces whose persisted `auth_subject` is `team-a`, and cross-subject run IDs are hidden as `404 not_found`.
 Use `GET /runtime/runs/summary` to build a lightweight operations dashboard or
 approval queue badge without loading individual runs. It applies subject
@@ -782,70 +780,70 @@ JSON. If the target trace cannot be decoded or read, the endpoint returns
 Use `agent_runs_by_status`, `average_agent_run_duration_seconds`, and
 `max_agent_run_duration_seconds` to distinguish healthy agent completions from
 agent exceptions or timeouts. Prometheus scrapes expose the same signals through
-`self_correcting_agent_runs_total`, `self_correcting_agent_run_status_total`,
+`kagent_runs_total`, `kagent_run_status_total`,
 and the agent run duration gauges. Use
-`self_correcting_agent_agent_run_duration_seconds_bucket`,
-`self_correcting_agent_agent_run_duration_seconds_count`, and
-`self_correcting_agent_agent_run_duration_seconds_sum` for histogram queries
+`kagent_agent_run_duration_seconds_bucket`,
+`kagent_agent_run_duration_seconds_count`, and
+`kagent_agent_run_duration_seconds_sum` for histogram queries
 over internal agent execution latency. Compare this histogram with the HTTP
 request duration histogram to separate agent work from HTTP transport,
 auth, rate-limit, and trace persistence overhead.
 Use `requests_by_method` and
-`self_correcting_agent_requests_by_method_total` to separate probe, diagnostic,
+`kagent_requests_by_method_total` to separate probe, diagnostic,
 preflight, and `/run` traffic by HTTP method during rollout or gateway debugging.
 Known HTTP methods are normalized to uppercase, and unknown HTTP methods are
 aggregated under `__unknown__` to keep method metrics bounded while access logs
 still keep the original method for request-level triage.
 Use `requests_by_auth_subject` and
-`self_correcting_agent_requests_by_auth_subject_total` for internal usage dashboards
+`kagent_requests_by_auth_subject_total` for internal usage dashboards
 that show which configured teams or service accounts are using the agent. This
 dimension is populated only after a named internal bearer token is authenticated
-through `SELF_CORRECTING_SERVICE_AUTH_TOKENS`; raw tokens are never recorded,
+through `KAGENT_SERVICE_AUTH_TOKENS`; raw tokens are never recorded,
 and unauthenticated probe traffic is omitted from the subject counter to keep
 labels bounded.
-Use `self_correcting_agent_request_duration_seconds_bucket`,
-`self_correcting_agent_request_duration_seconds_count`, and
-`self_correcting_agent_request_duration_seconds_sum` for Prometheus histogram
+Use `kagent_request_duration_seconds_bucket`,
+`kagent_request_duration_seconds_count`, and
+`kagent_request_duration_seconds_sum` for Prometheus histogram
 queries over HTTP request latency. These bucketed metrics support percentile
 and SLO burn-rate views that average and max gauges cannot provide on their own.
-Use `self_correcting_agent_runtime_runs_total` and
-`self_correcting_agent_runtime_run_status_total` to trend Codex-style runtime
+Use `kagent_runtime_runs_total` and
+`kagent_runtime_run_status_total` to trend Codex-style runtime
 traffic separately from the deterministic `/run` path. Use
 `runtime_runs_by_auth_subject`, `runtime_runs_by_auth_subject_status`,
 `runtime_resumes_by_auth_subject`,
-`self_correcting_agent_runtime_runs_by_auth_subject_total`, and
-`self_correcting_agent_runtime_run_status_by_auth_subject_total` to build
+`kagent_runtime_runs_by_auth_subject_total`, and
+`kagent_runtime_run_status_by_auth_subject_total` to build
 per-team runtime outcome dashboards for success, failure, and approval rates
 without exposing bearer tokens. Use
-`self_correcting_agent_runtime_resumes_by_auth_subject_total` to trend
+`kagent_runtime_resumes_by_auth_subject_total` to trend
 subject/admin resume activity separately from run ownership. Use
-`self_correcting_agent_runtime_failed_observations_total` for tool or planner
+`kagent_runtime_failed_observations_total` for tool or planner
 failure pressure,
-`self_correcting_agent_runtime_progress_event_sink_failures_total` for progress
+`kagent_runtime_progress_event_sink_failures_total` for progress
 event delivery failures in streaming, webhook, or operator UI sinks,
-`self_correcting_agent_runtime_approval_required_total` for human approval queue
+`kagent_runtime_approval_required_total` for human approval queue
 pressure, and
-`self_correcting_agent_runtime_failed_budget_exhaustions_total` to alert on
+`kagent_runtime_failed_budget_exhaustions_total` to alert on
 failed runtime runs that spent their whole iteration budget.
-Use `self_correcting_agent_runtime_final_answer_guardrails_total` and
-`self_correcting_agent_runtime_final_answer_guardrails_by_reason_total` to
+Use `kagent_runtime_final_answer_guardrails_total` and
+`kagent_runtime_final_answer_guardrails_by_reason_total` to
 alert on model identity/deployment drift caught by runtime guardrails without
 replaying the provider's original misleading answer.
-Use `self_correcting_agent_runtime_pending_approvals_current`,
-`self_correcting_agent_runtime_stale_pending_approvals_current`,
-`self_correcting_agent_runtime_max_pending_approval_age_seconds`, and
-`self_correcting_agent_runtime_pending_approval_stale_seconds` as gauges for
+Use `kagent_runtime_pending_approvals_current`,
+`kagent_runtime_stale_pending_approvals_current`,
+`kagent_runtime_max_pending_approval_age_seconds`, and
+`kagent_runtime_pending_approval_stale_seconds` as gauges for
 the current persisted approval queue. These metrics are derived from compact
 runtime traces, so they show whether approval work is still pending now, while
-`self_correcting_agent_runtime_approval_required_total` remains a historical
+`kagent_runtime_approval_required_total` remains a historical
 counter of policy gates encountered by runs.
-Use `self_correcting_agent_runtime_observation_errors_total{error_code="..."}`
+Use `kagent_runtime_observation_errors_total{error_code="..."}`
 to separate runtime observation failures by stable error code, including
 `tool_execution_timeout`, `invalid_tool_input`, `invalid_tool_output`, and
 `tool_not_allowed`.
-Use `self_correcting_agent_runtime_run_duration_seconds_bucket`,
-`self_correcting_agent_runtime_run_duration_seconds_count`, and
-`self_correcting_agent_runtime_run_duration_seconds_sum` for percentile and SLO
+Use `kagent_runtime_run_duration_seconds_bucket`,
+`kagent_runtime_run_duration_seconds_count`, and
+`kagent_runtime_run_duration_seconds_sum` for percentile and SLO
 views over Codex-style runtime latency, separate from HTTP transport latency and
 the deterministic `/run` histogram.
 Unknown HTTP paths are aggregated under `__unknown__` in request path metrics
@@ -855,7 +853,7 @@ Use `active_rate_limit_windows` to estimate current per-client rate-limit
 cardinality after expired rate-limit windows have been pruned from the metrics
 snapshot.
 Use `error_responses_by_code` and
-`self_correcting_agent_error_responses_total` to trend client errors,
+`kagent_error_responses_total` to trend client errors,
 authentication failures, rate limiting, and service-side agent failures by
 stable `error_code`. Use `service_version`, `bind_host`, `bind_port`,
 `auth_required`, `trace_persistence`, `trace_directory_permissions`,
@@ -863,7 +861,7 @@ stable `error_code`. Use `service_version`, `bind_host`, `bind_port`,
 `trust_forwarded_for`, `llm_provider`, `llm_base_url`, `llm_model`,
 `llm_api_key_configured`, `llm_timeout_seconds`, `llm_max_retries`, and
 `llm_retry_backoff_seconds` in `/metrics`, plus
-`self_correcting_agent_build_info` in Prometheus scrapes, to audit rollout
+`kagent_build_info` in Prometheus scrapes, to audit rollout
 version, trace storage policy, and key runtime controls without exposing the
 bearer token. Structured
 access logs include `error_code` on failed
@@ -913,23 +911,23 @@ responses for unknown routes. Unsupported methods return structured HTTP `405`
 responses with `Allow: GET, HEAD, OPTIONS, POST`. Full trace HTTP responses
 are disabled by default: a `/run` request with `"full_trace": true` returns
 `403 full_trace_disabled` unless
-`SELF_CORRECTING_SERVICE_ALLOW_FULL_TRACE_RESPONSE=true` is configured. Prefer
-persisted traces through `SELF_CORRECTING_SERVICE_TRACE_DIR` for production
+`KAGENT_SERVICE_ALLOW_FULL_TRACE_RESPONSE=true` is configured. Prefer
+persisted traces through `KAGENT_SERVICE_TRACE_DIR` for production
 debugging because it returns `trace_path` without exposing internal event bodies
 to API clients.
-Use `self-correcting-agent-trace-prune TRACE_DIR --max-age-days 7` to dry-run
+Use `kagent-trace-prune TRACE_DIR --max-age-days 7` to dry-run
 trace retention before deleting anything. Add `--delete` only after reviewing
 the JSON summary; the command scans top-level `*.json` trace files, skips
 symlink trace files, and leaves other files untouched.
 For Codex-style runtime retention, prefer
-`self-correcting-agent-trace-prune TRACE_DIR --max-age-days 7 --runtime-only`.
+`kagent-trace-prune TRACE_DIR --max-age-days 7 --runtime-only`.
 Runtime-only mode scans only `trace_type: "codex_runtime"` files and, by
 default, matches old `done`, `failed`, and `cancelled` traces while protecting
 `requires_approval` traces. Its JSON summary includes `protected_pending`,
 `matched_by_status`, `runtime_scanned`, `skipped_non_runtime`, and
 `skipped_status` so operators can review exactly what a retention job would
 delete before adding `--delete`.
-Use `self-correcting-agent-trace-replay TRACE.json` when debugging a persisted
+Use `kagent-trace-replay TRACE.json` when debugging a persisted
 Codex-style runtime trace. The replay command emits a redacted summary with run
 status, tool counts, failed observations, changed files, artifacts, and timeline
 metadata, but it does not replay `read_file` contents, action inputs, or patch
@@ -938,21 +936,21 @@ bodies into stdout.
 booleans; invalid values return `400 invalid_agent_config` before the agent
 runner starts. `full_trace` must be a JSON boolean; strings such as `"true"`
 return `400 invalid_request_body` before the agent runner starts. `goal` is
-capped by `SELF_CORRECTING_SERVICE_MAX_GOAL_CHARS` and oversized goals return
+capped by `KAGENT_SERVICE_MAX_GOAL_CHARS` and oversized goals return
 `413 goal_too_large` before the agent runner starts.
 The `SelfCorrectingAgentHighRequestLatency` alert fires when the 95th
 percentile HTTP request latency from
-`self_correcting_agent_request_duration_seconds_bucket` stays above 2 seconds.
+`kagent_request_duration_seconds_bucket` stays above 2 seconds.
 Check downstream run duration, trace storage latency, concurrency saturation,
 and gateway retries before raising timeout or concurrency limits.
 The `SelfCorrectingAgentSlowAgentRuns` alert fires when the 95th percentile
 internal agent execution latency from
-`self_correcting_agent_agent_run_duration_seconds_bucket` stays above 2
+`kagent_agent_run_duration_seconds_bucket` stays above 2
 seconds. If this fires without `SelfCorrectingAgentHighRequestLatency`, focus on
 planner, tool, verifier, and retry behavior rather than HTTP transport.
 The `SelfCorrectingAgentSlowRuntimeRuns` alert fires when the 95th percentile
 Codex-style runtime run latency from
-`self_correcting_agent_runtime_run_duration_seconds_bucket` stays above 5
+`kagent_runtime_run_duration_seconds_bucket` stays above 5
 seconds. If this fires without `SelfCorrectingAgentSlowAgentRuns`, focus on
 runtime planning depth, approval gates, external tool latency, and iteration
 budget pressure rather than the deterministic `/run` path.
@@ -963,10 +961,10 @@ client HTTP libraries, and whether probes or scanners are reaching `/run`.
 The `SelfCorrectingAgentOversizedRunRequests` alert fires when
 `request_too_large` or `goal_too_large` responses persist. Check whether a
 client is sending unbounded prompts, whether a gateway body limit is higher
-than the service limit, or whether `SELF_CORRECTING_SERVICE_MAX_REQUEST_BYTES`
-and `SELF_CORRECTING_SERVICE_MAX_GOAL_CHARS` need an intentional rollout
+than the service limit, or whether `KAGENT_SERVICE_MAX_REQUEST_BYTES`
+and `KAGENT_SERVICE_MAX_GOAL_CHARS` need an intentional rollout
 change.
-Set `SELF_CORRECTING_SERVICE_IDEMPOTENCY_CACHE_SIZE` above `0` to enable
+Set `KAGENT_SERVICE_IDEMPOTENCY_CACHE_SIZE` above `0` to enable
 execution-route response reuse for clients that send
 `Idempotency-Key` to `POST /run`, `POST /runtime/run`, or
 `POST /runtime/resume`. The same key with the same request body on the same
@@ -978,10 +976,10 @@ for a different team run independently. Anonymous traffic uses a separate
 anonymous scope. Raw idempotency keys and bearer tokens are never logged. Keys
 must be single-valued 1-128 printable ASCII characters or the service returns
 `400 invalid_idempotency_key`. Set
-`SELF_CORRECTING_SERVICE_IDEMPOTENCY_CACHE_PATH` to a SQLite file when retry
+`KAGENT_SERVICE_IDEMPOTENCY_CACHE_PATH` to a SQLite file when retry
 responses must survive restarts or be shared by same-volume service replicas;
 leave it empty for the in-memory per-process cache. When this path is set,
-`/ready` and `self-correcting-agent-doctor` validate
+`/ready` and `kagent-doctor` validate
 `idempotency_cache_persistence` by initializing the SQLite file before the
 service accepts traffic.
 
@@ -989,10 +987,10 @@ service accepts traffic.
 
 - `agent_run_failed`: the agent runner raised an unexpected exception.
 - `agent_run_timeout`: an execution route exceeded
-  `SELF_CORRECTING_SERVICE_RUN_TIMEOUT_SECONDS`.
+  `KAGENT_SERVICE_RUN_TIMEOUT_SECONDS`.
 - `full_trace_disabled`: a client requested `full_trace=true` while HTTP full trace
   responses are disabled.
-- `goal_too_large`: `/run` goal text exceeded `SELF_CORRECTING_SERVICE_MAX_GOAL_CHARS`.
+- `goal_too_large`: `/run` goal text exceeded `KAGENT_SERVICE_MAX_GOAL_CHARS`.
 - `expectation_failed`: HTTP `Expect` is present; the service does not support
   continue-style request body negotiation.
 - `idempotency_key_conflict`: `Idempotency-Key` was reused with a different
@@ -1015,8 +1013,8 @@ service accepts traffic.
 - `readiness_failed`: `/ready` found one or more failed dependency checks; use
   `failed_checks` for the specific dependency names.
 - `request_body_timeout`: client did not finish sending the declared request
-  body before `SELF_CORRECTING_SERVICE_REQUEST_TIMEOUT_SECONDS`.
-- `request_too_large`: request body exceeded `SELF_CORRECTING_SERVICE_MAX_REQUEST_BYTES`.
+  body before `KAGENT_SERVICE_REQUEST_TIMEOUT_SECONDS`.
+- `request_too_large`: request body exceeded `KAGENT_SERVICE_MAX_REQUEST_BYTES`.
 - `too_many_concurrent_runs`: service-level run concurrency cap is full.
 - `trace_persistence_failed`: configured trace directory could not persist the run trace.
 - `trace_read_failed`: a persisted runtime trace could not be decoded or read.
@@ -1024,16 +1022,16 @@ service accepts traffic.
 - `unsupported_media_type`: `Content-Type` is missing, duplicated, or not a
   single-valued `application/json` header.
 
-Set `SELF_CORRECTING_SERVICE_AUTH_TOKEN` to require `Authorization: Bearer ...`
+Set `KAGENT_SERVICE_AUTH_TOKEN` to require `Authorization: Bearer ...`
 for `POST /run`; unauthorized responses include `WWW-Authenticate: Bearer` for
-standard client and gateway handling. `self-correcting-agent-doctor
+standard client and gateway handling. `kagent-doctor
 --production` requires this token to be at least 16 characters and rejects
 placeholder values with `auth_token_placeholder`. Malformed or non-ASCII `Authorization`
 header values are treated as unauthorized, not internal service errors. Raw HTTP
 requests must use a single-valued `Authorization` header. Tokens
 that cannot be represented as safe HTTP header values fail production doctor
 with `auth_token_unsafe`. For internal company use, set
-`SELF_CORRECTING_SERVICE_AUTH_TOKENS` to a JSON object mapping stable subjects
+`KAGENT_SERVICE_AUTH_TOKENS` to a JSON object mapping stable subjects
 to bearer tokens, such as `{"team-a":"...","ops":"..."}`. Matching subjects are
 used for rate-limit isolation, access log `auth_subject` fields, and
 subject-scoped runtime trace reads; raw tokens are never logged or returned by
@@ -1045,19 +1043,19 @@ runtime cancel: a subject token can cancel only non-terminal runtime traces
 with the same `auth_subject`, while the primary bearer token can perform
 operator cleanup across subjects and the trace records
 `cancelled_by_auth_subject`. Set
-`SELF_CORRECTING_SERVICE_PROTECT_DIAGNOSTICS=true` to require the same bearer
+`KAGENT_SERVICE_PROTECT_DIAGNOSTICS=true` to require the same bearer
 token for diagnostic GET endpoints: `/config`, `/tools`, `/metrics`,
 `/metrics.prom`, and `/openapi.json`. `/health`, `/ready`, and `/version`
-remain public for probes and rollout checks. `self-correcting-agent-doctor
+remain public for probes and rollout checks. `kagent-doctor
 --production` requires diagnostic protection to be enabled.
 Set
-`SELF_CORRECTING_SERVICE_MAX_REQUEST_BYTES` to cap request body size before the
-agent runs. Set `SELF_CORRECTING_SERVICE_MAX_GOAL_CHARS` to cap accepted goal
+`KAGENT_SERVICE_MAX_REQUEST_BYTES` to cap request body size before the
+agent runs. Set `KAGENT_SERVICE_MAX_GOAL_CHARS` to cap accepted goal
 length independently of the raw HTTP body size. Set
-`SELF_CORRECTING_SERVICE_IDEMPOTENCY_CACHE_SIZE` to bound how many successful
+`KAGENT_SERVICE_IDEMPOTENCY_CACHE_SIZE` to bound how many successful
 execution-route responses can be reused by `Idempotency-Key`; the cache is
 in-memory by default or SQLite-backed when
-`SELF_CORRECTING_SERVICE_IDEMPOTENCY_CACHE_PATH` is set, with keys scoped by
+`KAGENT_SERVICE_IDEMPOTENCY_CACHE_PATH` is set, with keys scoped by
 execution route and authenticated internal subject for `/run`, `/runtime/run`,
 and `/runtime/resume`. Anonymous traffic uses a separate anonymous scope.
 `/config`, `/metrics`, and `/metrics.prom` expose whether the idempotency cache
@@ -1066,16 +1064,16 @@ hits, misses, conflicts, stores, and evictions help operators
 distinguish healthy retry reuse from key misuse and undersized cache capacity.
 Rising evictions during the expected client retry window usually means the
 cache size is too small or retry traffic is being spread across too many
-service processes. Set `SELF_CORRECTING_SERVICE_RUNTIME_ALLOWED_TOOLS` to
+service processes. Set `KAGENT_SERVICE_RUNTIME_ALLOWED_TOOLS` to
 control which runtime tools execute without approval in this deployment. Set
-`SELF_CORRECTING_SERVICE_RUNTIME_ALLOWED_TOOLS_BY_SUBJECT` when different
+`KAGENT_SERVICE_RUNTIME_ALLOWED_TOOLS_BY_SUBJECT` when different
 `auth_subject` teams need stricter or broader runtime tool policies. Set
-`SELF_CORRECTING_SERVICE_RUNTIME_MAX_ITERATIONS` to cap
+`KAGENT_SERVICE_RUNTIME_MAX_ITERATIONS` to cap
 the accepted planner iteration budget for Codex-style runtime requests. Set
-`SELF_CORRECTING_SERVICE_RATE_LIMIT_PER_MINUTE` to cap per-client `/run`
+`KAGENT_SERVICE_RATE_LIMIT_PER_MINUTE` to cap per-client `/run`
 traffic. By default the limiter uses the socket remote address and ignores
 caller-supplied `X-Forwarded-For`; set
-`SELF_CORRECTING_SERVICE_TRUST_FORWARDED_FOR=true` only behind a trusted reverse
+`KAGENT_SERVICE_TRUST_FORWARDED_FOR=true` only behind a trusted reverse
 proxy that overwrites that header. Empty, overlong, or control-character
 unsafe `X-Forwarded-For` values, plus non-IP forwarded client values, fall
 back to the socket remote address so
@@ -1105,12 +1103,12 @@ response content, frame the API, or resolve relative base URLs from API
 payloads.
 Responses also include `X-Frame-Options: DENY` for legacy frame-protection
 checks that do not evaluate CSP `frame-ancestors`.
-Set `SELF_CORRECTING_SERVICE_ALLOW_FULL_TRACE_RESPONSE=true` only for tightly
+Set `KAGENT_SERVICE_ALLOW_FULL_TRACE_RESPONSE=true` only for tightly
 controlled operator-only service instances that need complete trace bodies in
 HTTP responses. Keep it `false` for normal production traffic.
-`self-correcting-agent-doctor --production` rejects enabled full trace HTTP
+`kagent-doctor --production` rejects enabled full trace HTTP
 responses with `full_trace_response_must_be_disabled`.
-Set `SELF_CORRECTING_SERVICE_TRACE_DIR` to persist full per-run traces and
+Set `KAGENT_SERVICE_TRACE_DIR` to persist full per-run traces and
 return `trace_path` in `/run` responses. The trace directory is tightened to
 `0700`, and trace files are written through a same-directory owner-only
 temporary file and atomically replaced as final `0600` JSON files, so failed
@@ -1121,26 +1119,26 @@ persistence is enabled, `/ready` creates or tightens the trace directory to
 `503 not_ready` with `error_code=readiness_failed` and a stable failure label
 before traffic is sent to `/run`, without exposing local filesystem paths or
 raw dependency exceptions. Access logs, JSON `/metrics`, and Prometheus
-`self_correcting_agent_error_responses_total` record the same error code.
+`kagent_error_responses_total` record the same error code.
 When SQLite idempotency persistence is configured, `/ready` checks
 `idempotency_cache_persistence` and returns
 `failed: idempotency_cache_unavailable` if the cache file cannot be initialized.
 Operators should use `failed_checks` to route incidents to the failing
 dependency, such as `trace_persistence`.
-Run `self-correcting-agent-trace-prune` from a cron job or Kubernetes CronJob
+Run `kagent-trace-prune` from a cron job or Kubernetes CronJob
 to enforce trace retention. The command defaults to dry-run mode and requires
 `--delete` for destructive cleanup, so operators can wire alerting and review
 before enabling deletion.
-Set `SELF_CORRECTING_SERVICE_RUN_TIMEOUT_SECONDS` to cap execution-route
+Set `KAGENT_SERVICE_RUN_TIMEOUT_SECONDS` to cap execution-route
 wall-clock time for `/run`, `/runtime/run`, and `/runtime/resume`; timed-out
 runs return a structured HTTP `504` response. Keep this value lower than the
 upstream proxy timeout so clients receive service-owned JSON errors instead of
 proxy-generated responses.
-Set `SELF_CORRECTING_SERVICE_REQUEST_TIMEOUT_SECONDS` to cap how long a client
+Set `KAGENT_SERVICE_REQUEST_TIMEOUT_SECONDS` to cap how long a client
 can take to send a complete HTTP request, limiting slow-client thread
 occupancy. If headers arrive but the body stalls, the service returns
 structured HTTP `408 request_body_timeout`.
-During container or process shutdown, `self-correcting-agent-serve` handles
+During container or process shutdown, `kagent-serve` handles
 `SIGTERM`, closes the HTTP server, waits for accepted bounded request threads
 through `block_on_close`, and exits with status `143` so supervisors can
 distinguish an orchestrator stop from an application failure.

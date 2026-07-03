@@ -3,13 +3,13 @@ import os
 import time
 from pathlib import Path
 
-from self_correcting_langgraph_agent.runtime import tools as runtime_tools
-from self_correcting_langgraph_agent.runtime.types import (
+from kagent.runtime import tools as runtime_tools
+from kagent.runtime.types import (
     MAX_PLAN_ACTIONS,
     MAX_PLAN_FINAL_ANSWER_CHARS,
 )
-from self_correcting_langgraph_agent.service import router as service_router
-from self_correcting_langgraph_agent.service.runtime import (
+from kagent.service import router as service_router
+from kagent.service.runtime import (
     ServiceConcurrencyLimiter,
     ServiceConfig,
     ServiceIdempotencyCache,
@@ -17,7 +17,7 @@ from self_correcting_langgraph_agent.service.runtime import (
     ServiceRateLimiter,
     SqliteServiceIdempotencyCache,
 )
-from self_correcting_langgraph_agent.service.trace_store import persist_trace
+from kagent.service.trace_store import persist_trace
 
 
 def _mock_public_http_request(monkeypatch, body: bytes = b"ok") -> str:
@@ -2572,7 +2572,7 @@ def test_service_router_runtime_status_reports_final_answer_guardrail(tmp_path):
             "run_id": "identity-guardrail",
             "status": "done",
             "goal": "你是谁",
-            "answer": "我是 self-correcting LangGraph agent runtime。",
+            "answer": "我是 Kagent runtime。",
             "final_answer_guardrail": {
                 "applied": "true",
                 "reason": "runtime_identity_boundary",
@@ -5541,7 +5541,7 @@ def test_service_router_runtime_run_reports_trace_persistence_failure(monkeypatc
         raise OSError("disk full")
 
     monkeypatch.setattr(
-        "self_correcting_langgraph_agent.service.runtime_run.persist_trace",
+        "kagent.service.runtime_run.persist_trace",
         failing_persist_trace,
     )
 
@@ -5564,7 +5564,7 @@ def test_service_router_runtime_run_times_out_slow_runtime(monkeypatch):
         return {"trace_type": "codex_runtime", "run_id": "slow", "status": "done"}
 
     monkeypatch.setattr(
-        "self_correcting_langgraph_agent.service.runtime_run.run_runtime_agent",
+        "kagent.service.runtime_run.run_runtime_agent",
         slow_runtime_agent,
     )
 
@@ -5605,7 +5605,7 @@ def test_service_router_runtime_resume_times_out_slow_runtime(tmp_path, monkeypa
         return {"trace_type": "codex_runtime", "run_id": "slow", "status": "done"}
 
     monkeypatch.setattr(
-        "self_correcting_langgraph_agent.service.runtime_resume.run_runtime_agent",
+        "kagent.service.runtime_resume.run_runtime_agent",
         slow_runtime_agent,
     )
 
@@ -5897,7 +5897,7 @@ def test_service_router_metrics_snapshot_includes_redacted_runtime_info():
         allow_full_trace_response=True,
         protect_diagnostics=True,
         trust_forwarded_for=True,
-        trace_dir="/var/lib/self-correcting-agent/traces",
+        trace_dir="/var/lib/kagent/traces",
         run_timeout_seconds=9.5,
         request_timeout_seconds=4.5,
     )

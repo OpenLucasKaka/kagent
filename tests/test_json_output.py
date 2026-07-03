@@ -1,7 +1,7 @@
 import json
 from enum import Enum
 
-from self_correcting_langgraph_agent.utils.json_output import format_and_write_json, json_ready
+from kagent.utils.json_output import format_and_write_json, json_ready
 
 
 class ExampleStatus(Enum):

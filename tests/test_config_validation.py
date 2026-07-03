@@ -1,6 +1,6 @@
 import pytest
 
-from self_correcting_langgraph_agent.utils.config_validation import optional_json_int
+from kagent.utils.config_validation import optional_json_int
 
 
 def test_optional_json_int_uses_default_for_missing_or_empty_values():

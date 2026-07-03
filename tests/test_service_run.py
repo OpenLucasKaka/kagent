@@ -2,8 +2,8 @@ import json
 from concurrent.futures import TimeoutError as RunTimeoutError
 from pathlib import Path
 
-from self_correcting_langgraph_agent.service.run import execute_run_request
-from self_correcting_langgraph_agent.service.runtime import ServiceConfig
+from kagent.service.run import execute_run_request
+from kagent.service.runtime import ServiceConfig
 
 
 def test_execute_run_request_returns_summary_and_persists_trace(tmp_path):
@@ -97,7 +97,7 @@ def test_execute_run_request_failure_responses_include_stable_error_codes(monkey
         raise OSError("disk full")
 
     monkeypatch.setattr(
-        "self_correcting_langgraph_agent.service.run.persist_trace",
+        "kagent.service.run.persist_trace",
         failing_persist_trace,
     )
 
@@ -152,7 +152,7 @@ def test_execute_run_request_timeout_response_includes_stable_error_code(monkeyp
         raise RunTimeoutError
 
     monkeypatch.setattr(
-        "self_correcting_langgraph_agent.service.run.run_with_timeout",
+        "kagent.service.run.run_with_timeout",
         timeout_run,
     )
 

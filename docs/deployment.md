@@ -10,7 +10,7 @@ package, runs as a non-root user, exposes port `8000`, and uses the built-in
 Build the image:
 
 ```sh
-docker build -t self-correcting-langgraph-agent:local .
+docker build -t kagent:local .
 ```
 
 Run the service:
@@ -19,7 +19,7 @@ Run the service:
 docker run --rm \
   --env-file deploy/env.example \
   -p 8000:8000 \
-  self-correcting-langgraph-agent:local
+  kagent:local
 ```
 
 Check readiness:
@@ -30,19 +30,19 @@ curl -I http://127.0.0.1:8000/health
 curl -s http://127.0.0.1:8000/ready
 curl -s http://127.0.0.1:8000/metrics
 curl -s http://127.0.0.1:8000/metrics.prom
-self-correcting-agent-doctor --trace-dir /tmp/self-correcting-agent-traces
+kagent-doctor --trace-dir /tmp/kagent-traces
 ```
 
 For externally exposed deployments, enforce bearer auth in the self-check:
 
 ```sh
-self-correcting-agent-doctor --require-auth --trace-dir /tmp/self-correcting-agent-traces
+kagent-doctor --require-auth --trace-dir /tmp/kagent-traces
 ```
 
 For production release gates, use the stronger policy check:
 
 ```sh
-self-correcting-agent-doctor --production --trace-dir /tmp/self-correcting-agent-traces
+kagent-doctor --production --trace-dir /tmp/kagent-traces
 ```
 
 `--production` fails unless bearer auth, diagnostic endpoint protection, trace
@@ -53,12 +53,11 @@ For deployments that depend on real Codex-style runtime planning, add the
 provider gate:
 
 ```sh
-SELF_CORRECTING_LLM_BASE_URL="${PROVIDER_BASE_URL}" \
-SELF_CORRECTING_LLM_API_KEY="${PROVIDER_API_KEY}" \
-SELF_CORRECTING_LLM_MODEL="agent-runtime-model" \
-SELF_CORRECTING_SERVICE_RUNTIME_MAX_ITERATIONS=2 \
-self-correcting-agent-doctor --production --require-runtime-provider \
-  --trace-dir /tmp/self-correcting-agent-traces
+# KAGENT_LLM_BASE_URL, KAGENT_LLM_API_KEY, and KAGENT_LLM_MODEL
+# must already be set in your shell or secret manager.
+KAGENT_SERVICE_RUNTIME_MAX_ITERATIONS=2 \
+kagent-doctor --production --require-runtime-provider \
+  --trace-dir /tmp/kagent-traces
 ```
 
 This rejects missing provider settings with `llm_base_url_required`,
@@ -69,88 +68,88 @@ runtime budgets with `runtime_iterations_too_low`.
 
 The service reads these environment variables:
 
-- `SELF_CORRECTING_SERVICE_HOST`: bind host, default `127.0.0.1`.
-- `SELF_CORRECTING_SERVICE_PORT`: bind port, default `8000`.
-- `SELF_CORRECTING_SERVICE_MAX_REQUEST_BYTES`: maximum request body size,
+- `KAGENT_SERVICE_HOST`: bind host, default `127.0.0.1`.
+- `KAGENT_SERVICE_PORT`: bind port, default `8000`.
+- `KAGENT_SERVICE_MAX_REQUEST_BYTES`: maximum request body size,
   default `65536`.
-- `SELF_CORRECTING_SERVICE_MAX_GOAL_CHARS`: maximum accepted `/run` goal text
+- `KAGENT_SERVICE_MAX_GOAL_CHARS`: maximum accepted `/run` goal text
   length, default `4096`.
-- `SELF_CORRECTING_SERVICE_AUTH_TOKEN`: optional bearer token for `POST /run`.
-  Use `self-correcting-agent-doctor --require-auth` in release automation when
+- `KAGENT_SERVICE_AUTH_TOKEN`: optional bearer token for `POST /run`.
+  Use `kagent-doctor --require-auth` in release automation when
   this service is reachable outside localhost, or `--production` when the gate
   should also require diagnostic endpoint protection, trace persistence, rate
   limiting, and bounded concurrency. `--require-auth` rejects placeholder tokens
   with `auth_token_placeholder`. Production gates require this token to be at least 16 characters and reject placeholders such as
   `replace-with-a-long-random-token` with `auth_token_placeholder`.
-- `SELF_CORRECTING_SERVICE_AUTH_TOKENS`: optional JSON object for internal
+- `KAGENT_SERVICE_AUTH_TOKENS`: optional JSON object for internal
   company deployments that need multiple bearer tokens, for example
   `{"team-a":"...","ops":"..."}`. The object keys become redacted
   `auth_subject` audit labels and per-subject rate-limit keys; raw tokens are
   never logged.
-- `SELF_CORRECTING_SERVICE_RATE_LIMIT_PER_MINUTE`: per-client `/run` request
+- `KAGENT_SERVICE_RATE_LIMIT_PER_MINUTE`: per-client `/run` request
   limit, default `0` for disabled.
-- `SELF_CORRECTING_SERVICE_MAX_CONCURRENT_RUNS`: maximum in-flight `/run`
+- `KAGENT_SERVICE_MAX_CONCURRENT_RUNS`: maximum in-flight `/run`
   executions, default `4`; set `0` to disable this service-level cap.
-- `SELF_CORRECTING_SERVICE_IDEMPOTENCY_CACHE_SIZE`: number of successful
+- `KAGENT_SERVICE_IDEMPOTENCY_CACHE_SIZE`: number of successful
   `POST /run` responses retained for `Idempotency-Key` retry reuse, default
   `0` for disabled.
-- `SELF_CORRECTING_SERVICE_IDEMPOTENCY_CACHE_PATH`: optional SQLite file for
+- `KAGENT_SERVICE_IDEMPOTENCY_CACHE_PATH`: optional SQLite file for
   persistent/shared idempotency reuse across service restarts and same-volume
   replicas. Leave it empty for the in-memory per-process cache. In Kubernetes,
   place it on a `ReadWriteMany` volume if more than one replica should share
   retry responses.
-- `SELF_CORRECTING_SERVICE_RUNTIME_ALLOWED_TOOLS`: optional comma-separated
+- `KAGENT_SERVICE_RUNTIME_ALLOWED_TOOLS`: optional comma-separated
   allowlist for runtime tools that may execute without approval, for example
   `note,artifact,task_list`. Leave it empty for the default policy. Unknown runtime tool names fail service configuration before startup. `/config`,
-  `/metrics`, and Prometheus `self_correcting_agent_build_info` expose the active
+  `/metrics`, and Prometheus `kagent_build_info` expose the active
   `runtime_allowed_tools` value as non-secret rollout metadata.
-- `SELF_CORRECTING_SERVICE_RUNTIME_ALLOWED_TOOLS_BY_SUBJECT`: optional JSON
+- `KAGENT_SERVICE_RUNTIME_ALLOWED_TOOLS_BY_SUBJECT`: optional JSON
   object mapping `auth_subject` values to comma-separated tool lists or arrays
   of tool names, for example `{"team-a":"note,artifact","ops":["note"]}`.
   Subject-specific entries override the global runtime allowlist for matching
   internal bearer tokens. Unknown runtime tool names fail service configuration
   before startup, and rollout metadata exposes only
   `runtime_allowed_tools_by_subject_count`.
-- `SELF_CORRECTING_SERVICE_RUNTIME_MAX_ITERATIONS`: maximum accepted
+- `KAGENT_SERVICE_RUNTIME_MAX_ITERATIONS`: maximum accepted
   Codex-style runtime planner iterations for `/runtime/run` and
   `/runtime/resume`, default `10`.
-- `SELF_CORRECTING_SERVICE_RUNTIME_PENDING_APPROVAL_STALE_SECONDS`: age
+- `KAGENT_SERVICE_RUNTIME_PENDING_APPROVAL_STALE_SECONDS`: age
   threshold used by `/metrics` and `/metrics.prom` stale pending approval
   gauges, default `3600`.
-- `SELF_CORRECTING_SERVICE_ALLOW_FULL_TRACE_RESPONSE`: whether
+- `KAGENT_SERVICE_ALLOW_FULL_TRACE_RESPONSE`: whether
   `full_trace=true` may return complete internal trace bodies over HTTP,
   default `false`. Keep this disabled for normal production traffic and use
   persisted trace files for operator debugging.
-- `SELF_CORRECTING_SERVICE_PROTECT_DIAGNOSTICS`: whether diagnostic GET
+- `KAGENT_SERVICE_PROTECT_DIAGNOSTICS`: whether diagnostic GET
   endpoints require the configured bearer token, default `false`. Production
   doctor gates require this to be `true`; health, readiness, and version
   probes remain public.
-- `SELF_CORRECTING_SERVICE_TRUST_FORWARDED_FOR`: whether rate limiting trusts
+- `KAGENT_SERVICE_TRUST_FORWARDED_FOR`: whether rate limiting trusts
   `X-Forwarded-For`, default `false`; enable only behind a trusted reverse proxy.
-- `SELF_CORRECTING_SERVICE_TRACE_DIR`: optional directory for persisted full
+- `KAGENT_SERVICE_TRACE_DIR`: optional directory for persisted full
   run traces. When set, `/ready` validates that the directory can be created
   and written, `/run` responses include `trace_path`, and trace files are
   atomically replaced after a successful temporary-file write.
-- `SELF_CORRECTING_SERVICE_RUN_TIMEOUT_SECONDS`: maximum wall-clock time for
+- `KAGENT_SERVICE_RUN_TIMEOUT_SECONDS`: maximum wall-clock time for
   one execution route (`/run`, `/runtime/run`, or `/runtime/resume`) before
   returning `504`, default `30`.
-- `SELF_CORRECTING_SERVICE_REQUEST_TIMEOUT_SECONDS`: maximum time to read a
+- `KAGENT_SERVICE_REQUEST_TIMEOUT_SECONDS`: maximum time to read a
   complete HTTP request before returning a structured slow-client timeout,
   default `10`.
-- `SELF_CORRECTING_LLM_BASE_URL`: OpenAI-compatible provider base URL.
-- `SELF_CORRECTING_LLM_API_KEY`: provider bearer token.
-- `SELF_CORRECTING_LLM_MODEL`: chat-completions model name.
-- `SELF_CORRECTING_LLM_TIMEOUT_SECONDS`: provider request timeout, default
+- `KAGENT_LLM_BASE_URL`: OpenAI-compatible provider base URL.
+- `KAGENT_LLM_API_KEY`: provider bearer token.
+- `KAGENT_LLM_MODEL`: chat-completions model name.
+- `KAGENT_LLM_TIMEOUT_SECONDS`: provider request timeout, default
   `30`.
-- `SELF_CORRECTING_LLM_MAX_RETRIES`: transient 429 and 5xx provider retry
+- `KAGENT_LLM_MAX_RETRIES`: transient 429 and 5xx provider retry
   count, default `2`.
-- `SELF_CORRECTING_LLM_RETRY_BACKOFF_SECONDS`: fixed sleep between provider
+- `KAGENT_LLM_RETRY_BACKOFF_SECONDS`: fixed sleep between provider
   retry attempts, default `0.25`. Numeric provider `Retry-After` response
   headers take precedence for retryable HTTP failures.
-- `SELF_CORRECTING_MAX_STEPS`: default max planned steps per run.
-- `SELF_CORRECTING_MAX_RETRIES`: default per-step retry budget.
+- `KAGENT_MAX_STEPS`: default max planned steps per run.
+- `KAGENT_MAX_RETRIES`: default per-step retry budget.
 
-When `SELF_CORRECTING_SERVICE_AUTH_TOKEN` is set, callers must send:
+When `KAGENT_SERVICE_AUTH_TOKEN` is set, callers must send:
 
 ```sh
 Authorization: Bearer <token>
@@ -159,18 +158,18 @@ Authorization: Bearer <token>
 ## systemd
 
 For VM or bare-metal deployments, use
-`deploy/systemd/self-correcting-agent.service` as a starting point. Install the
-package into `/opt/self-correcting-langgraph-agent/.venv`, copy
-`deploy/env.example` to `/etc/self-correcting-agent.env`, adjust values, then
+`deploy/systemd/kagent.service` as a starting point. Install the
+package into `/opt/kagent/.venv`, copy
+`deploy/env.example` to `/etc/kagent.env`, adjust values, then
 enable the unit with systemd. The unit runs with `Restart=on-failure` and basic
 process hardening flags. It also runs
-`self-correcting-agent-doctor --production` as `ExecStartPre`, so the service
-will not start until `/etc/self-correcting-agent.env` provides bearer auth,
+`kagent-doctor --production` as `ExecStartPre`, so the service
+will not start until `/etc/kagent.env` provides bearer auth,
 trace persistence, per-client rate limiting, and bounded run concurrency.
-The unit declares `StateDirectory=self-correcting-agent` and
-`ReadWritePaths=/var/lib/self-correcting-agent`, then uses `ProtectSystem=strict`
+The unit declares `StateDirectory=kagent` and
+`ReadWritePaths=/var/lib/kagent`, then uses `ProtectSystem=strict`
 so persisted traces have an explicit writable state boundary. The unit passes
-`--trace-dir /var/lib/self-correcting-agent/traces` to both the production
+`--trace-dir /var/lib/kagent/traces` to both the production
 doctor and the service process so trace persistence is validated before startup
 and used at runtime.
 It also sets `UMask=0077` so newly written trace and state files default to
@@ -184,21 +183,21 @@ The unit declares cgroup resource boundaries with `MemoryMax=1G`,
 `CPUQuota=100%`, and `TasksMax=64`; tune these values for larger production
 hosts after observing `/metrics` and supervisor memory pressure.
 The unit sets `TimeoutStopSec=45`, which is longer than the default
-`SELF_CORRECTING_SERVICE_RUN_TIMEOUT_SECONDS=30`, so systemd gives the service
+`KAGENT_SERVICE_RUN_TIMEOUT_SECONDS=30`, so systemd gives the service
 time to handle `SIGTERM`, close the HTTP server, and let bounded runs finish
 before sending a final kill signal.
 
 ## Kubernetes
 
-Use `deploy/kubernetes/self-correcting-agent.yaml` as a production-oriented
+Use `deploy/kubernetes/kagent.yaml` as a production-oriented
 cluster starting point:
 
 ```sh
-kubectl apply -f deploy/kubernetes/self-correcting-agent.yaml
+kubectl apply -f deploy/kubernetes/kagent.yaml
 ```
 
 Before applying it to a real cluster, replace
-`SELF_CORRECTING_SERVICE_AUTH_TOKEN` in the Secret with a long random token and
+`KAGENT_SERVICE_AUTH_TOKEN` in the Secret with a long random token and
 update the image reference to an immutable registry tag. The checked-in
 `replace-with-a-long-random-token` value is intentionally a deployment
 placeholder; the initContainer production doctor rejects it with
@@ -209,11 +208,11 @@ updates, `minReadySeconds`, `progressDeadlineSeconds`,
 `topologySpreadConstraints` that prefer spreading service pods across nodes by
 `kubernetes.io/hostname`, and a ClusterIP Service.
 
-The Deployment runs `self-correcting-agent-doctor --production` as an
+The Deployment runs `kagent-doctor --production` as an
 initContainer before the service starts. The service container uses a
 `startupProbe` against `/ready` so cold starts, trace PVC setup, and readiness
 dependency checks can finish before liveness restarts are considered. When
-`SELF_CORRECTING_SERVICE_IDEMPOTENCY_CACHE_PATH` is set, both the production
+`KAGENT_SERVICE_IDEMPOTENCY_CACHE_PATH` is set, both the production
 doctor initContainer and `/ready` validate SQLite idempotency persistence before
 traffic is accepted. Readiness and liveness probes target `/ready` and `/health`, and Prometheus scrape
 annotations point at `/metrics.prom`. The trace PVC uses `ReadWriteMany`
@@ -236,7 +235,7 @@ repeat it on each container security context so admission policies and image
 scanners can verify the runtime syscall profile without depending on inherited
 defaults.
 The manifest also includes a `CronJob` that runs
-`self-correcting-agent-trace-prune` against the same trace volume every day and
+`kagent-trace-prune` against the same trace volume every day and
 deletes old terminal Codex-style runtime trace JSON files older than 7 days
 with `--runtime-only`. That mode protects pending `requires_approval` traces
 by default and reports `protected_pending` plus `matched_by_status`. Run the
@@ -244,21 +243,21 @@ command without `--delete` first when changing the retention window so
 operators can review the JSON dry-run summary before applying a destructive
 cleanup.
 The pod sets `terminationGracePeriodSeconds: 45`, which is longer than the
-default `SELF_CORRECTING_SERVICE_RUN_TIMEOUT_SECONDS=30`, so Kubernetes gives
+default `KAGENT_SERVICE_RUN_TIMEOUT_SECONDS=30`, so Kubernetes gives
 the service time to handle `SIGTERM`, close the HTTP server, and let bounded
 runs return controlled responses before the container is killed.
 
 The manifest also includes a `PodDisruptionBudget` with `minAvailable: 1` for
 voluntary disruption protection and a `NetworkPolicy` that permits service
 ingress on port `8000` only from pods whose namespace and pod labels both set
-`self-correcting-agent-access: "true"`, while restricting egress to DNS and
+`kagent-access: "true"`, while restricting egress to DNS and
 HTTPS. Label the ingress gateway, monitoring scraper, or internal caller
 namespace and pods before relying on the policy in a real cluster.
 
 Prometheus alerting rules live in
-`deploy/prometheus/self-correcting-agent-rules.yaml`. Prometheus Operator
+`deploy/prometheus/kagent-rules.yaml`. Prometheus Operator
 clusters can apply
-`deploy/prometheus/self-correcting-agent-servicemonitor.yaml` to scrape the
+`deploy/prometheus/kagent-servicemonitor.yaml` to scrape the
 ClusterIP Service through a `ServiceMonitor`; clusters without the
 `monitoring.coreos.com` CRDs can continue using the pod scrape annotations in
 the base Kubernetes manifest. Load the rules into your Prometheus or Prometheus
@@ -273,7 +272,7 @@ idempotency cache eviction, request body timeout,
 `SelfCorrectingAgentMalformedRunRequests`,
 `SelfCorrectingAgentOversizedRunRequests`, and unknown route or method alerts.
 Grafana dashboard JSON for the same runtime signals lives in
-`deploy/grafana/self-correcting-agent-dashboard.json`; import it after the
+`deploy/grafana/kagent-dashboard.json`; import it after the
 Prometheus datasource is available to get baseline service health, HTTP error,
 runtime latency, per-subject usage/outcome, resume, approval, and tool-error
 panels.
@@ -313,11 +312,11 @@ failure triage, trace correlation, and retry correlation without logging raw
 idempotency keys. Successful `/run` responses include `X-Run-ID`, and include
 `X-Trace-Path` when trace persistence writes a trace artifact.
 
-Set `SELF_CORRECTING_SERVICE_RUN_TIMEOUT_SECONDS` below the upstream reverse
+Set `KAGENT_SERVICE_RUN_TIMEOUT_SECONDS` below the upstream reverse
 proxy timeout so slow execution routes return a controlled JSON `504` response.
-Set `SELF_CORRECTING_SERVICE_REQUEST_TIMEOUT_SECONDS` low enough to close
+Set `KAGENT_SERVICE_REQUEST_TIMEOUT_SECONDS` low enough to close
 slow or incomplete HTTP requests before they hold handler threads for too long.
-Set `SELF_CORRECTING_SERVICE_MAX_CONCURRENT_RUNS` according to CPU and memory
+Set `KAGENT_SERVICE_MAX_CONCURRENT_RUNS` according to CPU and memory
 capacity so slow runs cannot starve health, readiness, or metrics probes.
 The service handles `SIGTERM` by closing the HTTP server and exiting with
 status `143`, which lets Docker, systemd, and Kubernetes treat planned stops

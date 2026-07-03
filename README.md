@@ -1,4 +1,4 @@
-# Self-Correcting LangGraph Agent
+# Kagent
 
 Production-shaped LangGraph agent runtime for internal, non-coding workflows.
 
@@ -24,24 +24,24 @@ scripts/run_checks.sh
 Run a deterministic goal:
 
 ```sh
-.venv/bin/python -m self_correcting_langgraph_agent.cli "calculate 2 + 3"
+.venv/bin/python -m kagent.cli "calculate 2 + 3"
 ```
 
 Start the LLM-backed terminal agent after setting provider environment
 variables:
 
 ```sh
-# Set SELF_CORRECTING_LLM_BASE_URL, SELF_CORRECTING_LLM_API_KEY, and
-# SELF_CORRECTING_LLM_MODEL in your shell or secret manager.
+# Set KAGENT_LLM_BASE_URL, KAGENT_LLM_API_KEY, and
+# KAGENT_LLM_MODEL in your shell or secret manager.
 
-.venv/bin/python -m self_correcting_langgraph_agent.cli
+.venv/bin/python -m kagent.cli
 ```
 
 After package installation, the console entrypoint is the same daily-use
 interface:
 
 ```sh
-self-correcting-agent
+kagent
 ```
 
 TTY sessions show live progress and a compact operator transcript by default.
@@ -74,7 +74,7 @@ compact fields such as `progress_event_count` for timeline-oriented UIs.
 Start the local HTTP service:
 
 ```sh
-self-correcting-agent-serve --host 127.0.0.1 --port 8000
+kagent-serve --host 127.0.0.1 --port 8000
 ```
 
 Useful endpoints include:
@@ -92,17 +92,17 @@ tool policy, diagnostics protection, and production preflight checks.
 
 ## Code Organization
 
-- `src/self_correcting_langgraph_agent/core/`: deterministic LangGraph loop.
-- `src/self_correcting_langgraph_agent/runtime/`: LLM runtime, policies, tools,
+- `src/kagent/core/`: deterministic LangGraph loop.
+- `src/kagent/runtime/`: LLM runtime, policies, tools,
   and typed runtime data.
-- `src/self_correcting_langgraph_agent/service/`: stdlib HTTP service, routing,
+- `src/kagent/service/`: stdlib HTTP service, routing,
   status, approvals, resume/cancel, trace store, and transport helpers.
-- `src/self_correcting_langgraph_agent/cli/`: command line and interactive
+- `src/kagent/cli/`: command line and interactive
   terminal UI.
-- `src/self_correcting_langgraph_agent/providers/`: OpenAI-compatible provider
+- `src/kagent/providers/`: OpenAI-compatible provider
   and fake provider test support.
-- `src/self_correcting_langgraph_agent/eval/`: evaluation cases and runner.
-- `src/self_correcting_langgraph_agent/ops/`: doctor, metrics, release
+- `src/kagent/eval/`: evaluation cases and runner.
+- `src/kagent/ops/`: doctor, metrics, release
   evidence, release manifest, batch, and trace replay commands.
 
 ## Console Scripts
@@ -110,16 +110,16 @@ tool policy, diagnostics protection, and production preflight checks.
 Installed entry points:
 
 ```sh
-self-correcting-agent --version
-self-correcting-agent-batch /tmp/goals.jsonl /tmp/results.jsonl
-self-correcting-agent-doctor --production --require-runtime-provider
-self-correcting-agent-eval --list-cases
-self-correcting-agent-metrics /tmp/self-correcting-agent-continuous.jsonl
-self-correcting-agent-release-evidence --help
-self-correcting-agent-release-manifest --help
-self-correcting-agent-serve --host 127.0.0.1 --port 8000
-self-correcting-agent-trace-prune /tmp/self-correcting-agent-traces --max-age-days 7
-self-correcting-agent-trace-replay /tmp/self-correcting-agent-traces/RUN_ID.json
+kagent --version
+kagent-batch /tmp/goals.jsonl /tmp/results.jsonl
+kagent-doctor --production --require-runtime-provider
+kagent-eval --list-cases
+kagent-metrics /tmp/kagent-continuous.jsonl
+kagent-release-evidence --help
+kagent-release-manifest --help
+kagent-serve --host 127.0.0.1 --port 8000
+kagent-trace-prune /tmp/kagent-traces --max-age-days 7
+kagent-trace-replay /tmp/kagent-traces/RUN_ID.json
 ```
 
 ## Release And Operations
@@ -151,7 +151,7 @@ These scripts emit redacted evidence and are documented in
 Stable package-level imports are available for automation:
 
 ```python
-from self_correcting_langgraph_agent import (
+from kagent import (
     FakeLLMProvider,
     evaluate_agent,
     preview_plan,
@@ -166,7 +166,7 @@ from self_correcting_langgraph_agent import (
 Example deterministic runtime test:
 
 ```python
-from self_correcting_langgraph_agent import FakeLLMProvider, run_runtime_agent
+from kagent import FakeLLMProvider, run_runtime_agent
 
 provider = FakeLLMProvider(
     '{"actions":[{"id":"step-1","tool":"note","input":{"text":"hello"}}]}'

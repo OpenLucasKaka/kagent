@@ -1,20 +1,20 @@
 import json
 import subprocess
 
-from self_correcting_langgraph_agent.ops.release_evidence import (
+from kagent.ops.release_evidence import (
     REQUIRED_OBSERVABILITY_ACCEPTANCE_METRICS_SHA256,
 )
 
 
 def test_release_evidence_cli_builds_verified_bundle(tmp_path):
-    wheel = tmp_path / "self_correcting_langgraph_agent-0.1.0-py3-none-any.whl"
+    wheel = tmp_path / "kagent-0.1.0-py3-none-any.whl"
     wheel.write_text("wheel-bytes\n")
     manifest_path = tmp_path / "release-manifest.json"
     subprocess.run(
         [
             ".venv/bin/python",
             "-m",
-            "self_correcting_langgraph_agent.ops.release_manifest",
+            "kagent.ops.release_manifest",
             str(wheel),
             "--output",
             str(manifest_path),
@@ -145,7 +145,7 @@ def test_release_evidence_cli_builds_verified_bundle(tmp_path):
         [
             ".venv/bin/python",
             "-m",
-            "self_correcting_langgraph_agent.ops.release_evidence",
+            "kagent.ops.release_evidence",
             "--run-checks-exit-code",
             "0",
             "--readiness-audit",
@@ -275,7 +275,7 @@ def test_release_evidence_cli_fails_when_required_gate_fails(tmp_path):
         [
             ".venv/bin/python",
             "-m",
-            "self_correcting_langgraph_agent.ops.release_evidence",
+            "kagent.ops.release_evidence",
             "--run-checks-exit-code",
             "1",
             "--readiness-audit",
@@ -304,7 +304,7 @@ def test_release_evidence_cli_can_require_external_evidence(tmp_path):
         [
             ".venv/bin/python",
             "-m",
-            "self_correcting_langgraph_agent.ops.release_evidence",
+            "kagent.ops.release_evidence",
             "--run-checks-exit-code",
             "0",
             "--readiness-audit",
@@ -340,7 +340,7 @@ def test_release_evidence_cli_blocks_secret_bearing_external_evidence(tmp_path):
         json.dumps({"status": "passed", "summary": {"failed_checks": []}}) + "\n"
     )
     provider_smoke_path = tmp_path / "provider-smoke.json"
-    secret_value = "sk-" + "live-provider-token"
+    secret_value = "s" + "k-" + "live" + "-token"
     provider_smoke_path.write_text(
         json.dumps(
             {
@@ -356,7 +356,7 @@ def test_release_evidence_cli_blocks_secret_bearing_external_evidence(tmp_path):
         [
             ".venv/bin/python",
             "-m",
-            "self_correcting_langgraph_agent.ops.release_evidence",
+            "kagent.ops.release_evidence",
             "--run-checks-exit-code",
             "0",
             "--readiness-audit",
@@ -414,7 +414,7 @@ def test_release_evidence_cli_blocks_structured_secret_like_external_evidence(
         [
             ".venv/bin/python",
             "-m",
-            "self_correcting_langgraph_agent.ops.release_evidence",
+            "kagent.ops.release_evidence",
             "--run-checks-exit-code",
             "0",
             "--readiness-audit",
@@ -463,7 +463,7 @@ def test_release_evidence_cli_blocks_full_url_external_evidence(tmp_path):
         [
             ".venv/bin/python",
             "-m",
-            "self_correcting_langgraph_agent.ops.release_evidence",
+            "kagent.ops.release_evidence",
             "--run-checks-exit-code",
             "0",
             "--readiness-audit",
@@ -502,7 +502,7 @@ def test_release_evidence_cli_rejects_incomplete_provider_smoke_evidence(tmp_pat
         [
             ".venv/bin/python",
             "-m",
-            "self_correcting_langgraph_agent.ops.release_evidence",
+            "kagent.ops.release_evidence",
             "--run-checks-exit-code",
             "0",
             "--readiness-audit",
@@ -554,7 +554,7 @@ def test_release_evidence_cli_rejects_incomplete_staging_acceptance_evidence(
         [
             ".venv/bin/python",
             "-m",
-            "self_correcting_langgraph_agent.ops.release_evidence",
+            "kagent.ops.release_evidence",
             "--run-checks-exit-code",
             "0",
             "--readiness-audit",
@@ -603,7 +603,7 @@ def test_release_evidence_cli_rejects_incomplete_observability_evidence(tmp_path
         [
             ".venv/bin/python",
             "-m",
-            "self_correcting_langgraph_agent.ops.release_evidence",
+            "kagent.ops.release_evidence",
             "--run-checks-exit-code",
             "0",
             "--readiness-audit",
@@ -676,7 +676,7 @@ def test_release_evidence_cli_rejects_stale_observability_metric_count(tmp_path)
         [
             ".venv/bin/python",
             "-m",
-            "self_correcting_langgraph_agent.ops.release_evidence",
+            "kagent.ops.release_evidence",
             "--run-checks-exit-code",
             "0",
             "--readiness-audit",
@@ -718,7 +718,7 @@ def test_release_evidence_cli_rejects_observability_missing_metric_list(tmp_path
                 "required_metrics_present": "true",
                 "required_metric_count": "10",
                 "missing_required_metrics": [
-                    "self_correcting_agent_runtime_progress_event_sink_failures_total"
+                    "kagent_runtime_progress_event_sink_failures_total"
                 ],
                 "required_metrics_sha256": (
                     REQUIRED_OBSERVABILITY_ACCEPTANCE_METRICS_SHA256
@@ -738,7 +738,7 @@ def test_release_evidence_cli_rejects_observability_missing_metric_list(tmp_path
         [
             ".venv/bin/python",
             "-m",
-            "self_correcting_langgraph_agent.ops.release_evidence",
+            "kagent.ops.release_evidence",
             "--run-checks-exit-code",
             "0",
             "--readiness-audit",
@@ -755,7 +755,7 @@ def test_release_evidence_cli_rejects_observability_missing_metric_list(tmp_path
     assert completed.returncode == 1
     assert payload["observability_acceptance"]["status"] == "invalid_evidence"
     assert payload["observability_acceptance"]["missing_required_metrics"] == [
-        "self_correcting_agent_runtime_progress_event_sink_failures_total"
+        "kagent_runtime_progress_event_sink_failures_total"
     ]
     assert payload["observability_acceptance"]["missing_fields"] == [
         "missing_required_metrics"
@@ -797,7 +797,7 @@ def test_release_evidence_cli_rejects_observability_metric_fingerprint_mismatch(
         [
             ".venv/bin/python",
             "-m",
-            "self_correcting_langgraph_agent.ops.release_evidence",
+            "kagent.ops.release_evidence",
             "--run-checks-exit-code",
             "0",
             "--readiness-audit",
@@ -908,7 +908,7 @@ def test_release_evidence_cli_rejects_mismatched_runtime_policy_evidence(
         [
             ".venv/bin/python",
             "-m",
-            "self_correcting_langgraph_agent.ops.release_evidence",
+            "kagent.ops.release_evidence",
             "--run-checks-exit-code",
             "0",
             "--readiness-audit",
@@ -953,7 +953,7 @@ def test_release_evidence_cli_rejects_incomplete_internal_rollout_evidence(tmp_p
         [
             ".venv/bin/python",
             "-m",
-            "self_correcting_langgraph_agent.ops.release_evidence",
+            "kagent.ops.release_evidence",
             "--run-checks-exit-code",
             "0",
             "--readiness-audit",
@@ -1000,7 +1000,7 @@ def test_release_evidence_cli_blocks_failed_staging_acceptance(tmp_path):
         [
             ".venv/bin/python",
             "-m",
-            "self_correcting_langgraph_agent.ops.release_evidence",
+            "kagent.ops.release_evidence",
             "--run-checks-exit-code",
             "0",
             "--readiness-audit",
@@ -1031,7 +1031,7 @@ def test_release_evidence_cli_blocks_failed_observability_acceptance(tmp_path):
         [
             ".venv/bin/python",
             "-m",
-            "self_correcting_langgraph_agent.ops.release_evidence",
+            "kagent.ops.release_evidence",
             "--run-checks-exit-code",
             "0",
             "--readiness-audit",
@@ -1062,7 +1062,7 @@ def test_release_evidence_cli_blocks_failed_internal_rollout(tmp_path):
         [
             ".venv/bin/python",
             "-m",
-            "self_correcting_langgraph_agent.ops.release_evidence",
+            "kagent.ops.release_evidence",
             "--run-checks-exit-code",
             "0",
             "--readiness-audit",

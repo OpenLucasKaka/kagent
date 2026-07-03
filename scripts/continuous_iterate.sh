@@ -5,10 +5,10 @@ cd "$(dirname "$0")/.."
 
 DURATION_SECONDS="${1:-18000}"
 INTERVAL_SECONDS="${2:-60}"
-LOG_FILE="${3:-/tmp/self-correcting-agent-continuous.log}"
-METRICS_FILE="${4:-/tmp/self-correcting-agent-continuous.jsonl}"
-CHECK_COMMAND="${SELF_CORRECTING_CHECK_COMMAND:-scripts/run_checks.sh}"
-EVAL_FILE="${SELF_CORRECTING_EVAL_FILE:-/tmp/self-correcting-agent-eval.json}"
+LOG_FILE="${3:-/tmp/kagent-continuous.log}"
+METRICS_FILE="${4:-/tmp/kagent-continuous.jsonl}"
+CHECK_COMMAND="${KAGENT_CHECK_COMMAND:-scripts/run_checks.sh}"
+EVAL_FILE="${KAGENT_EVAL_FILE:-/tmp/kagent-eval.json}"
 END_AT=$(( $(date +%s) + DURATION_SECONDS ))
 ITERATION=1
 

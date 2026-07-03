@@ -14,7 +14,7 @@ require_env() {
     fi
 }
 
-require_env SELF_CORRECTING_OBSERVABILITY_BASE_URL
+require_env KAGENT_OBSERVABILITY_BASE_URL
 
 "$PYTHON_BIN" - <<'PY'
 import hashlib
@@ -26,46 +26,46 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
-base_url = os.environ["SELF_CORRECTING_OBSERVABILITY_BASE_URL"].rstrip("/")
-secret = os.environ.get("SELF_CORRECTING_OBSERVABILITY_TOKEN", "")
+base_url = os.environ["KAGENT_OBSERVABILITY_BASE_URL"].rstrip("/")
+secret = os.environ.get("KAGENT_OBSERVABILITY_TOKEN", "")
 timeout_seconds = float(
-    os.environ.get("SELF_CORRECTING_OBSERVABILITY_TIMEOUT_SECONDS", "30")
+    os.environ.get("KAGENT_OBSERVABILITY_TIMEOUT_SECONDS", "30")
 )
 metrics_path = os.environ.get(
-    "SELF_CORRECTING_OBSERVABILITY_METRICS_PATH", "/metrics.prom"
+    "KAGENT_OBSERVABILITY_METRICS_PATH", "/metrics.prom"
 )
-prometheus_base_url = os.environ.get("SELF_CORRECTING_PROMETHEUS_BASE_URL", "").rstrip("/")
-prometheus_secret = os.environ.get("SELF_CORRECTING_PROMETHEUS_TOKEN", "")
+prometheus_base_url = os.environ.get("KAGENT_PROMETHEUS_BASE_URL", "").rstrip("/")
+prometheus_secret = os.environ.get("KAGENT_PROMETHEUS_TOKEN", "")
 prometheus_query = os.environ.get(
-    "SELF_CORRECTING_PROMETHEUS_QUERY", "self_correcting_agent_build_info"
+    "KAGENT_PROMETHEUS_QUERY", "kagent_build_info"
 )
 
 parsed = urllib.parse.urlparse(base_url)
 if parsed.scheme not in {"http", "https"} or not parsed.netloc:
-    raise SystemExit("SELF_CORRECTING_OBSERVABILITY_BASE_URL must be an http(s) URL")
+    raise SystemExit("KAGENT_OBSERVABILITY_BASE_URL must be an http(s) URL")
 if parsed.username or parsed.password:
-    raise SystemExit("SELF_CORRECTING_OBSERVABILITY_BASE_URL must not contain credentials")
+    raise SystemExit("KAGENT_OBSERVABILITY_BASE_URL must not contain credentials")
 if not metrics_path.startswith("/"):
-    raise SystemExit("SELF_CORRECTING_OBSERVABILITY_METRICS_PATH must start with /")
+    raise SystemExit("KAGENT_OBSERVABILITY_METRICS_PATH must start with /")
 prometheus_parsed = None
 if prometheus_base_url:
     prometheus_parsed = urllib.parse.urlparse(prometheus_base_url)
     if prometheus_parsed.scheme not in {"http", "https"} or not prometheus_parsed.netloc:
-        raise SystemExit("SELF_CORRECTING_PROMETHEUS_BASE_URL must be an http(s) URL")
+        raise SystemExit("KAGENT_PROMETHEUS_BASE_URL must be an http(s) URL")
     if prometheus_parsed.username or prometheus_parsed.password:
-        raise SystemExit("SELF_CORRECTING_PROMETHEUS_BASE_URL must not contain credentials")
+        raise SystemExit("KAGENT_PROMETHEUS_BASE_URL must not contain credentials")
 
 required_metrics = [
-    "self_correcting_agent_requests_total",
-    "self_correcting_agent_responses_total",
-    "self_correcting_agent_request_duration_seconds_bucket",
-    "self_correcting_agent_runtime_runs_total",
-    "self_correcting_agent_runtime_run_duration_seconds_bucket",
-    "self_correcting_agent_runtime_approval_required_total",
-    "self_correcting_agent_runtime_stale_pending_approvals_current",
-    "self_correcting_agent_runtime_progress_event_sink_failures_total",
-    "self_correcting_agent_runtime_runs_by_auth_subject_total",
-    "self_correcting_agent_build_info",
+    "kagent_requests_total",
+    "kagent_responses_total",
+    "kagent_request_duration_seconds_bucket",
+    "kagent_runtime_runs_total",
+    "kagent_runtime_run_duration_seconds_bucket",
+    "kagent_runtime_approval_required_total",
+    "kagent_runtime_stale_pending_approvals_current",
+    "kagent_runtime_progress_event_sink_failures_total",
+    "kagent_runtime_runs_by_auth_subject_total",
+    "kagent_build_info",
 ]
 
 
@@ -112,7 +112,7 @@ def file_sha256(path):
 
 
 def grafana_status():
-    path = Path("deploy/grafana/self-correcting-agent-dashboard.json")
+    path = Path("deploy/grafana/kagent-dashboard.json")
     if not path.is_file():
         return "missing", ""
     try:
@@ -126,7 +126,7 @@ def grafana_status():
 
 
 def prometheus_rules_status():
-    path = Path("deploy/prometheus/self-correcting-agent-rules.yaml")
+    path = Path("deploy/prometheus/kagent-rules.yaml")
     if not path.is_file():
         return "missing", ""
     text = path.read_text(encoding="utf-8")

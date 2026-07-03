@@ -3,7 +3,7 @@ import subprocess
 
 import pytest
 
-from self_correcting_langgraph_agent.eval.evaluator import (
+from kagent.eval.evaluator import (
     _exit_code_for_report,
     _run_case,
     evaluate_agent,
@@ -90,7 +90,7 @@ def test_evaluator_module_prints_json_report():
         [
             ".venv/bin/python",
             "-m",
-            "self_correcting_langgraph_agent.eval.evaluator",
+            "kagent.eval.evaluator",
         ],
         check=True,
         capture_output=True,
@@ -132,7 +132,7 @@ def test_evaluator_module_accepts_category_filter():
         [
             ".venv/bin/python",
             "-m",
-            "self_correcting_langgraph_agent.eval.evaluator",
+            "kagent.eval.evaluator",
             "--category",
             "recovery",
         ],
@@ -153,7 +153,7 @@ def test_evaluator_module_accepts_case_filter():
         [
             ".venv/bin/python",
             "-m",
-            "self_correcting_langgraph_agent.eval.evaluator",
+            "kagent.eval.evaluator",
             "--case",
             "subtraction_tool_success",
         ],
@@ -181,7 +181,7 @@ def test_evaluator_module_can_list_cases_without_running_them():
         [
             ".venv/bin/python",
             "-m",
-            "self_correcting_langgraph_agent.eval.evaluator",
+            "kagent.eval.evaluator",
             "--list-cases",
         ],
         check=True,
@@ -205,7 +205,7 @@ def test_evaluator_module_can_write_report_to_output_file(tmp_path):
         [
             ".venv/bin/python",
             "-m",
-            "self_correcting_langgraph_agent.eval.evaluator",
+            "kagent.eval.evaluator",
             "--case",
             "subtraction_tool_success",
             "--output",
@@ -225,7 +225,7 @@ def test_evaluator_module_accepts_fail_on_failure_flag_when_report_passes():
         [
             ".venv/bin/python",
             "-m",
-            "self_correcting_langgraph_agent.eval.evaluator",
+            "kagent.eval.evaluator",
             "--case",
             "subtraction_tool_success",
             "--fail-on-failure",
@@ -262,7 +262,7 @@ def test_evaluator_module_reports_unknown_filter_without_traceback():
         [
             ".venv/bin/python",
             "-m",
-            "self_correcting_langgraph_agent.eval.evaluator",
+            "kagent.eval.evaluator",
             "--category",
             "typo",
         ],

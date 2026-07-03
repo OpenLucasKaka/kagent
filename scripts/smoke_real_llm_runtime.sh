@@ -4,7 +4,7 @@ set -eu
 cd "$(dirname "$0")/.."
 
 PYTHON_BIN="${PYTHON_BIN:-.venv/bin/python}"
-SERVICE_BIN="${SERVICE_BIN:-.venv/bin/self-correcting-agent-serve}"
+SERVICE_BIN="${SERVICE_BIN:-.venv/bin/kagent-serve}"
 
 require_env() {
     name="$1"
@@ -15,11 +15,11 @@ require_env() {
     fi
 }
 
-require_env SELF_CORRECTING_LLM_BASE_URL
-require_env SELF_CORRECTING_LLM_API_KEY
-require_env SELF_CORRECTING_LLM_MODEL
+require_env KAGENT_LLM_BASE_URL
+require_env KAGENT_LLM_API_KEY
+require_env KAGENT_LLM_MODEL
 
-export SELF_CORRECTING_LLM_TIMEOUT_SECONDS="${SELF_CORRECTING_LLM_TIMEOUT_SECONDS:-60}"
+export KAGENT_LLM_TIMEOUT_SECONDS="${KAGENT_LLM_TIMEOUT_SECONDS:-60}"
 
 PORT="$("$PYTHON_BIN" - <<'PY'
 import socket
@@ -30,8 +30,8 @@ print(sock.getsockname()[1])
 sock.close()
 PY
 )"
-TRACE_DIR="$(mktemp -d "${TMPDIR:-/tmp}/self-correcting-real-llm-traces.XXXXXX")"
-SERVICE_LOG="${SERVICE_LOG:-/tmp/self-correcting-real-llm-service.log}"
+TRACE_DIR="$(mktemp -d "${TMPDIR:-/tmp}/kagent-real-llm-traces.XXXXXX")"
+SERVICE_LOG="${SERVICE_LOG:-/tmp/kagent-real-llm-service.log}"
 
 "$SERVICE_BIN" --host 127.0.0.1 --port "$PORT" --trace-dir "$TRACE_DIR" \
     --runtime-max-iterations 4 --run-timeout-seconds 120 \
@@ -101,7 +101,7 @@ def run_cli_runtime_with_retries():
     for _attempt in range(3):
         completed = subprocess.run(
             [
-                ".venv/bin/self-correcting-agent",
+                ".venv/bin/kagent",
                 "--runtime",
                 "--max-iterations",
                 "2",
@@ -134,21 +134,21 @@ def payload_contains(value, needle):
 
 
 def provider_snapshot():
-    parsed = urllib.parse.urlparse(os.environ["SELF_CORRECTING_LLM_BASE_URL"])
+    parsed = urllib.parse.urlparse(os.environ["KAGENT_LLM_BASE_URL"])
     return {
         "llm_provider": "openai_compatible",
         "llm_base_url_host": parsed.hostname or "",
-        "llm_model": os.environ["SELF_CORRECTING_LLM_MODEL"],
+        "llm_model": os.environ["KAGENT_LLM_MODEL"],
         "llm_api_key_configured": str(
-            bool(os.environ.get("SELF_CORRECTING_LLM_API_KEY", ""))
+            bool(os.environ.get("KAGENT_LLM_API_KEY", ""))
         ).lower(),
         "llm_timeout_seconds": os.environ.get(
-            "SELF_CORRECTING_LLM_TIMEOUT_SECONDS",
+            "KAGENT_LLM_TIMEOUT_SECONDS",
             "",
         ),
-        "llm_max_retries": os.environ.get("SELF_CORRECTING_LLM_MAX_RETRIES", "0"),
+        "llm_max_retries": os.environ.get("KAGENT_LLM_MAX_RETRIES", "0"),
         "llm_retry_backoff_seconds": os.environ.get(
-            "SELF_CORRECTING_LLM_RETRY_BACKOFF_SECONDS",
+            "KAGENT_LLM_RETRY_BACKOFF_SECONDS",
             "0",
         ),
     }

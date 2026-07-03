@@ -1,6 +1,6 @@
 from http.server import BaseHTTPRequestHandler
 
-from self_correcting_langgraph_agent.service.runtime import (
+from kagent.service.runtime import (
     ServiceConcurrencyLimiter,
     ServiceConfig,
     ServiceIdempotencyCache,
@@ -8,7 +8,7 @@ from self_correcting_langgraph_agent.service.runtime import (
     ServiceRateLimiter,
     SqliteServiceIdempotencyCache,
 )
-from self_correcting_langgraph_agent.service.server import create_threading_server
+from kagent.service.server import create_threading_server
 
 
 class DummyHandler(BaseHTTPRequestHandler):

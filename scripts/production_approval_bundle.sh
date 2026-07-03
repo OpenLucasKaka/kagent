@@ -31,15 +31,15 @@ PY
     esac
 done
 
-PROVIDER_SMOKE_EVIDENCE="${SELF_CORRECTING_PROVIDER_SMOKE_EVIDENCE:-/tmp/self-correcting-agent-provider-smoke.json}"
-STAGING_ACCEPTANCE_EVIDENCE="${SELF_CORRECTING_STAGING_ACCEPTANCE_EVIDENCE:-/tmp/self-correcting-agent-staging-acceptance.json}"
-OBSERVABILITY_ACCEPTANCE_EVIDENCE="${SELF_CORRECTING_OBSERVABILITY_ACCEPTANCE_EVIDENCE:-/tmp/self-correcting-agent-observability-acceptance.json}"
-INTERNAL_ROLLOUT_EVIDENCE="${SELF_CORRECTING_INTERNAL_ROLLOUT_EVIDENCE:-/tmp/self-correcting-agent-internal-rollout.json}"
-RELEASE_MANIFEST="${SELF_CORRECTING_RELEASE_MANIFEST:-/tmp/self-correcting-agent-release-manifest.json}"
-RUN_CHECKS_EXIT_CODE="${SELF_CORRECTING_RUN_CHECKS_EXIT_CODE:-0}"
-READINESS_AUDIT_OUTPUT="${SELF_CORRECTING_READINESS_AUDIT_OUTPUT:-/tmp/self-correcting-agent-production-readiness-audit.json}"
-RELEASE_EVIDENCE_OUTPUT="${SELF_CORRECTING_RELEASE_EVIDENCE_OUTPUT:-/tmp/self-correcting-agent-release-evidence.json}"
-EVIDENCE_MAX_AGE_SECONDS="${SELF_CORRECTING_EVIDENCE_MAX_AGE_SECONDS:-86400}"
+PROVIDER_SMOKE_EVIDENCE="${KAGENT_PROVIDER_SMOKE_EVIDENCE:-/tmp/kagent-provider-smoke.json}"
+STAGING_ACCEPTANCE_EVIDENCE="${KAGENT_STAGING_ACCEPTANCE_EVIDENCE:-/tmp/kagent-staging-acceptance.json}"
+OBSERVABILITY_ACCEPTANCE_EVIDENCE="${KAGENT_OBSERVABILITY_ACCEPTANCE_EVIDENCE:-/tmp/kagent-observability-acceptance.json}"
+INTERNAL_ROLLOUT_EVIDENCE="${KAGENT_INTERNAL_ROLLOUT_EVIDENCE:-/tmp/kagent-internal-rollout.json}"
+RELEASE_MANIFEST="${KAGENT_RELEASE_MANIFEST:-/tmp/kagent-release-manifest.json}"
+RUN_CHECKS_EXIT_CODE="${KAGENT_RUN_CHECKS_EXIT_CODE:-0}"
+READINESS_AUDIT_OUTPUT="${KAGENT_READINESS_AUDIT_OUTPUT:-/tmp/kagent-production-readiness-audit.json}"
+RELEASE_EVIDENCE_OUTPUT="${KAGENT_RELEASE_EVIDENCE_OUTPUT:-/tmp/kagent-release-evidence.json}"
+EVIDENCE_MAX_AGE_SECONDS="${KAGENT_EVIDENCE_MAX_AGE_SECONDS:-86400}"
 
 "$PYTHON_BIN" - \
     "$PROVIDER_SMOKE_EVIDENCE" "provider_smoke" \
@@ -79,7 +79,7 @@ except ValueError:
         json.dumps(
             {
                 "error": "evidence_max_age_invalid",
-                "environment_variable": "SELF_CORRECTING_EVIDENCE_MAX_AGE_SECONDS",
+                "environment_variable": "KAGENT_EVIDENCE_MAX_AGE_SECONDS",
                 "reason": "must_be_integer",
                 "value": sys.argv[1],
             },
@@ -93,7 +93,7 @@ if max_age_seconds <= 0:
         json.dumps(
             {
                 "error": "evidence_max_age_invalid",
-                "environment_variable": "SELF_CORRECTING_EVIDENCE_MAX_AGE_SECONDS",
+                "environment_variable": "KAGENT_EVIDENCE_MAX_AGE_SECONDS",
                 "reason": "must_be_positive",
                 "value": sys.argv[1],
             },
@@ -153,7 +153,7 @@ if "$PYTHON_BIN" scripts/production_readiness_audit.py \
     :
 fi
 
-if "$PYTHON_BIN" -m self_correcting_langgraph_agent.ops.release_evidence \
+if "$PYTHON_BIN" -m kagent.ops.release_evidence \
     --run-checks-exit-code "$RUN_CHECKS_EXIT_CODE" \
     --readiness-audit "$READINESS_AUDIT_OUTPUT" \
     --release-manifest "$RELEASE_MANIFEST" \
@@ -166,7 +166,7 @@ if "$PYTHON_BIN" -m self_correcting_langgraph_agent.ops.release_evidence \
     --internal-rollout-evidence "$INTERNAL_ROLLOUT_EVIDENCE" \
     --require-internal-rollout \
     --output "$RELEASE_EVIDENCE_OUTPUT" \
-    >/tmp/self-correcting-agent-production-approval-bundle-release-evidence.stdout.json; then
+    >/tmp/kagent-production-approval-bundle-release-evidence.stdout.json; then
     :
 fi
 # release_evidence blocks secret-bearing evidence with evidence_secret_detected.

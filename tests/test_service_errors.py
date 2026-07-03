@@ -1,4 +1,4 @@
-from self_correcting_langgraph_agent.service.errors import (
+from kagent.service.errors import (
     ERROR_CODES,
     failure_payload,
 )

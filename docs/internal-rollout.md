@@ -9,10 +9,10 @@ persistence, Prometheus scraping, and provider-backed runtime planning.
 
 Use one primary operator token and named internal subject tokens:
 
-- `SELF_CORRECTING_SERVICE_AUTH_TOKEN`: primary operator/admin token.
-- `SELF_CORRECTING_SERVICE_AUTH_TOKENS`: JSON map of stable team subjects to
+- `KAGENT_SERVICE_AUTH_TOKEN`: primary operator/admin token.
+- `KAGENT_SERVICE_AUTH_TOKENS`: JSON map of stable team subjects to
   bearer tokens, for example `{"team-a":"...","ops":"..."}`.
-- `SELF_CORRECTING_SERVICE_PROTECT_DIAGNOSTICS=true`: protect `/config`,
+- `KAGENT_SERVICE_PROTECT_DIAGNOSTICS=true`: protect `/config`,
   `/tools`, `/runtime/tools`, `/metrics`, `/metrics.prom`, `/openapi.json`,
   `/runtime/runs`, and `/runtime/runs/{run_id}` routes.
 
@@ -26,8 +26,8 @@ Start with a narrow direct-execution policy and broaden it per team only after
 reviewing traces:
 
 ```sh
-SELF_CORRECTING_SERVICE_RUNTIME_ALLOWED_TOOLS=note,artifact,task_list
-SELF_CORRECTING_SERVICE_RUNTIME_ALLOWED_TOOLS_BY_SUBJECT='{"ops":"note,artifact,task_list","research":["note","artifact","rubric_score"]}'
+KAGENT_SERVICE_RUNTIME_ALLOWED_TOOLS=note,artifact,task_list
+KAGENT_SERVICE_RUNTIME_ALLOWED_TOOLS_BY_SUBJECT='{"ops":"note,artifact,task_list","research":["note","artifact","rubric_score"]}'
 ```
 
 Unknown tool names fail configuration before startup. Leave `http_request`
@@ -44,51 +44,49 @@ scripts/run_checks.sh
 scripts/smoke_service.sh
 scripts/smoke_internal_runtime.sh
 scripts/production_readiness_audit.py
-self-correcting-agent-doctor --production --trace-dir /tmp/self-correcting-agent-traces
-SELF_CORRECTING_LLM_BASE_URL="${PROVIDER_BASE_URL}" \
-SELF_CORRECTING_LLM_API_KEY="${PROVIDER_API_KEY}" \
-SELF_CORRECTING_LLM_MODEL="agent-runtime-model" \
-SELF_CORRECTING_SERVICE_RUNTIME_MAX_ITERATIONS=2 \
-self-correcting-agent-doctor --production --require-runtime-provider \
-  --trace-dir /tmp/self-correcting-agent-traces
-SELF_CORRECTING_LLM_BASE_URL="${PROVIDER_BASE_URL}" \
-SELF_CORRECTING_LLM_API_KEY="${PROVIDER_API_KEY}" \
-SELF_CORRECTING_LLM_MODEL="agent-runtime-model" \
+kagent-doctor --production --trace-dir /tmp/kagent-traces
+# KAGENT_LLM_BASE_URL, KAGENT_LLM_API_KEY, and KAGENT_LLM_MODEL
+# must already be set in your shell or secret manager.
+KAGENT_SERVICE_RUNTIME_MAX_ITERATIONS=2 \
+kagent-doctor --production --require-runtime-provider \
+  --trace-dir /tmp/kagent-traces
+# KAGENT_LLM_BASE_URL, KAGENT_LLM_API_KEY, and KAGENT_LLM_MODEL
+# must already be set in your shell or secret manager.
 scripts/smoke_real_llm_runtime.sh \
-  >/tmp/self-correcting-agent-provider-smoke.json
-SELF_CORRECTING_STAGING_BASE_URL="https://staging.example.internal" \
-SELF_CORRECTING_STAGING_TOKEN="$TEAM_A_STAGING_TOKEN" \
+  >/tmp/kagent-provider-smoke.json
+KAGENT_STAGING_BASE_URL="https://staging.example.internal" \
+KAGENT_STAGING_TOKEN="$TEAM_A_STAGING_TOKEN" \
 scripts/staging_acceptance.sh \
-  >/tmp/self-correcting-agent-staging-acceptance.json
-SELF_CORRECTING_OBSERVABILITY_BASE_URL="https://staging.example.internal" \
-SELF_CORRECTING_OBSERVABILITY_TOKEN="$TEAM_A_STAGING_TOKEN" \
+  >/tmp/kagent-staging-acceptance.json
+KAGENT_OBSERVABILITY_BASE_URL="https://staging.example.internal" \
+KAGENT_OBSERVABILITY_TOKEN="$TEAM_A_STAGING_TOKEN" \
 scripts/observability_acceptance.sh \
-  >/tmp/self-correcting-agent-observability-acceptance.json
+  >/tmp/kagent-observability-acceptance.json
 scripts/internal_rollout_acceptance.py \
-  --signoff /tmp/self-correcting-agent-internal-rollout-signoff.json \
-  >/tmp/self-correcting-agent-internal-rollout.json
+  --signoff /tmp/kagent-internal-rollout-signoff.json \
+  >/tmp/kagent-internal-rollout.json
 scripts/production_readiness_audit.py \
-  --provider-smoke-evidence /tmp/self-correcting-agent-provider-smoke.json \
+  --provider-smoke-evidence /tmp/kagent-provider-smoke.json \
   --require-provider-smoke \
-  --staging-acceptance-evidence /tmp/self-correcting-agent-staging-acceptance.json \
+  --staging-acceptance-evidence /tmp/kagent-staging-acceptance.json \
   --require-staging-acceptance \
-  --observability-acceptance-evidence /tmp/self-correcting-agent-observability-acceptance.json \
+  --observability-acceptance-evidence /tmp/kagent-observability-acceptance.json \
   --require-observability-acceptance \
-  --internal-rollout-evidence /tmp/self-correcting-agent-internal-rollout.json \
+  --internal-rollout-evidence /tmp/kagent-internal-rollout.json \
   --require-internal-rollout
-self-correcting-agent-release-evidence \
+kagent-release-evidence \
   --run-checks-exit-code 0 \
-  --readiness-audit /tmp/self-correcting-agent-production-readiness-audit.json \
-  --release-manifest /tmp/self-correcting-agent-release-manifest.json \
-  --provider-smoke-evidence /tmp/self-correcting-agent-provider-smoke.json \
+  --readiness-audit /tmp/kagent-production-readiness-audit.json \
+  --release-manifest /tmp/kagent-release-manifest.json \
+  --provider-smoke-evidence /tmp/kagent-provider-smoke.json \
   --require-provider-smoke \
-  --staging-acceptance-evidence /tmp/self-correcting-agent-staging-acceptance.json \
+  --staging-acceptance-evidence /tmp/kagent-staging-acceptance.json \
   --require-staging-acceptance \
-  --observability-acceptance-evidence /tmp/self-correcting-agent-observability-acceptance.json \
+  --observability-acceptance-evidence /tmp/kagent-observability-acceptance.json \
   --require-observability-acceptance \
-  --internal-rollout-evidence /tmp/self-correcting-agent-internal-rollout.json \
+  --internal-rollout-evidence /tmp/kagent-internal-rollout.json \
   --require-internal-rollout \
-  --output /tmp/self-correcting-agent-release-evidence.json
+  --output /tmp/kagent-release-evidence.json
 scripts/production_approval_bundle.sh --strict
 ```
 
@@ -96,8 +94,8 @@ The production doctor must pass with auth, diagnostic protection, trace
 persistence, bounded concurrency, rate limiting, full-trace HTTP responses
 disabled, and provider configuration present.
 The internal runtime smoke must pass without provider credentials; it verifies
-named team tokens, `SELF_CORRECTING_SERVICE_AUTH_TOKENS`,
-`SELF_CORRECTING_SERVICE_RUNTIME_ALLOWED_TOOLS_BY_SUBJECT`, subject-scoped
+named team tokens, `KAGENT_SERVICE_AUTH_TOKENS`,
+`KAGENT_SERVICE_RUNTIME_ALLOWED_TOOLS_BY_SUBJECT`, subject-scoped
 runtime trace reads, subject-scoped runtime resume, admin resume audit fields,
 and per-subject runtime metrics.
 Archive the release evidence bundle with the rollout ticket. It ties the local
@@ -121,8 +119,8 @@ Capture the rollout approval as JSON and validate it before promotion:
 
 ```sh
 scripts/internal_rollout_acceptance.py \
-  --signoff /tmp/self-correcting-agent-internal-rollout-signoff.json \
-  >/tmp/self-correcting-agent-internal-rollout.json
+  --signoff /tmp/kagent-internal-rollout-signoff.json \
+  >/tmp/kagent-internal-rollout.json
 ```
 
 The source sign-off must include `rollout_id`, `release_version`,
@@ -148,12 +146,12 @@ Once provider smoke, staging acceptance, observability acceptance, and internal
 rollout evidence files are present, run `scripts/production_approval_bundle.sh --strict`
 or `make production-approval-bundle`. The script invokes
 `scripts/production_readiness_audit.py` and
-`self-correcting-agent-release-evidence` with all strict evidence flags, writes
+`kagent-release-evidence` with all strict evidence flags, writes
 the JSON artifacts, and prints only their paths plus final status. Evidence
 files that are missing are reported together as `evidence_missing` with their
 labels and paths; evidence files older than 24 hours are rejected as
 `evidence_stale`. Set
-`SELF_CORRECTING_EVIDENCE_MAX_AGE_SECONDS` only when the rollout ticket
+`KAGENT_EVIDENCE_MAX_AGE_SECONDS` only when the rollout ticket
 documents a different freshness window.
 If that freshness window is not a positive integer, the script reports
 `evidence_max_age_invalid` as structured JSON.
@@ -176,20 +174,19 @@ before those artifacts are built.
 Use environment variables only; do not write provider secrets to files.
 
 ```sh
-SELF_CORRECTING_LLM_BASE_URL="${PROVIDER_BASE_URL}" \
-SELF_CORRECTING_LLM_API_KEY="${PROVIDER_API_KEY}" \
-SELF_CORRECTING_LLM_MODEL="agent-runtime-model" \
+# KAGENT_LLM_BASE_URL, KAGENT_LLM_API_KEY, and KAGENT_LLM_MODEL
+# must already be set in your shell or secret manager.
 scripts/smoke_real_llm_runtime.sh \
-  >/tmp/self-correcting-agent-provider-smoke.json
+  >/tmp/kagent-provider-smoke.json
 
 scripts/production_readiness_audit.py \
-  --provider-smoke-evidence /tmp/self-correcting-agent-provider-smoke.json \
+  --provider-smoke-evidence /tmp/kagent-provider-smoke.json \
   --require-provider-smoke \
-  --staging-acceptance-evidence /tmp/self-correcting-agent-staging-acceptance.json \
+  --staging-acceptance-evidence /tmp/kagent-staging-acceptance.json \
   --require-staging-acceptance \
-  --observability-acceptance-evidence /tmp/self-correcting-agent-observability-acceptance.json \
+  --observability-acceptance-evidence /tmp/kagent-observability-acceptance.json \
   --require-observability-acceptance \
-  --internal-rollout-evidence /tmp/self-correcting-agent-internal-rollout.json \
+  --internal-rollout-evidence /tmp/kagent-internal-rollout.json \
   --require-internal-rollout
 ```
 
@@ -215,17 +212,17 @@ After the service is deployed behind the internal gateway, verify the live
 Prometheus surface and packaged SRE artifacts:
 
 ```sh
-SELF_CORRECTING_OBSERVABILITY_BASE_URL="https://staging.example.internal" \
-SELF_CORRECTING_OBSERVABILITY_TOKEN="$TEAM_A_STAGING_TOKEN" \
+KAGENT_OBSERVABILITY_BASE_URL="https://staging.example.internal" \
+KAGENT_OBSERVABILITY_TOKEN="$TEAM_A_STAGING_TOKEN" \
 scripts/observability_acceptance.sh \
-  >/tmp/self-correcting-agent-observability-acceptance.json
+  >/tmp/kagent-observability-acceptance.json
 ```
 
 The script reads the token only from the environment, calls `GET /metrics.prom`,
 checks required service/runtime metrics, and validates the packaged Grafana
-dashboard and Prometheus rules. Set `SELF_CORRECTING_PROMETHEUS_BASE_URL`,
-optional `SELF_CORRECTING_PROMETHEUS_TOKEN`, and
-`SELF_CORRECTING_PROMETHEUS_QUERY` to make it verify that Prometheus has scraped
+dashboard and Prometheus rules. Set `KAGENT_PROMETHEUS_BASE_URL`,
+optional `KAGENT_PROMETHEUS_TOKEN`, and
+`KAGENT_PROMETHEUS_QUERY` to make it verify that Prometheus has scraped
 at least one matching sample. Attach the redacted JSON to
 `scripts/production_readiness_audit.py` with
 `--observability-acceptance-evidence` and enforce it with
@@ -244,10 +241,10 @@ evidence schema must be `evidence_schema_version: "1"`.
 Run staging with production-shaped config and short-lived test tokens:
 
 ```sh
-SELF_CORRECTING_STAGING_BASE_URL="https://staging.example.internal" \
-SELF_CORRECTING_STAGING_TOKEN="$TEAM_A_STAGING_TOKEN" \
+KAGENT_STAGING_BASE_URL="https://staging.example.internal" \
+KAGENT_STAGING_TOKEN="$TEAM_A_STAGING_TOKEN" \
 scripts/staging_acceptance.sh \
-  >/tmp/self-correcting-agent-staging-acceptance.json
+  >/tmp/kagent-staging-acceptance.json
 ```
 
 The script verifies `/health`, `/ready`, authenticated `/openapi.json`,
@@ -297,30 +294,30 @@ team subject before rollout expansion.
 
 Install and scrape:
 
-- `deploy/prometheus/self-correcting-agent-rules.yaml`
-- `deploy/prometheus/self-correcting-agent-servicemonitor.yaml`
-- `deploy/grafana/self-correcting-agent-dashboard.json`
+- `deploy/prometheus/kagent-rules.yaml`
+- `deploy/prometheus/kagent-servicemonitor.yaml`
+- `deploy/grafana/kagent-dashboard.json`
 
 Add Grafana panels for:
 
-- Request rate and 5xx rate from `self_correcting_agent_requests_total` and
-  `self_correcting_agent_responses_total`.
+- Request rate and 5xx rate from `kagent_requests_total` and
+  `kagent_responses_total`.
 - Runtime latency from
-  `self_correcting_agent_runtime_run_duration_seconds_bucket`.
+  `kagent_runtime_run_duration_seconds_bucket`.
 - Team usage from
-  `self_correcting_agent_runtime_runs_by_auth_subject_total`.
+  `kagent_runtime_runs_by_auth_subject_total`.
 - Team outcomes from
-  `self_correcting_agent_runtime_run_status_by_auth_subject_total`.
+  `kagent_runtime_run_status_by_auth_subject_total`.
 - Resume activity from
-  `self_correcting_agent_runtime_resumes_by_auth_subject_total`.
+  `kagent_runtime_resumes_by_auth_subject_total`.
 - Approval pressure from
-  `self_correcting_agent_runtime_approval_required_total`.
+  `kagent_runtime_approval_required_total`.
 - Stale pending approval queue depth from
-  `self_correcting_agent_runtime_stale_pending_approvals_current`; alert
+  `kagent_runtime_stale_pending_approvals_current`; alert
   `SelfCorrectingAgentRuntimeStalePendingApprovals` should notify owners when
   pending approvals exceed the configured age threshold.
 - Tool failures from
-  `self_correcting_agent_runtime_observation_errors_total`.
+  `kagent_runtime_observation_errors_total`.
 
 Alert routes should page the owner for service down, high 5xx rate, trace
 persistence failures, runtime run failures, stale pending approvals, and tool
@@ -346,7 +343,7 @@ Before opening the service to an internal team, record:
 
 - Service version and image tag.
 - Owning team and on-call channel.
-- Team subjects configured in `SELF_CORRECTING_SERVICE_AUTH_TOKENS`.
+- Team subjects configured in `KAGENT_SERVICE_AUTH_TOKENS`.
 - Runtime tool allowlists and approval-required tools.
 - Provider model, base URL hostname, timeout, retry count, and retry backoff.
 - Evidence links for `scripts/run_checks.sh`, production doctor, provider

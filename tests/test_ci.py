@@ -35,16 +35,16 @@ def test_github_actions_ci_uploads_wheel_artifact():
     workflow = Path(".github/workflows/ci.yml").read_text()
 
     assert "actions/upload-artifact" in workflow
-    assert "self-correcting-agent-wheel-${{ matrix.python-version }}" in workflow
-    assert "/tmp/self-correcting-agent-wheelhouse" in workflow
+    assert "kagent-wheel-${{ matrix.python-version }}" in workflow
+    assert "/tmp/kagent-wheelhouse" in workflow
     assert "retention-days: 14" in workflow
 
 
 def test_github_actions_ci_uploads_release_manifest_artifact():
     workflow = Path(".github/workflows/ci.yml").read_text()
 
-    assert "self-correcting-agent-release-manifest-${{ matrix.python-version }}" in workflow
-    assert "/tmp/self-correcting-agent-release-manifest.json" in workflow
+    assert "kagent-release-manifest-${{ matrix.python-version }}" in workflow
+    assert "/tmp/kagent-release-manifest.json" in workflow
     assert "if-no-files-found: error" in workflow
     assert workflow.count("retention-days: 14") == 2
 

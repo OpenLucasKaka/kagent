@@ -2,15 +2,15 @@ import json
 
 import pytest
 
-from self_correcting_langgraph_agent.providers.llm import FakeLLMProvider
-from self_correcting_langgraph_agent.runtime import run_runtime_agent
-from self_correcting_langgraph_agent.runtime import tools as runtime_tools
-from self_correcting_langgraph_agent.runtime.policy import RuntimePolicy
-from self_correcting_langgraph_agent.runtime.tools import (
+from kagent.providers.llm import FakeLLMProvider
+from kagent.runtime import run_runtime_agent
+from kagent.runtime import tools as runtime_tools
+from kagent.runtime.policy import RuntimePolicy
+from kagent.runtime.tools import (
     RuntimeToolSpec,
     default_runtime_tools,
 )
-from self_correcting_langgraph_agent.runtime.types import (
+from kagent.runtime.types import (
     MAX_ACTION_REASON_CHARS,
     MAX_PLAN_ACTIONS,
     MAX_PLAN_FINAL_ANSWER_CHARS,
@@ -18,7 +18,7 @@ from self_correcting_langgraph_agent.runtime.types import (
 
 
 def test_runtime_entrypoint_is_delegated_to_runtime_agent_module():
-    from self_correcting_langgraph_agent.runtime.agent import (
+    from kagent.runtime.agent import (
         run_runtime_agent as runtime_agent_run_runtime_agent,
     )
 
@@ -119,7 +119,7 @@ def test_runtime_agent_system_prompt_declares_runtime_identity_boundary():
     run_runtime_agent("inspect identity boundary", provider=provider)
 
     system_prompt = provider.calls[0]["system"]
-    assert "self-correcting LangGraph agent runtime" in system_prompt
+    assert "Kagent runtime" in system_prompt
     assert "OpenAI-compatible provider" in system_prompt
     assert "underlying model provider" in system_prompt
 
@@ -714,7 +714,7 @@ def test_runtime_agent_normalizes_model_identity_answer():
     result = run_runtime_agent("你是谁", provider=provider)
 
     assert result["status"] == "done"
-    assert "self-correcting LangGraph agent runtime" in result["answer"]
+    assert "Kagent runtime" in result["answer"]
     assert "OpenAI-compatible provider" in result["answer"]
     assert "Qwen" not in result["answer"]
     assert "通义千问" not in result["answer"]

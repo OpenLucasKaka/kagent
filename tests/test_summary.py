@@ -1,5 +1,5 @@
-from self_correcting_langgraph_agent.core.agent import AgentConfig, run_agent
-from self_correcting_langgraph_agent.core.summary import summarize_run
+from kagent.core.agent import AgentConfig, run_agent
+from kagent.core.summary import summarize_run
 
 
 def test_summarize_run_compacts_successful_trace():

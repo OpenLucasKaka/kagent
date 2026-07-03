@@ -11,7 +11,7 @@ lint:
 	PYTHONWARNINGS=ignore .venv/bin/python -m ruff check src tests
 
 eval:
-	PYTHONWARNINGS=ignore .venv/bin/python -m self_correcting_langgraph_agent.evaluator
+	PYTHONWARNINGS=ignore .venv/bin/python -m kagent.evaluator
 
 smoke-service:
 	PYTHONWARNINGS=ignore sh scripts/smoke_service.sh
@@ -20,19 +20,19 @@ readiness-audit:
 	PYTHONWARNINGS=ignore .venv/bin/python scripts/production_readiness_audit.py
 
 release-evidence:
-	PYTHONWARNINGS=ignore .venv/bin/python scripts/production_readiness_audit.py >/tmp/self-correcting-agent-production-readiness-audit.json
-	PYTHONWARNINGS=ignore .venv/bin/python -m self_correcting_langgraph_agent.release_evidence --run-checks-exit-code 0 --readiness-audit /tmp/self-correcting-agent-production-readiness-audit.json --release-manifest /tmp/self-correcting-agent-release-manifest.json --output /tmp/self-correcting-agent-release-evidence.json
+	PYTHONWARNINGS=ignore .venv/bin/python scripts/production_readiness_audit.py >/tmp/kagent-production-readiness-audit.json
+	PYTHONWARNINGS=ignore .venv/bin/python -m kagent.release_evidence --run-checks-exit-code 0 --readiness-audit /tmp/kagent-production-readiness-audit.json --release-manifest /tmp/kagent-release-manifest.json --output /tmp/kagent-release-evidence.json
 
 production-approval-bundle:
 	PYTHONWARNINGS=ignore sh scripts/production_approval_bundle.sh --strict
 
 wheel:
-	rm -rf /tmp/self-correcting-agent-wheelhouse
-	PYTHONWARNINGS=ignore .venv/bin/python -m pip wheel --no-deps --no-build-isolation . -w /tmp/self-correcting-agent-wheelhouse
-	ls /tmp/self-correcting-agent-wheelhouse/self_correcting_langgraph_agent-0.1.0-*.whl >/dev/null
+	rm -rf /tmp/kagent-wheelhouse
+	PYTHONWARNINGS=ignore .venv/bin/python -m pip wheel --no-deps --no-build-isolation . -w /tmp/kagent-wheelhouse
+	ls /tmp/kagent-wheelhouse/kagent-0.1.0-*.whl >/dev/null
 
 docker-build:
-	docker build -t self-correcting-langgraph-agent:local .
+	docker build -t kagent:local .
 
 check:
 	scripts/run_checks.sh

@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from self_correcting_langgraph_agent.runtime.types import (
+from kagent.runtime.types import (
     MAX_ACTION_REASON_CHARS,
     MAX_PLAN_ACTIONS,
     MAX_PLAN_FINAL_ANSWER_CHARS,

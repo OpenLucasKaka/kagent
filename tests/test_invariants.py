@@ -1,7 +1,7 @@
 from copy import deepcopy
 
-from self_correcting_langgraph_agent.core.agent import AgentConfig, run_agent
-from self_correcting_langgraph_agent.core.invariants import validate_run_invariants
+from kagent.core.agent import AgentConfig, run_agent
+from kagent.core.invariants import validate_run_invariants
 
 
 def test_validate_run_invariants_accepts_recovered_trace():

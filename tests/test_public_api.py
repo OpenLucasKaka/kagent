@@ -1,4 +1,4 @@
-from self_correcting_langgraph_agent import (
+from kagent import (
     FakeLLMProvider,
     LLMProviderConfig,
     __version__,

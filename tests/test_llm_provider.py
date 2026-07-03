@@ -1,7 +1,7 @@
 import io
 import urllib.error
 
-from self_correcting_langgraph_agent.providers.llm import (
+from kagent.providers.llm import (
     FakeLLMProvider,
     LLMProviderConfig,
     OpenAICompatibleProvider,
@@ -12,12 +12,12 @@ from self_correcting_langgraph_agent.providers.llm import (
 def test_provider_config_reads_openai_compatible_environment_without_exposing_key():
     config = LLMProviderConfig.from_env(
         {
-            "SELF_CORRECTING_LLM_BASE_URL": "https://llm.example/v1",
-            "SELF_CORRECTING_LLM_API_KEY": "secret-key",
-            "SELF_CORRECTING_LLM_MODEL": "agent-model",
-            "SELF_CORRECTING_LLM_TIMEOUT_SECONDS": "12.5",
-            "SELF_CORRECTING_LLM_MAX_RETRIES": "2",
-            "SELF_CORRECTING_LLM_RETRY_BACKOFF_SECONDS": "0.25",
+            "KAGENT_LLM_BASE_URL": "https://llm.example/v1",
+            "KAGENT_LLM_API_KEY": "redactme",
+            "KAGENT_LLM_MODEL": "agent-model",
+            "KAGENT_LLM_TIMEOUT_SECONDS": "12.5",
+            "KAGENT_LLM_MAX_RETRIES": "2",
+            "KAGENT_LLM_RETRY_BACKOFF_SECONDS": "0.25",
         }
     )
 
@@ -35,7 +35,7 @@ def test_provider_config_reads_openai_compatible_environment_without_exposing_ke
         "llm_max_retries": "2",
         "llm_retry_backoff_seconds": "0.25",
     }
-    assert "secret-key" not in str(config.redacted_snapshot())
+    assert "redactme" not in str(config.redacted_snapshot())
 
 
 def test_provider_config_defaults_to_unconfigured_runtime():
@@ -99,7 +99,7 @@ def test_openai_compatible_provider_retries_transient_http_errors():
     provider = OpenAICompatibleProvider(
         LLMProviderConfig(
             base_url="https://llm.example/v1",
-            api_key="secret-key",
+            api_key="x",
             model="agent-model",
             max_retries=1,
         ),
@@ -127,7 +127,7 @@ def test_openai_compatible_provider_does_not_retry_non_transient_http_errors():
     provider = OpenAICompatibleProvider(
         LLMProviderConfig(
             base_url="https://llm.example/v1",
-            api_key="secret-key",
+            api_key="x",
             model="agent-model",
             max_retries=3,
         ),
@@ -169,7 +169,7 @@ def test_openai_compatible_provider_retries_model_unloaded_http_errors():
     provider = OpenAICompatibleProvider(
         LLMProviderConfig(
             base_url="https://llm.example/v1",
-            api_key="secret-key",
+            api_key="x",
             model="agent-model",
             max_retries=1,
         ),
@@ -207,7 +207,7 @@ def test_openai_compatible_provider_uses_numeric_retry_after_header():
     provider = OpenAICompatibleProvider(
         LLMProviderConfig(
             base_url="https://llm.example/v1",
-            api_key="secret-key",
+            api_key="x",
             model="agent-model",
             max_retries=1,
             retry_backoff_seconds=0.25,

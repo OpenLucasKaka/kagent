@@ -1,7 +1,7 @@
 import json
 import subprocess
 
-from self_correcting_langgraph_agent.ops.batch import run_batch_file
+from kagent.ops.batch import run_batch_file
 
 
 def test_run_batch_file_writes_one_summary_record_per_input_line(tmp_path):
@@ -125,7 +125,7 @@ def test_batch_module_cli_writes_report_and_results(tmp_path):
         [
             ".venv/bin/python",
             "-m",
-            "self_correcting_langgraph_agent.ops.batch",
+            "kagent.ops.batch",
             str(input_path),
             str(output_path),
         ],
@@ -152,7 +152,7 @@ def test_batch_module_cli_can_exit_nonzero_when_batch_has_failures(tmp_path):
         [
             ".venv/bin/python",
             "-m",
-            "self_correcting_langgraph_agent.ops.batch",
+            "kagent.ops.batch",
             str(input_path),
             str(output_path),
             "--fail-on-failure",
@@ -175,7 +175,7 @@ def test_batch_module_cli_can_write_full_traces(tmp_path):
         [
             ".venv/bin/python",
             "-m",
-            "self_correcting_langgraph_agent.ops.batch",
+            "kagent.ops.batch",
             str(input_path),
             str(output_path),
             "--full-trace",

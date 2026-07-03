@@ -1,7 +1,7 @@
 import json
 import subprocess
 
-from self_correcting_langgraph_agent.ops.metrics import summarize_metrics_file
+from kagent.ops.metrics import summarize_metrics_file
 
 
 def test_summarize_metrics_file_reports_trends(tmp_path):
@@ -107,7 +107,7 @@ def test_metrics_module_prints_json_summary(tmp_path):
         [
             ".venv/bin/python",
             "-m",
-            "self_correcting_langgraph_agent.ops.metrics",
+            "kagent.ops.metrics",
             str(metrics_path),
         ],
         check=True,
@@ -152,7 +152,7 @@ def test_metrics_module_can_write_summary_to_output_file(tmp_path):
         [
             ".venv/bin/python",
             "-m",
-            "self_correcting_langgraph_agent.ops.metrics",
+            "kagent.ops.metrics",
             str(metrics_path),
             "--output",
             str(output_path),
@@ -184,7 +184,7 @@ def test_metrics_module_can_fail_when_recent_health_does_not_match(tmp_path):
         [
             ".venv/bin/python",
             "-m",
-            "self_correcting_langgraph_agent.ops.metrics",
+            "kagent.ops.metrics",
             str(metrics_path),
             "--require-recent-health",
             "healthy",

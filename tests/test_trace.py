@@ -1,5 +1,5 @@
-from self_correcting_langgraph_agent.core.state import AgentStatus
-from self_correcting_langgraph_agent.core.trace import (
+from kagent.core.state import AgentStatus
+from kagent.core.trace import (
     copy_agent_state,
     record_execution_attempt,
     record_node_event,

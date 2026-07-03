@@ -4,7 +4,7 @@ set -eu
 cd "$(dirname "$0")/.."
 
 PYTHON_BIN="${PYTHON_BIN:-.venv/bin/python}"
-SERVICE_BIN="${SERVICE_BIN:-.venv/bin/self-correcting-agent-serve}"
+SERVICE_BIN="${SERVICE_BIN:-.venv/bin/kagent-serve}"
 PORT="$("$PYTHON_BIN" - <<'PY'
 import socket
 
@@ -15,15 +15,15 @@ sock.close()
 PY
 )"
 
-SERVICE_LOG="${SERVICE_LOG:-/tmp/self-correcting-agent-internal-runtime-smoke.log}"
-TRACE_DIR="$(mktemp -d "${TMPDIR:-/tmp}/self-correcting-internal-runtime-traces.XXXXXX")"
-ADMIN_TOKEN="${SELF_CORRECTING_INTERNAL_SMOKE_ADMIN_TOKEN:-internal-admin-token}"
-TEAM_A_TOKEN="${SELF_CORRECTING_INTERNAL_SMOKE_TEAM_A_TOKEN:-internal-team-a-token}"
-TEAM_B_TOKEN="${SELF_CORRECTING_INTERNAL_SMOKE_TEAM_B_TOKEN:-internal-team-b-token}"
+SERVICE_LOG="${SERVICE_LOG:-/tmp/kagent-internal-runtime-smoke.log}"
+TRACE_DIR="$(mktemp -d "${TMPDIR:-/tmp}/kagent-internal-runtime-traces.XXXXXX")"
+ADMIN_TOKEN="${KAGENT_INTERNAL_SMOKE_ADMIN_TOKEN:-internal-admin-token}"
+TEAM_A_TOKEN="${KAGENT_INTERNAL_SMOKE_TEAM_A_TOKEN:-internal-team-a-token}"
+TEAM_B_TOKEN="${KAGENT_INTERNAL_SMOKE_TEAM_B_TOKEN:-internal-team-b-token}"
 
-SELF_CORRECTING_SERVICE_AUTH_TOKEN="$ADMIN_TOKEN" \
-SELF_CORRECTING_SERVICE_AUTH_TOKENS="{\"team-a\":\"$TEAM_A_TOKEN\",\"team-b\":\"$TEAM_B_TOKEN\"}" \
-SELF_CORRECTING_SERVICE_RUNTIME_ALLOWED_TOOLS_BY_SUBJECT='{"team-a":"note","team-b":"note"}' \
+KAGENT_SERVICE_AUTH_TOKEN="$ADMIN_TOKEN" \
+KAGENT_SERVICE_AUTH_TOKENS="{\"team-a\":\"$TEAM_A_TOKEN\",\"team-b\":\"$TEAM_B_TOKEN\"}" \
+KAGENT_SERVICE_RUNTIME_ALLOWED_TOOLS_BY_SUBJECT='{"team-a":"note","team-b":"note"}' \
     "$SERVICE_BIN" --host 127.0.0.1 --port "$PORT" --trace-dir "$TRACE_DIR" \
     --protect-diagnostics --runtime-max-iterations 3 \
     >"$SERVICE_LOG.stdout" 2>"$SERVICE_LOG.stderr" &
@@ -376,10 +376,10 @@ assert metrics["runtime_pending_approval_stale_seconds"] == "3600", metrics
 
 prometheus_status, prometheus_metrics = request_text("/metrics.prom", token=admin_token)
 assert prometheus_status == 200, prometheus_metrics
-assert "self_correcting_agent_runtime_pending_approvals_current 1" in prometheus_metrics
-assert "self_correcting_agent_runtime_stale_pending_approvals_current 0" in prometheus_metrics
-assert "self_correcting_agent_runtime_max_pending_approval_age_seconds" in prometheus_metrics
-assert "self_correcting_agent_runtime_pending_approval_stale_seconds 3600" in prometheus_metrics
+assert "kagent_runtime_pending_approvals_current 1" in prometheus_metrics
+assert "kagent_runtime_stale_pending_approvals_current 0" in prometheus_metrics
+assert "kagent_runtime_max_pending_approval_age_seconds" in prometheus_metrics
+assert "kagent_runtime_pending_approval_stale_seconds 3600" in prometheus_metrics
 
 stderr = open(service_stderr_path, encoding="utf-8").read()
 records = [json.loads(line) for line in stderr.splitlines() if line.strip()]

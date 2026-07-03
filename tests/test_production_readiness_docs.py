@@ -12,13 +12,13 @@ def test_production_readiness_checklist_documents_release_gates():
     assert "scripts/smoke_service.sh" in readiness
     assert "scripts/smoke_internal_runtime.sh" in readiness
     assert "scripts/staging_acceptance.sh" in readiness
-    assert "self-correcting-agent-doctor" in readiness
+    assert "kagent-doctor" in readiness
     assert "--production" in readiness
     assert "Docker" in readiness
     assert "Kubernetes" in readiness
-    assert "deploy/kubernetes/self-correcting-agent.yaml" in readiness
-    assert "deploy/prometheus/self-correcting-agent-rules.yaml" in readiness
-    assert "deploy/prometheus/self-correcting-agent-servicemonitor.yaml" in readiness
+    assert "deploy/kubernetes/kagent.yaml" in readiness
+    assert "deploy/prometheus/kagent-rules.yaml" in readiness
+    assert "deploy/prometheus/kagent-servicemonitor.yaml" in readiness
     assert "ServiceMonitor" in readiness
     assert "idempotency conflict" in readiness
     assert "trace persistence failure" in readiness
@@ -42,7 +42,7 @@ def test_production_readiness_checklist_documents_release_gates():
     assert "secret-like query or fragment" in readiness
     assert "PodDisruptionBudget" in readiness
     assert "NetworkPolicy" in readiness
-    assert "self-correcting-agent-access" in readiness
+    assert "kagent-access" in readiness
     assert "CronJob" in readiness
     assert "startupProbe" in readiness
     assert "topologySpreadConstraints" in readiness
@@ -56,11 +56,11 @@ def test_production_readiness_checklist_documents_release_gates():
     assert "X-Frame-Options" in readiness
     assert "security_response_headers" in readiness
     assert "raw-key-free idempotency" in readiness
-    assert "SELF_CORRECTING_SERVICE_IDEMPOTENCY_CACHE_PATH" in readiness
+    assert "KAGENT_SERVICE_IDEMPOTENCY_CACHE_PATH" in readiness
     assert "same-volume replica retry reuse" in readiness
     assert "idempotency_cache_persistence" in readiness
-    assert "SELF_CORRECTING_SERVICE_RUNTIME_ALLOWED_TOOLS" in readiness
-    assert "SELF_CORRECTING_SERVICE_RUNTIME_ALLOWED_TOOLS_BY_SUBJECT" in readiness
+    assert "KAGENT_SERVICE_RUNTIME_ALLOWED_TOOLS" in readiness
+    assert "KAGENT_SERVICE_RUNTIME_ALLOWED_TOOLS_BY_SUBJECT" in readiness
     assert "runtime tool execution policy" in readiness
     assert "auth_subject" in readiness
     assert "subject-scoped runtime trace reads" in readiness
@@ -71,8 +71,8 @@ def test_production_readiness_checklist_documents_release_gates():
     assert "per-subject runtime resume metrics" in readiness
     assert "per-subject runtime resume alerting" in readiness
     assert "stale pending approval gauges" in readiness
-    assert "self_correcting_agent_runtime_stale_pending_approvals_current" in readiness
-    assert "SELF_CORRECTING_SERVICE_AUTH_TOKENS" in readiness
+    assert "kagent_runtime_stale_pending_approvals_current" in readiness
+    assert "KAGENT_SERVICE_AUTH_TOKENS" in readiness
     assert "bind host" in readiness
     assert "bind port" in readiness
     assert "max request bytes" in readiness
@@ -104,7 +104,7 @@ def test_production_readiness_checklist_documents_release_gates():
     assert "release evidence bundle" in readiness
     assert "evidence_secret_detected" in readiness
     assert "evidence_secret_findings" in readiness
-    assert "self-correcting-agent-release-evidence" in readiness
+    assert "kagent-release-evidence" in readiness
     assert "Known External Dependencies" in readiness
     assert "redacted LLM provider audit fields" in readiness
     assert "llm_api_key_configured" in readiness
@@ -181,17 +181,17 @@ def test_detailed_docs_document_service_runtime_controls():
         ]
     )
 
-    assert "SELF_CORRECTING_SERVICE_AUTH_TOKEN" in detailed_docs
-    assert "SELF_CORRECTING_SERVICE_RATE_LIMIT_PER_MINUTE" in detailed_docs
-    assert "SELF_CORRECTING_SERVICE_MAX_CONCURRENT_RUNS" in detailed_docs
-    assert "SELF_CORRECTING_SERVICE_MAX_GOAL_CHARS" in detailed_docs
-    assert "SELF_CORRECTING_SERVICE_ALLOW_FULL_TRACE_RESPONSE" in detailed_docs
-    assert "SELF_CORRECTING_SERVICE_PROTECT_DIAGNOSTICS" in detailed_docs
-    assert "SELF_CORRECTING_SERVICE_RUN_TIMEOUT_SECONDS" in detailed_docs
-    assert "SELF_CORRECTING_SERVICE_REQUEST_TIMEOUT_SECONDS" in detailed_docs
-    assert "SELF_CORRECTING_SERVICE_RUNTIME_ALLOWED_TOOLS" in detailed_docs
-    assert "SELF_CORRECTING_SERVICE_RUNTIME_ALLOWED_TOOLS_BY_SUBJECT" in detailed_docs
-    assert "SELF_CORRECTING_SERVICE_TRUST_FORWARDED_FOR" in detailed_docs
-    assert "SELF_CORRECTING_SERVICE_TRACE_DIR" in detailed_docs
+    assert "KAGENT_SERVICE_AUTH_TOKEN" in detailed_docs
+    assert "KAGENT_SERVICE_RATE_LIMIT_PER_MINUTE" in detailed_docs
+    assert "KAGENT_SERVICE_MAX_CONCURRENT_RUNS" in detailed_docs
+    assert "KAGENT_SERVICE_MAX_GOAL_CHARS" in detailed_docs
+    assert "KAGENT_SERVICE_ALLOW_FULL_TRACE_RESPONSE" in detailed_docs
+    assert "KAGENT_SERVICE_PROTECT_DIAGNOSTICS" in detailed_docs
+    assert "KAGENT_SERVICE_RUN_TIMEOUT_SECONDS" in detailed_docs
+    assert "KAGENT_SERVICE_REQUEST_TIMEOUT_SECONDS" in detailed_docs
+    assert "KAGENT_SERVICE_RUNTIME_ALLOWED_TOOLS" in detailed_docs
+    assert "KAGENT_SERVICE_RUNTIME_ALLOWED_TOOLS_BY_SUBJECT" in detailed_docs
+    assert "KAGENT_SERVICE_TRUST_FORWARDED_FOR" in detailed_docs
+    assert "KAGENT_SERVICE_TRACE_DIR" in detailed_docs
     assert "SSRF" in detailed_docs
     assert "does not follow redirects" in detailed_docs

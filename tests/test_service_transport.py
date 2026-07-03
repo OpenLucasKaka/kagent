@@ -1,7 +1,7 @@
 import json
 
-from self_correcting_langgraph_agent.service import transport as service_transport
-from self_correcting_langgraph_agent.service.transport import (
+from kagent.service import transport as service_transport
+from kagent.service.transport import (
     CACHE_CONTROL_HEADER_VALUE,
     error_code_from_payload,
     response_body,

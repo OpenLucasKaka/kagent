@@ -7,8 +7,8 @@ from stat import S_IMODE
 
 import pytest
 
-from self_correcting_langgraph_agent.service import trace_store as service_trace_store
-from self_correcting_langgraph_agent.service.trace_store import (
+from kagent.service import trace_store as service_trace_store
+from kagent.service.trace_store import (
     load_trace_by_run_id,
     persist_trace,
     prune_runtime_traces,
@@ -385,7 +385,7 @@ def test_trace_store_module_prunes_traces_in_dry_run_mode(tmp_path):
         [
             sys.executable,
             "-m",
-            "self_correcting_langgraph_agent.service.trace_store",
+            "kagent.service.trace_store",
             str(tmp_path),
             "--max-age-days",
             "1",
@@ -415,7 +415,7 @@ def test_trace_store_module_prunes_runtime_traces_in_dry_run_mode(tmp_path):
         [
             sys.executable,
             "-m",
-            "self_correcting_langgraph_agent.service.trace_store",
+            "kagent.service.trace_store",
             str(tmp_path),
             "--max-age-days",
             "1",

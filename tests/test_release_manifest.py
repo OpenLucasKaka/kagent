@@ -2,7 +2,7 @@ import hashlib
 import json
 import subprocess
 
-from self_correcting_langgraph_agent.ops.release_manifest import (
+from kagent.ops.release_manifest import (
     build_release_manifest,
     verify_release_manifest,
 )
@@ -14,7 +14,7 @@ def test_build_release_manifest_records_artifact_hashes_and_sizes(tmp_path):
 
     manifest = build_release_manifest([artifact])
 
-    assert manifest["package"] == "self-correcting-langgraph-agent"
+    assert manifest["package"] == "kagent"
     assert manifest["version"] == "0.1.0"
     assert manifest["artifact_count"] == "1"
     assert manifest["artifacts"] == [
@@ -36,7 +36,7 @@ def test_release_manifest_cli_writes_json_manifest(tmp_path):
         [
             ".venv/bin/python",
             "-m",
-            "self_correcting_langgraph_agent.ops.release_manifest",
+            "kagent.ops.release_manifest",
             str(artifact),
             "--output",
             str(output),
@@ -144,7 +144,7 @@ def test_verify_release_manifest_reports_invalid_artifacts_schema(tmp_path):
     manifest_path.write_text(
         json.dumps(
             {
-                "package": "self-correcting-langgraph-agent",
+                "package": "kagent",
                 "version": "0.1.0",
                 "artifact_count": "1",
                 "artifacts": "not-a-list",
@@ -172,7 +172,7 @@ def test_verify_release_manifest_reports_invalid_artifact_entry_schema(tmp_path)
     manifest_path.write_text(
         json.dumps(
             {
-                "package": "self-correcting-langgraph-agent",
+                "package": "kagent",
                 "version": "0.1.0",
                 "artifact_count": "1",
                 "artifacts": ["not-an-object"],
@@ -200,7 +200,7 @@ def test_verify_release_manifest_reports_missing_artifact_path(tmp_path):
     manifest_path.write_text(
         json.dumps(
             {
-                "package": "self-correcting-langgraph-agent",
+                "package": "kagent",
                 "version": "0.1.0",
                 "artifact_count": "1",
                 "artifacts": [{"sha256": "abc", "size_bytes": "123"}],
@@ -230,7 +230,7 @@ def test_verify_release_manifest_reports_directory_artifact_path(tmp_path):
     manifest_path.write_text(
         json.dumps(
             {
-                "package": "self-correcting-langgraph-agent",
+                "package": "kagent",
                 "version": "0.1.0",
                 "artifact_count": "1",
                 "artifacts": [
@@ -264,7 +264,7 @@ def test_verify_release_manifest_reports_invalid_artifact_path(tmp_path):
     manifest_path.write_text(
         json.dumps(
             {
-                "package": "self-correcting-langgraph-agent",
+                "package": "kagent",
                 "version": "0.1.0",
                 "artifact_count": "1",
                 "artifacts": [
@@ -304,7 +304,7 @@ def test_release_manifest_cli_verify_exits_nonzero_for_mismatched_artifacts(tmp_
         [
             ".venv/bin/python",
             "-m",
-            "self_correcting_langgraph_agent.ops.release_manifest",
+            "kagent.ops.release_manifest",
             "--verify",
             str(manifest_path),
         ],
@@ -325,7 +325,7 @@ def test_release_manifest_cli_verify_reports_invalid_json_without_traceback(tmp_
         [
             ".venv/bin/python",
             "-m",
-            "self_correcting_langgraph_agent.ops.release_manifest",
+            "kagent.ops.release_manifest",
             "--verify",
             str(manifest_path),
         ],

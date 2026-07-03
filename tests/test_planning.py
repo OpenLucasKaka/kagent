@@ -1,4 +1,4 @@
-from self_correcting_langgraph_agent.core.planning import (
+from kagent.core.planning import (
     normalize_fault_plan,
     plan_errors,
     validate_plan_steps,

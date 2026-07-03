@@ -2,7 +2,7 @@ from uuid import UUID
 
 import pytest
 
-from self_correcting_langgraph_agent.core.agent import (
+from kagent.core.agent import (
     AgentConfig,
     AgentStatus,
     build_agent_graph,
@@ -52,8 +52,8 @@ def test_run_agent_records_run_metadata_for_observability():
 def test_agent_config_can_be_loaded_from_environment_mapping():
     config = AgentConfig.from_env(
         {
-            "SELF_CORRECTING_MAX_STEPS": "3",
-            "SELF_CORRECTING_MAX_RETRIES": "4",
+            "KAGENT_MAX_STEPS": "3",
+            "KAGENT_MAX_RETRIES": "4",
         }
     )
 
@@ -61,8 +61,8 @@ def test_agent_config_can_be_loaded_from_environment_mapping():
 
 
 def test_agent_config_reports_invalid_environment_values():
-    with pytest.raises(ValueError, match="SELF_CORRECTING_MAX_STEPS must be an integer"):
-        AgentConfig.from_env({"SELF_CORRECTING_MAX_STEPS": "many"})
+    with pytest.raises(ValueError, match="KAGENT_MAX_STEPS must be an integer"):
+        AgentConfig.from_env({"KAGENT_MAX_STEPS": "many"})
 
 
 def test_preview_plan_reports_supported_steps_without_execution():

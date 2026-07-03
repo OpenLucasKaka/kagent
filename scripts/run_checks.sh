@@ -8,173 +8,172 @@ cleanup_local_build_artifacts() {
 }
 trap cleanup_local_build_artifacts EXIT
 
-PYTHONWARNINGS=ignore .venv/bin/python -m pip install -e '.[dev]' >/tmp/self-correcting-agent-install.log
+PYTHONWARNINGS=ignore .venv/bin/python -m pip install -e '.[dev]' >/tmp/kagent-install.log
 PYTHONWARNINGS=ignore .venv/bin/python -m pytest
 PYTHONWARNINGS=ignore .venv/bin/python -m ruff check src tests
-rm -rf /tmp/self-correcting-agent-pycache
-PYTHONPYCACHEPREFIX=/tmp/self-correcting-agent-pycache PYTHONWARNINGS=ignore .venv/bin/python -m compileall -q src tests
-PYTHONWARNINGS=ignore .venv/bin/self-correcting-agent --version >/tmp/self-correcting-agent-entrypoint-version.json
-printf '{"id":"sum","goal":"calculate 2 + 3"}\n' >/tmp/self-correcting-agent-batch-input.jsonl
-PYTHONWARNINGS=ignore .venv/bin/self-correcting-agent-batch /tmp/self-correcting-agent-batch-input.jsonl /tmp/self-correcting-agent-batch-output.jsonl --fail-on-failure >/tmp/self-correcting-agent-batch-report.json
-PYTHONWARNINGS=ignore .venv/bin/python -m self_correcting_langgraph_agent.cli --version >/tmp/self-correcting-agent-version.json
-SELF_CORRECTING_SERVICE_IDEMPOTENCY_CACHE_SIZE=17 \
+rm -rf /tmp/kagent-pycache
+PYTHONPYCACHEPREFIX=/tmp/kagent-pycache PYTHONWARNINGS=ignore .venv/bin/python -m compileall -q src tests
+PYTHONWARNINGS=ignore .venv/bin/kagent --version >/tmp/kagent-entrypoint-version.json
+printf '{"id":"sum","goal":"calculate 2 + 3"}\n' >/tmp/kagent-batch-input.jsonl
+PYTHONWARNINGS=ignore .venv/bin/kagent-batch /tmp/kagent-batch-input.jsonl /tmp/kagent-batch-output.jsonl --fail-on-failure >/tmp/kagent-batch-report.json
+PYTHONWARNINGS=ignore .venv/bin/python -m kagent.cli --version >/tmp/kagent-version.json
+KAGENT_SERVICE_IDEMPOTENCY_CACHE_SIZE=17 \
 PYTHONWARNINGS=ignore \
-    .venv/bin/self-correcting-agent-doctor \
-    --trace-dir /tmp/self-correcting-agent-doctor-traces \
-    >/tmp/self-correcting-agent-doctor.json
-grep '"idempotency_cache_size": "17"' /tmp/self-correcting-agent-doctor.json >/dev/null
-grep '"runtime_policy"' /tmp/self-correcting-agent-doctor.json >/dev/null
-grep '"effective_tool_policy_sha256"' /tmp/self-correcting-agent-doctor.json >/dev/null
-if PYTHONWARNINGS=ignore .venv/bin/self-correcting-agent-doctor --require-auth >/tmp/self-correcting-agent-doctor-require-auth.json; then
+    .venv/bin/kagent-doctor \
+    --trace-dir /tmp/kagent-doctor-traces \
+    >/tmp/kagent-doctor.json
+grep '"idempotency_cache_size": "17"' /tmp/kagent-doctor.json >/dev/null
+grep '"runtime_policy"' /tmp/kagent-doctor.json >/dev/null
+grep '"effective_tool_policy_sha256"' /tmp/kagent-doctor.json >/dev/null
+if PYTHONWARNINGS=ignore .venv/bin/kagent-doctor --require-auth >/tmp/kagent-doctor-require-auth.json; then
     echo "doctor --require-auth unexpectedly passed without auth token" >&2
     exit 1
 fi
-if SELF_CORRECTING_SERVICE_AUTH_TOKEN=release-gate-token-é \
+if KAGENT_SERVICE_AUTH_TOKEN=release-gate-token-é \
 PYTHONWARNINGS=ignore \
-    .venv/bin/self-correcting-agent-doctor --require-auth \
-    >/tmp/self-correcting-agent-doctor-require-auth-unsafe-token.json; then
+    .venv/bin/kagent-doctor --require-auth \
+    >/tmp/kagent-doctor-require-auth-unsafe-token.json; then
     echo "doctor --require-auth unexpectedly passed with unsafe auth token" >&2
     exit 1
 fi
 grep "auth_token_unsafe" \
-    /tmp/self-correcting-agent-doctor-require-auth-unsafe-token.json >/dev/null
-if SELF_CORRECTING_SERVICE_AUTH_TOKEN=replace-with-a-long-random-token \
+    /tmp/kagent-doctor-require-auth-unsafe-token.json >/dev/null
+if KAGENT_SERVICE_AUTH_TOKEN=replace-with-a-long-random-token \
 PYTHONWARNINGS=ignore \
-    .venv/bin/self-correcting-agent-doctor --require-auth \
-    >/tmp/self-correcting-agent-doctor-require-auth-placeholder-token.json; then
+    .venv/bin/kagent-doctor --require-auth \
+    >/tmp/kagent-doctor-require-auth-placeholder-token.json; then
     echo "doctor --require-auth unexpectedly passed with placeholder auth token" >&2
     exit 1
 fi
 grep "auth_token_placeholder" \
-    /tmp/self-correcting-agent-doctor-require-auth-placeholder-token.json >/dev/null
-SELF_CORRECTING_SERVICE_AUTH_TOKEN=release-gate-token \
-SELF_CORRECTING_SERVICE_RATE_LIMIT_PER_MINUTE=60 \
-SELF_CORRECTING_SERVICE_MAX_CONCURRENT_RUNS=4 \
-SELF_CORRECTING_SERVICE_PROTECT_DIAGNOSTICS=true \
+    /tmp/kagent-doctor-require-auth-placeholder-token.json >/dev/null
+KAGENT_SERVICE_AUTH_TOKEN=release-gate-token \
+KAGENT_SERVICE_RATE_LIMIT_PER_MINUTE=60 \
+KAGENT_SERVICE_MAX_CONCURRENT_RUNS=4 \
+KAGENT_SERVICE_PROTECT_DIAGNOSTICS=true \
 PYTHONWARNINGS=ignore \
-    .venv/bin/self-correcting-agent-doctor --production \
-    --trace-dir /tmp/self-correcting-agent-doctor-production-traces \
-    >/tmp/self-correcting-agent-doctor-production.json
-if SELF_CORRECTING_SERVICE_AUTH_TOKEN=replace-with-a-long-random-token \
-SELF_CORRECTING_SERVICE_RATE_LIMIT_PER_MINUTE=60 \
-SELF_CORRECTING_SERVICE_MAX_CONCURRENT_RUNS=4 \
-SELF_CORRECTING_SERVICE_PROTECT_DIAGNOSTICS=true \
+    .venv/bin/kagent-doctor --production \
+    --trace-dir /tmp/kagent-doctor-production-traces \
+    >/tmp/kagent-doctor-production.json
+if KAGENT_SERVICE_AUTH_TOKEN=replace-with-a-long-random-token \
+KAGENT_SERVICE_RATE_LIMIT_PER_MINUTE=60 \
+KAGENT_SERVICE_MAX_CONCURRENT_RUNS=4 \
+KAGENT_SERVICE_PROTECT_DIAGNOSTICS=true \
 PYTHONWARNINGS=ignore \
-    .venv/bin/self-correcting-agent-doctor --production \
-    --trace-dir /tmp/self-correcting-agent-doctor-placeholder-token-production-traces \
-    >/tmp/self-correcting-agent-doctor-placeholder-token-production.json; then
+    .venv/bin/kagent-doctor --production \
+    --trace-dir /tmp/kagent-doctor-placeholder-token-production-traces \
+    >/tmp/kagent-doctor-placeholder-token-production.json; then
     echo "doctor --production unexpectedly passed with placeholder auth token" >&2
     exit 1
 fi
-if SELF_CORRECTING_SERVICE_AUTH_TOKEN=release-gate-token-é \
-SELF_CORRECTING_SERVICE_RATE_LIMIT_PER_MINUTE=60 \
-SELF_CORRECTING_SERVICE_MAX_CONCURRENT_RUNS=4 \
-SELF_CORRECTING_SERVICE_PROTECT_DIAGNOSTICS=true \
+if KAGENT_SERVICE_AUTH_TOKEN=release-gate-token-é \
+KAGENT_SERVICE_RATE_LIMIT_PER_MINUTE=60 \
+KAGENT_SERVICE_MAX_CONCURRENT_RUNS=4 \
+KAGENT_SERVICE_PROTECT_DIAGNOSTICS=true \
 PYTHONWARNINGS=ignore \
-    .venv/bin/self-correcting-agent-doctor --production \
-    --trace-dir /tmp/self-correcting-agent-doctor-unsafe-token-production-traces \
-    >/tmp/self-correcting-agent-doctor-unsafe-token-production.json; then
+    .venv/bin/kagent-doctor --production \
+    --trace-dir /tmp/kagent-doctor-unsafe-token-production-traces \
+    >/tmp/kagent-doctor-unsafe-token-production.json; then
     echo "doctor --production unexpectedly passed with unsafe auth token" >&2
     exit 1
 fi
 grep "auth_token_unsafe" \
-    /tmp/self-correcting-agent-doctor-unsafe-token-production.json >/dev/null
-if SELF_CORRECTING_SERVICE_AUTH_TOKEN=release-gate-token \
-SELF_CORRECTING_SERVICE_RATE_LIMIT_PER_MINUTE=60 \
-SELF_CORRECTING_SERVICE_MAX_CONCURRENT_RUNS=4 \
-SELF_CORRECTING_SERVICE_PROTECT_DIAGNOSTICS=true \
-SELF_CORRECTING_SERVICE_ALLOW_FULL_TRACE_RESPONSE=true \
+    /tmp/kagent-doctor-unsafe-token-production.json >/dev/null
+if KAGENT_SERVICE_AUTH_TOKEN=release-gate-token \
+KAGENT_SERVICE_RATE_LIMIT_PER_MINUTE=60 \
+KAGENT_SERVICE_MAX_CONCURRENT_RUNS=4 \
+KAGENT_SERVICE_PROTECT_DIAGNOSTICS=true \
+KAGENT_SERVICE_ALLOW_FULL_TRACE_RESPONSE=true \
 PYTHONWARNINGS=ignore \
-    .venv/bin/self-correcting-agent-doctor --production \
-    --trace-dir /tmp/self-correcting-agent-doctor-full-trace-production-traces \
-    >/tmp/self-correcting-agent-doctor-full-trace-production.json; then
+    .venv/bin/kagent-doctor --production \
+    --trace-dir /tmp/kagent-doctor-full-trace-production-traces \
+    >/tmp/kagent-doctor-full-trace-production.json; then
     echo "doctor --production unexpectedly passed with full trace responses enabled" >&2
     exit 1
 fi
-RUN_CHECKS_PROVIDER_VALUE=configured-provider-value
-SELF_CORRECTING_SERVICE_AUTH_TOKEN=release-gate-token \
-SELF_CORRECTING_SERVICE_RATE_LIMIT_PER_MINUTE=60 \
-SELF_CORRECTING_SERVICE_MAX_CONCURRENT_RUNS=4 \
-SELF_CORRECTING_SERVICE_PROTECT_DIAGNOSTICS=true \
-SELF_CORRECTING_SERVICE_RUNTIME_MAX_ITERATIONS=2 \
-SELF_CORRECTING_LLM_BASE_URL=configured-provider-base \
-SELF_CORRECTING_LLM_API_KEY="$RUN_CHECKS_PROVIDER_VALUE" \
-SELF_CORRECTING_LLM_MODEL=agent-runtime-model \
+KAGENT_SERVICE_AUTH_TOKEN=release-gate-token \
+KAGENT_SERVICE_RATE_LIMIT_PER_MINUTE=60 \
+KAGENT_SERVICE_MAX_CONCURRENT_RUNS=4 \
+KAGENT_SERVICE_PROTECT_DIAGNOSTICS=true \
+KAGENT_SERVICE_RUNTIME_MAX_ITERATIONS=2 \
+KAGENT_LLM_BASE_URL=configured-provider-base \
+KAGENT_LLM_API_KEY=x \
+KAGENT_LLM_MODEL=agent-runtime-model \
 PYTHONWARNINGS=ignore \
-    .venv/bin/self-correcting-agent-doctor --production \
+    .venv/bin/kagent-doctor --production \
     --require-runtime-provider \
-    --trace-dir /tmp/self-correcting-agent-doctor-runtime-provider-traces \
-    >/tmp/self-correcting-agent-doctor-runtime-provider.json
-if SELF_CORRECTING_SERVICE_AUTH_TOKEN=release-gate-token \
-SELF_CORRECTING_SERVICE_RATE_LIMIT_PER_MINUTE=60 \
-SELF_CORRECTING_SERVICE_MAX_CONCURRENT_RUNS=4 \
-SELF_CORRECTING_SERVICE_PROTECT_DIAGNOSTICS=true \
-SELF_CORRECTING_SERVICE_RUNTIME_MAX_ITERATIONS=1 \
+    --trace-dir /tmp/kagent-doctor-runtime-provider-traces \
+    >/tmp/kagent-doctor-runtime-provider.json
+if KAGENT_SERVICE_AUTH_TOKEN=release-gate-token \
+KAGENT_SERVICE_RATE_LIMIT_PER_MINUTE=60 \
+KAGENT_SERVICE_MAX_CONCURRENT_RUNS=4 \
+KAGENT_SERVICE_PROTECT_DIAGNOSTICS=true \
+KAGENT_SERVICE_RUNTIME_MAX_ITERATIONS=1 \
 PYTHONWARNINGS=ignore \
-    .venv/bin/self-correcting-agent-doctor --production \
+    .venv/bin/kagent-doctor --production \
     --require-runtime-provider \
-    --trace-dir /tmp/self-correcting-agent-doctor-runtime-provider-missing-traces \
-    >/tmp/self-correcting-agent-doctor-runtime-provider-missing.json; then
+    --trace-dir /tmp/kagent-doctor-runtime-provider-missing-traces \
+    >/tmp/kagent-doctor-runtime-provider-missing.json; then
     echo "doctor --require-runtime-provider unexpectedly passed without provider config" >&2
     exit 1
 fi
 grep "llm_base_url_required" \
-    /tmp/self-correcting-agent-doctor-runtime-provider-missing.json >/dev/null
+    /tmp/kagent-doctor-runtime-provider-missing.json >/dev/null
 grep "llm_model_required" \
-    /tmp/self-correcting-agent-doctor-runtime-provider-missing.json >/dev/null
+    /tmp/kagent-doctor-runtime-provider-missing.json >/dev/null
 grep "llm_api_key_required" \
-    /tmp/self-correcting-agent-doctor-runtime-provider-missing.json >/dev/null
+    /tmp/kagent-doctor-runtime-provider-missing.json >/dev/null
 grep "runtime_iterations_too_low" \
-    /tmp/self-correcting-agent-doctor-runtime-provider-missing.json >/dev/null
-if SELF_CORRECTING_SERVICE_PORT=not-a-port \
+    /tmp/kagent-doctor-runtime-provider-missing.json >/dev/null
+if KAGENT_SERVICE_PORT=not-a-port \
 PYTHONWARNINGS=ignore \
-    .venv/bin/self-correcting-agent-doctor --production \
-    >/tmp/self-correcting-agent-doctor-invalid-env.stdout \
-    2>/tmp/self-correcting-agent-doctor-invalid-env.stderr; then
+    .venv/bin/kagent-doctor --production \
+    >/tmp/kagent-doctor-invalid-env.stdout \
+    2>/tmp/kagent-doctor-invalid-env.stderr; then
     echo "doctor --production unexpectedly passed with invalid env config" >&2
     exit 1
 fi
-grep "SELF_CORRECTING_SERVICE_PORT must be an integer" \
-    /tmp/self-correcting-agent-doctor-invalid-env.stderr >/dev/null
-if grep "Traceback" /tmp/self-correcting-agent-doctor-invalid-env.stderr >/dev/null; then
+grep "KAGENT_SERVICE_PORT must be an integer" \
+    /tmp/kagent-doctor-invalid-env.stderr >/dev/null
+if grep "Traceback" /tmp/kagent-doctor-invalid-env.stderr >/dev/null; then
     echo "doctor unexpectedly emitted traceback for invalid env config" >&2
     exit 1
 fi
-PYTHONWARNINGS=ignore .venv/bin/self-correcting-agent-serve --help >/tmp/self-correcting-agent-serve-help.txt
-if SELF_CORRECTING_SERVICE_PORT=not-a-port \
+PYTHONWARNINGS=ignore .venv/bin/kagent-serve --help >/tmp/kagent-serve-help.txt
+if KAGENT_SERVICE_PORT=not-a-port \
 PYTHONWARNINGS=ignore \
-    .venv/bin/self-correcting-agent-serve --help \
-    >/tmp/self-correcting-agent-serve-invalid-env.stdout \
-    2>/tmp/self-correcting-agent-serve-invalid-env.stderr; then
+    .venv/bin/kagent-serve --help \
+    >/tmp/kagent-serve-invalid-env.stdout \
+    2>/tmp/kagent-serve-invalid-env.stderr; then
     echo "serve --help unexpectedly passed with invalid env config" >&2
     exit 1
 fi
-grep "SELF_CORRECTING_SERVICE_PORT must be an integer" \
-    /tmp/self-correcting-agent-serve-invalid-env.stderr >/dev/null
-if grep "Traceback" /tmp/self-correcting-agent-serve-invalid-env.stderr >/dev/null; then
+grep "KAGENT_SERVICE_PORT must be an integer" \
+    /tmp/kagent-serve-invalid-env.stderr >/dev/null
+if grep "Traceback" /tmp/kagent-serve-invalid-env.stderr >/dev/null; then
     echo "serve unexpectedly emitted traceback for invalid env config" >&2
     exit 1
 fi
 PYTHONWARNINGS=ignore sh scripts/smoke_service.sh
-PYTHONWARNINGS=ignore sh scripts/smoke_internal_runtime.sh >/tmp/self-correcting-agent-internal-runtime-smoke.json
-PYTHONWARNINGS=ignore .venv/bin/python -m self_correcting_langgraph_agent.cli "calculate 2 + 3 then count words in 'ship small reliable agents'" >/tmp/self-correcting-agent-smoke.json
-PYTHONWARNINGS=ignore .venv/bin/python -m self_correcting_langgraph_agent.cli "calculate 2 + 3 then subtract 10 - 4" --plan >/tmp/self-correcting-agent-plan.json
-PYTHONWARNINGS=ignore .venv/bin/python -m self_correcting_langgraph_agent.cli "uppercase text in 'agent loop'" --inject-fault "uppercase text in 'agent loop'=empty-answer" --summary --output /tmp/self-correcting-agent-summary-output.json >/tmp/self-correcting-agent-summary.json
-rm -f /tmp/self-correcting-agent-session-memory.json
-printf '我是卡卡\nexit\n' | PYTHONWARNINGS=ignore .venv/bin/python -m self_correcting_langgraph_agent.cli \
+PYTHONWARNINGS=ignore sh scripts/smoke_internal_runtime.sh >/tmp/kagent-internal-runtime-smoke.json
+PYTHONWARNINGS=ignore .venv/bin/python -m kagent.cli "calculate 2 + 3 then count words in 'ship small reliable agents'" >/tmp/kagent-smoke.json
+PYTHONWARNINGS=ignore .venv/bin/python -m kagent.cli "calculate 2 + 3 then subtract 10 - 4" --plan >/tmp/kagent-plan.json
+PYTHONWARNINGS=ignore .venv/bin/python -m kagent.cli "uppercase text in 'agent loop'" --inject-fault "uppercase text in 'agent loop'=empty-answer" --summary --output /tmp/kagent-summary-output.json >/tmp/kagent-summary.json
+rm -f /tmp/kagent-session-memory.json
+printf '我是卡卡\nexit\n' | PYTHONWARNINGS=ignore .venv/bin/python -m kagent.cli \
     --runtime \
     --interactive \
     --max-iterations 1 \
     --runtime-plan '{"actions":[],"final_answer":"你好，卡卡。"}' \
-    --session-memory /tmp/self-correcting-agent-session-memory.json \
-    >/tmp/self-correcting-agent-session-memory-smoke.json
+    --session-memory /tmp/kagent-session-memory.json \
+    >/tmp/kagent-session-memory-smoke.json
 PYTHONWARNINGS=ignore .venv/bin/python - <<'PY'
 import json
 import stat
 from pathlib import Path
 
-output = json.load(open("/tmp/self-correcting-agent-session-memory-smoke.json", encoding="utf-8"))
-memory_path = Path("/tmp/self-correcting-agent-session-memory.json")
+output = json.load(open("/tmp/kagent-session-memory-smoke.json", encoding="utf-8"))
+memory_path = Path("/tmp/kagent-session-memory.json")
 memory = json.loads(memory_path.read_text(encoding="utf-8"))
 mode = stat.S_IMODE(memory_path.stat().st_mode)
 if output["status"] != "done" or output["answer"] != "你好，卡卡。":
@@ -186,20 +185,20 @@ if memory["turns"] != [{"user": "我是卡卡", "assistant": "你好，卡卡。
 if mode != 0o600:
     raise SystemExit(f"unexpected session memory file mode: {oct(mode)}")
 PY
-PYTHONWARNINGS=ignore .venv/bin/python -m self_correcting_langgraph_agent.eval.evaluator --fail-on-failure >/tmp/self-correcting-agent-eval.json
-PYTHONWARNINGS=ignore .venv/bin/self-correcting-agent-eval --list-cases >/tmp/self-correcting-agent-entrypoint-eval-cases.json
-PYTHONWARNINGS=ignore .venv/bin/python -m self_correcting_langgraph_agent.eval.evaluator --list-cases >/tmp/self-correcting-agent-eval-cases.json
-PYTHONWARNINGS=ignore .venv/bin/python -m self_correcting_langgraph_agent.eval.evaluator --category recovery >/tmp/self-correcting-agent-eval-recovery.json
-PYTHONWARNINGS=ignore .venv/bin/python -m self_correcting_langgraph_agent.eval.evaluator --case subtraction_tool_success >/tmp/self-correcting-agent-eval-subtraction.json
-printf '{"iteration":1,"duration_seconds":"1","status":"passed","checks_exit_code":0,"evaluator_passed":14,"evaluator_failed":0,"evaluator_slowest_case":"multi_step_success","evaluator_recovered_cases":"4","evaluator_recovery_rate":"0.29","evaluator_category_counts":{"failure":"3","recovery":"4","tool":"6","workflow":"1"}}\n' >/tmp/self-correcting-agent-metrics.jsonl
-PYTHONWARNINGS=ignore .venv/bin/python -m self_correcting_langgraph_agent.ops.metrics /tmp/self-correcting-agent-metrics.jsonl --output /tmp/self-correcting-agent-metrics-summary-output.json >/tmp/self-correcting-agent-metrics-summary.json
-PYTHONWARNINGS=ignore .venv/bin/self-correcting-agent-metrics /tmp/self-correcting-agent-metrics.jsonl --require-recent-health healthy >/tmp/self-correcting-agent-entrypoint-metrics-summary.json
-rm -rf /tmp/self-correcting-agent-trace-prune-smoke
+PYTHONWARNINGS=ignore .venv/bin/python -m kagent.eval.evaluator --fail-on-failure >/tmp/kagent-eval.json
+PYTHONWARNINGS=ignore .venv/bin/kagent-eval --list-cases >/tmp/kagent-entrypoint-eval-cases.json
+PYTHONWARNINGS=ignore .venv/bin/python -m kagent.eval.evaluator --list-cases >/tmp/kagent-eval-cases.json
+PYTHONWARNINGS=ignore .venv/bin/python -m kagent.eval.evaluator --category recovery >/tmp/kagent-eval-recovery.json
+PYTHONWARNINGS=ignore .venv/bin/python -m kagent.eval.evaluator --case subtraction_tool_success >/tmp/kagent-eval-subtraction.json
+printf '{"iteration":1,"duration_seconds":"1","status":"passed","checks_exit_code":0,"evaluator_passed":14,"evaluator_failed":0,"evaluator_slowest_case":"multi_step_success","evaluator_recovered_cases":"4","evaluator_recovery_rate":"0.29","evaluator_category_counts":{"failure":"3","recovery":"4","tool":"6","workflow":"1"}}\n' >/tmp/kagent-metrics.jsonl
+PYTHONWARNINGS=ignore .venv/bin/python -m kagent.ops.metrics /tmp/kagent-metrics.jsonl --output /tmp/kagent-metrics-summary-output.json >/tmp/kagent-metrics-summary.json
+PYTHONWARNINGS=ignore .venv/bin/kagent-metrics /tmp/kagent-metrics.jsonl --require-recent-health healthy >/tmp/kagent-entrypoint-metrics-summary.json
+rm -rf /tmp/kagent-trace-prune-smoke
 PYTHONWARNINGS=ignore .venv/bin/python - <<'PY'
 import os
 from pathlib import Path
 
-trace_dir = Path("/tmp/self-correcting-agent-trace-prune-smoke")
+trace_dir = Path("/tmp/kagent-trace-prune-smoke")
 trace_dir.mkdir(parents=True)
 old_trace = trace_dir / "old.json"
 fresh_trace = trace_dir / "fresh.json"
@@ -211,23 +210,23 @@ os.utime(old_trace, (1_000.0, 1_000.0))
 os.utime(fresh_trace, (4_102_444_800.0, 4_102_444_800.0))
 os.utime(note, (1_000.0, 1_000.0))
 PY
-PYTHONWARNINGS=ignore .venv/bin/self-correcting-agent-trace-prune \
-    /tmp/self-correcting-agent-trace-prune-smoke \
+PYTHONWARNINGS=ignore .venv/bin/kagent-trace-prune \
+    /tmp/kagent-trace-prune-smoke \
     --max-age-days 1 \
-    >/tmp/self-correcting-agent-trace-prune-dry-run.json
-PYTHONWARNINGS=ignore .venv/bin/self-correcting-agent-trace-prune \
-    /tmp/self-correcting-agent-trace-prune-smoke \
+    >/tmp/kagent-trace-prune-dry-run.json
+PYTHONWARNINGS=ignore .venv/bin/kagent-trace-prune \
+    /tmp/kagent-trace-prune-smoke \
     --max-age-days 1 \
     --delete \
-    >/tmp/self-correcting-agent-trace-prune-delete.json
+    >/tmp/kagent-trace-prune-delete.json
 PYTHONWARNINGS=ignore .venv/bin/python - <<'PY'
 import json
 import os
 from pathlib import Path
 
-trace_dir = Path("/tmp/self-correcting-agent-trace-prune-smoke")
-dry_run = json.load(open("/tmp/self-correcting-agent-trace-prune-dry-run.json", encoding="utf-8"))
-deleted = json.load(open("/tmp/self-correcting-agent-trace-prune-delete.json", encoding="utf-8"))
+trace_dir = Path("/tmp/kagent-trace-prune-smoke")
+dry_run = json.load(open("/tmp/kagent-trace-prune-dry-run.json", encoding="utf-8"))
+deleted = json.load(open("/tmp/kagent-trace-prune-delete.json", encoding="utf-8"))
 if dry_run["dry_run"] is not True or dry_run["deleted"] != 0 or dry_run["matched"] != 1:
     raise SystemExit(f"unexpected trace prune dry-run summary: {dry_run}")
 if deleted["dry_run"] is not False or deleted["deleted"] != 1:
@@ -258,24 +257,24 @@ runtime_legacy.write_text(
 for path in [runtime_done, runtime_pending, runtime_legacy]:
     os.utime(path, (1_000.0, 1_000.0))
 PY
-PYTHONWARNINGS=ignore .venv/bin/self-correcting-agent-trace-prune \
-    /tmp/self-correcting-agent-trace-prune-smoke \
+PYTHONWARNINGS=ignore .venv/bin/kagent-trace-prune \
+    /tmp/kagent-trace-prune-smoke \
     --max-age-days 1 \
     --runtime-only \
-    >/tmp/self-correcting-agent-runtime-trace-prune-dry-run.json
-PYTHONWARNINGS=ignore .venv/bin/self-correcting-agent-trace-prune \
-    /tmp/self-correcting-agent-trace-prune-smoke \
+    >/tmp/kagent-runtime-trace-prune-dry-run.json
+PYTHONWARNINGS=ignore .venv/bin/kagent-trace-prune \
+    /tmp/kagent-trace-prune-smoke \
     --max-age-days 1 \
     --runtime-only \
     --delete \
-    >/tmp/self-correcting-agent-runtime-trace-prune-delete.json
+    >/tmp/kagent-runtime-trace-prune-delete.json
 PYTHONWARNINGS=ignore .venv/bin/python - <<'PY'
 import json
 from pathlib import Path
 
-trace_dir = Path("/tmp/self-correcting-agent-trace-prune-smoke")
-runtime_dry_run = json.load(open("/tmp/self-correcting-agent-runtime-trace-prune-dry-run.json", encoding="utf-8"))
-runtime_deleted = json.load(open("/tmp/self-correcting-agent-runtime-trace-prune-delete.json", encoding="utf-8"))
+trace_dir = Path("/tmp/kagent-trace-prune-smoke")
+runtime_dry_run = json.load(open("/tmp/kagent-runtime-trace-prune-dry-run.json", encoding="utf-8"))
+runtime_deleted = json.load(open("/tmp/kagent-runtime-trace-prune-delete.json", encoding="utf-8"))
 if runtime_dry_run["dry_run"] is not True or runtime_dry_run["matched"] != 1:
     raise SystemExit(f"unexpected runtime trace prune dry-run summary: {runtime_dry_run}")
 if runtime_dry_run["protected_pending"] != 1:
@@ -295,7 +294,7 @@ PYTHONWARNINGS=ignore .venv/bin/python - <<'PY'
 import json
 from pathlib import Path
 
-trace_path = Path("/tmp/self-correcting-agent-trace-replay.json")
+trace_path = Path("/tmp/kagent-trace-replay.json")
 trace_path.write_text(
     json.dumps(
         {
@@ -364,14 +363,14 @@ trace_path.write_text(
     encoding="utf-8",
 )
 PY
-PYTHONWARNINGS=ignore .venv/bin/self-correcting-agent-trace-replay \
-    /tmp/self-correcting-agent-trace-replay.json \
-    >/tmp/self-correcting-agent-trace-replay-summary.json
+PYTHONWARNINGS=ignore .venv/bin/kagent-trace-replay \
+    /tmp/kagent-trace-replay.json \
+    >/tmp/kagent-trace-replay-summary.json
 PYTHONWARNINGS=ignore .venv/bin/python - <<'PY'
 import json
 
 summary_text = open(
-    "/tmp/self-correcting-agent-trace-replay-summary.json", encoding="utf-8"
+    "/tmp/kagent-trace-replay-summary.json", encoding="utf-8"
 ).read()
 summary = json.loads(summary_text)
 if summary["tool_counts"] != {"apply_patch": "1", "read_file": "1"}:
@@ -387,30 +386,30 @@ if "secret patch should not replay" in summary_text:
 if "secret progress metadata should not replay" in summary_text:
     raise SystemExit("trace replay leaked progress metadata")
 PY
-rm -rf /tmp/self-correcting-agent-wheelhouse
-PYTHONWARNINGS=ignore .venv/bin/python -m pip wheel --no-deps --no-build-isolation . -w /tmp/self-correcting-agent-wheelhouse >/tmp/self-correcting-agent-wheel-build.log
-ls /tmp/self-correcting-agent-wheelhouse/self_correcting_langgraph_agent-0.1.0-*.whl >/dev/null
-PYTHONWARNINGS=ignore .venv/bin/self-correcting-agent-release-manifest \
-    /tmp/self-correcting-agent-wheelhouse/self_correcting_langgraph_agent-0.1.0-*.whl \
-    --output /tmp/self-correcting-agent-release-manifest.json \
-    >/tmp/self-correcting-agent-release-manifest.stdout.json
-PYTHONWARNINGS=ignore .venv/bin/self-correcting-agent-release-manifest \
-    --verify /tmp/self-correcting-agent-release-manifest.json \
-    >/tmp/self-correcting-agent-release-manifest-verify.json
+rm -rf /tmp/kagent-wheelhouse
+PYTHONWARNINGS=ignore .venv/bin/python -m pip wheel --no-deps --no-build-isolation . -w /tmp/kagent-wheelhouse >/tmp/kagent-wheel-build.log
+ls /tmp/kagent-wheelhouse/kagent-0.1.0-*.whl >/dev/null
+PYTHONWARNINGS=ignore .venv/bin/kagent-release-manifest \
+    /tmp/kagent-wheelhouse/kagent-0.1.0-*.whl \
+    --output /tmp/kagent-release-manifest.json \
+    >/tmp/kagent-release-manifest.stdout.json
+PYTHONWARNINGS=ignore .venv/bin/kagent-release-manifest \
+    --verify /tmp/kagent-release-manifest.json \
+    >/tmp/kagent-release-manifest-verify.json
 PYTHONWARNINGS=ignore .venv/bin/python scripts/production_readiness_audit.py \
-    >/tmp/self-correcting-agent-production-readiness-audit.json
-PYTHONWARNINGS=ignore .venv/bin/python -m self_correcting_langgraph_agent.ops.release_evidence \
+    >/tmp/kagent-production-readiness-audit.json
+PYTHONWARNINGS=ignore .venv/bin/python -m kagent.ops.release_evidence \
     --run-checks-exit-code 0 \
-    --readiness-audit /tmp/self-correcting-agent-production-readiness-audit.json \
-    --release-manifest /tmp/self-correcting-agent-release-manifest.json \
-    --output /tmp/self-correcting-agent-release-evidence.json \
-    >/tmp/self-correcting-agent-release-evidence.stdout.json
+    --readiness-audit /tmp/kagent-production-readiness-audit.json \
+    --release-manifest /tmp/kagent-release-manifest.json \
+    --output /tmp/kagent-release-evidence.json \
+    >/tmp/kagent-release-evidence.stdout.json
 PYTHONWARNINGS=ignore .venv/bin/python - <<'PY'
 import json
 
-manifest = json.load(open("/tmp/self-correcting-agent-release-manifest.json", encoding="utf-8"))
-evidence = json.load(open("/tmp/self-correcting-agent-release-evidence.json", encoding="utf-8"))
-if manifest["package"] != "self-correcting-langgraph-agent":
+manifest = json.load(open("/tmp/kagent-release-manifest.json", encoding="utf-8"))
+evidence = json.load(open("/tmp/kagent-release-evidence.json", encoding="utf-8"))
+if manifest["package"] != "kagent":
     raise SystemExit("release manifest package mismatch")
 if manifest["version"] != "0.1.0":
     raise SystemExit("release manifest version mismatch")
@@ -430,31 +429,31 @@ if evidence["readiness_audit"]["status"] != "passed":
 if evidence["release_manifest"]["status"] != "verified":
     raise SystemExit("release evidence manifest mismatch")
 PY
-printf '{not-json' >/tmp/self-correcting-agent-release-manifest-invalid.json
-if PYTHONWARNINGS=ignore .venv/bin/self-correcting-agent-release-manifest \
-    --verify /tmp/self-correcting-agent-release-manifest-invalid.json \
-    >/tmp/self-correcting-agent-release-manifest-invalid.stdout \
-    2>/tmp/self-correcting-agent-release-manifest-invalid.stderr; then
+printf '{not-json' >/tmp/kagent-release-manifest-invalid.json
+if PYTHONWARNINGS=ignore .venv/bin/kagent-release-manifest \
+    --verify /tmp/kagent-release-manifest-invalid.json \
+    >/tmp/kagent-release-manifest-invalid.stdout \
+    2>/tmp/kagent-release-manifest-invalid.stderr; then
     echo "release manifest unexpectedly passed with invalid JSON" >&2
     exit 1
 fi
 grep "invalid release manifest JSON" \
-    /tmp/self-correcting-agent-release-manifest-invalid.stderr >/dev/null
-if grep "Traceback" /tmp/self-correcting-agent-release-manifest-invalid.stderr >/dev/null; then
+    /tmp/kagent-release-manifest-invalid.stderr >/dev/null
+if grep "Traceback" /tmp/kagent-release-manifest-invalid.stderr >/dev/null; then
     echo "release manifest unexpectedly emitted traceback for invalid JSON" >&2
     exit 1
 fi
-printf '{"package":"self-correcting-langgraph-agent","version":"0.1.0","artifact_count":"1","artifacts":[{"sha256":"abc","size_bytes":"123"}]}\n' >/tmp/self-correcting-agent-release-manifest-missing-path.json
-if PYTHONWARNINGS=ignore .venv/bin/self-correcting-agent-release-manifest \
-    --verify /tmp/self-correcting-agent-release-manifest-missing-path.json \
-    >/tmp/self-correcting-agent-release-manifest-missing-path.stdout \
-    2>/tmp/self-correcting-agent-release-manifest-missing-path.stderr; then
+printf '{"package":"kagent","version":"0.1.0","artifact_count":"1","artifacts":[{"sha256":"abc","size_bytes":"123"}]}\n' >/tmp/kagent-release-manifest-missing-path.json
+if PYTHONWARNINGS=ignore .venv/bin/kagent-release-manifest \
+    --verify /tmp/kagent-release-manifest-missing-path.json \
+    >/tmp/kagent-release-manifest-missing-path.stdout \
+    2>/tmp/kagent-release-manifest-missing-path.stderr; then
     echo "release manifest unexpectedly passed with a missing artifact path" >&2
     exit 1
 fi
 grep "artifact path missing" \
-    /tmp/self-correcting-agent-release-manifest-missing-path.stdout >/dev/null
-if grep "Traceback" /tmp/self-correcting-agent-release-manifest-missing-path.stderr >/dev/null; then
+    /tmp/kagent-release-manifest-missing-path.stdout >/dev/null
+if grep "Traceback" /tmp/kagent-release-manifest-missing-path.stderr >/dev/null; then
     echo "release manifest unexpectedly emitted traceback for missing artifact path" >&2
     exit 1
 fi
@@ -462,7 +461,7 @@ PYTHONWARNINGS=ignore .venv/bin/python - <<'PY'
 import json
 
 manifest = {
-    "package": "self-correcting-langgraph-agent",
+    "package": "kagent",
     "version": "0.1.0",
     "artifact_count": "1",
     "artifacts": [
@@ -473,71 +472,71 @@ manifest = {
         }
     ],
 }
-with open("/tmp/self-correcting-agent-release-manifest-invalid-path.json", "w", encoding="utf-8") as handle:
+with open("/tmp/kagent-release-manifest-invalid-path.json", "w", encoding="utf-8") as handle:
     json.dump(manifest, handle)
     handle.write("\n")
 PY
-if PYTHONWARNINGS=ignore .venv/bin/self-correcting-agent-release-manifest \
-    --verify /tmp/self-correcting-agent-release-manifest-invalid-path.json \
-    >/tmp/self-correcting-agent-release-manifest-invalid-path.stdout \
-    2>/tmp/self-correcting-agent-release-manifest-invalid-path.stderr; then
+if PYTHONWARNINGS=ignore .venv/bin/kagent-release-manifest \
+    --verify /tmp/kagent-release-manifest-invalid-path.json \
+    >/tmp/kagent-release-manifest-invalid-path.stdout \
+    2>/tmp/kagent-release-manifest-invalid-path.stderr; then
     echo "release manifest unexpectedly passed with an invalid artifact path" >&2
     exit 1
 fi
 grep "artifact path invalid" \
-    /tmp/self-correcting-agent-release-manifest-invalid-path.stdout >/dev/null
-if grep "Traceback" /tmp/self-correcting-agent-release-manifest-invalid-path.stderr >/dev/null; then
+    /tmp/kagent-release-manifest-invalid-path.stdout >/dev/null
+if grep "Traceback" /tmp/kagent-release-manifest-invalid-path.stderr >/dev/null; then
     echo "release manifest unexpectedly emitted traceback for invalid artifact path" >&2
     exit 1
 fi
-rm -rf /tmp/self-correcting-agent-release-manifest-artifact-dir
-mkdir -p /tmp/self-correcting-agent-release-manifest-artifact-dir
-printf '{"package":"self-correcting-langgraph-agent","version":"0.1.0","artifact_count":"1","artifacts":[{"path":"/tmp/self-correcting-agent-release-manifest-artifact-dir","sha256":"abc","size_bytes":"123"}]}\n' >/tmp/self-correcting-agent-release-manifest-directory-path.json
-if PYTHONWARNINGS=ignore .venv/bin/self-correcting-agent-release-manifest \
-    --verify /tmp/self-correcting-agent-release-manifest-directory-path.json \
-    >/tmp/self-correcting-agent-release-manifest-directory-path.stdout \
-    2>/tmp/self-correcting-agent-release-manifest-directory-path.stderr; then
+rm -rf /tmp/kagent-release-manifest-artifact-dir
+mkdir -p /tmp/kagent-release-manifest-artifact-dir
+printf '{"package":"kagent","version":"0.1.0","artifact_count":"1","artifacts":[{"path":"/tmp/kagent-release-manifest-artifact-dir","sha256":"abc","size_bytes":"123"}]}\n' >/tmp/kagent-release-manifest-directory-path.json
+if PYTHONWARNINGS=ignore .venv/bin/kagent-release-manifest \
+    --verify /tmp/kagent-release-manifest-directory-path.json \
+    >/tmp/kagent-release-manifest-directory-path.stdout \
+    2>/tmp/kagent-release-manifest-directory-path.stderr; then
     echo "release manifest unexpectedly passed with a directory artifact path" >&2
     exit 1
 fi
 grep "artifact is not a file" \
-    /tmp/self-correcting-agent-release-manifest-directory-path.stdout >/dev/null
-if grep "Traceback" /tmp/self-correcting-agent-release-manifest-directory-path.stderr >/dev/null; then
+    /tmp/kagent-release-manifest-directory-path.stdout >/dev/null
+if grep "Traceback" /tmp/kagent-release-manifest-directory-path.stderr >/dev/null; then
     echo "release manifest unexpectedly emitted traceback for directory artifact path" >&2
     exit 1
 fi
-rm -rf /tmp/self-correcting-agent-isolated-wheelhouse
-if ! PYTHONWARNINGS=ignore .venv/bin/python -m pip wheel --no-deps . -w /tmp/self-correcting-agent-isolated-wheelhouse >/tmp/self-correcting-agent-isolated-wheel-build.log 2>&1; then
+rm -rf /tmp/kagent-isolated-wheelhouse
+if ! PYTHONWARNINGS=ignore .venv/bin/python -m pip wheel --no-deps . -w /tmp/kagent-isolated-wheelhouse >/tmp/kagent-isolated-wheel-build.log 2>&1; then
     echo "isolated wheel build failed; retrying without build isolation" >&2
-    PYTHONWARNINGS=ignore .venv/bin/python -m pip wheel --no-deps --no-build-isolation . -w /tmp/self-correcting-agent-isolated-wheelhouse >/tmp/self-correcting-agent-isolated-wheel-build-fallback.log
+    PYTHONWARNINGS=ignore .venv/bin/python -m pip wheel --no-deps --no-build-isolation . -w /tmp/kagent-isolated-wheelhouse >/tmp/kagent-isolated-wheel-build-fallback.log
 fi
-ls /tmp/self-correcting-agent-isolated-wheelhouse/self_correcting_langgraph_agent-0.1.0-*.whl >/dev/null
-rm -rf /tmp/self-correcting-agent-wheel-install-venv
-PYTHONWARNINGS=ignore .venv/bin/python -m venv /tmp/self-correcting-agent-wheel-install-venv
-PYTHONWARNINGS=ignore /tmp/self-correcting-agent-wheel-install-venv/bin/python -m pip install --no-deps /tmp/self-correcting-agent-wheelhouse/self_correcting_langgraph_agent-0.1.0-*.whl >/tmp/self-correcting-agent-wheel-install.log
-PYTHONWARNINGS=ignore /tmp/self-correcting-agent-wheel-install-venv/bin/python - <<'PY' >/tmp/self-correcting-agent-wheel-install-smoke.json
+ls /tmp/kagent-isolated-wheelhouse/kagent-0.1.0-*.whl >/dev/null
+rm -rf /tmp/kagent-wheel-install-venv
+PYTHONWARNINGS=ignore .venv/bin/python -m venv /tmp/kagent-wheel-install-venv
+PYTHONWARNINGS=ignore /tmp/kagent-wheel-install-venv/bin/python -m pip install --no-deps /tmp/kagent-wheelhouse/kagent-0.1.0-*.whl >/tmp/kagent-wheel-install.log
+PYTHONWARNINGS=ignore /tmp/kagent-wheel-install-venv/bin/python - <<'PY' >/tmp/kagent-wheel-install-smoke.json
 import importlib.metadata
 import json
 
-import self_correcting_langgraph_agent as package
+import kagent as package
 
-distribution = importlib.metadata.distribution("self-correcting-langgraph-agent")
+distribution = importlib.metadata.distribution("kagent")
 console_scripts = sorted(
     entry_point.name
     for entry_point in distribution.entry_points
     if entry_point.group == "console_scripts"
 )
 expected_scripts = [
-    "self-correcting-agent",
-    "self-correcting-agent-batch",
-    "self-correcting-agent-doctor",
-    "self-correcting-agent-eval",
-    "self-correcting-agent-metrics",
-    "self-correcting-agent-release-evidence",
-    "self-correcting-agent-release-manifest",
-    "self-correcting-agent-serve",
-    "self-correcting-agent-trace-prune",
-    "self-correcting-agent-trace-replay",
+    "kagent",
+    "kagent-batch",
+    "kagent-doctor",
+    "kagent-eval",
+    "kagent-metrics",
+    "kagent-release-evidence",
+    "kagent-release-manifest",
+    "kagent-serve",
+    "kagent-trace-prune",
+    "kagent-trace-replay",
 ]
 missing_scripts = sorted(set(expected_scripts) - set(console_scripts))
 if package.__version__ != "0.1.0":
