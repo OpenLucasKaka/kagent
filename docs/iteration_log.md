@@ -718,7 +718,7 @@
 - Added Codex-style runtime run duration histograms to JSON metrics and
   Prometheus exposition so operators can graph runtime latency separately from
   HTTP transport latency and the deterministic `/run` path.
-- Added `SelfCorrectingAgentSlowRuntimeRuns` Prometheus alerting plus operations,
+- Added `KagentSlowRuntimeRuns` Prometheus alerting plus operations,
   deployment, production-readiness, and regression-test coverage so runtime
   latency is part of the production paging surface.
 - Verified a real OpenAI-compatible provider end to end with the live runtime

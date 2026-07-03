@@ -132,11 +132,11 @@ def test_operations_runbook_documents_continuous_iteration_and_failure_triage():
     assert "Error Code Catalog" in runbook
     assert "agent_run_timeout" in runbook
     assert "goal_too_large" in runbook
-    assert "SelfCorrectingAgentMalformedRunRequests" in runbook
-    assert "SelfCorrectingAgentOversizedRunRequests" in runbook
-    assert "SelfCorrectingAgentHighRequestLatency" in runbook
-    assert "SelfCorrectingAgentSlowAgentRuns" in runbook
-    assert "SelfCorrectingAgentSlowRuntimeRuns" in runbook
+    assert "KagentMalformedRunRequests" in runbook
+    assert "KagentOversizedRunRequests" in runbook
+    assert "KagentHighRequestLatency" in runbook
+    assert "KagentSlowAgentRuns" in runbook
+    assert "KagentSlowRuntimeRuns" in runbook
     assert "runtime run latency" in runbook
     assert "full_trace_disabled" in runbook
     assert "incomplete_request_body" in runbook

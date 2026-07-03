@@ -195,7 +195,7 @@ with urllib.request.urlopen(head_request, timeout=REQUEST_TIMEOUT_SECONDS) as re
     assert response.headers["X-Content-Type-Options"] == "nosniff"
     assert response.headers["Cache-Control"] == "no-store"
     assert response.headers["Referrer-Policy"] == "no-referrer"
-    assert response.headers["Server"] == "SelfCorrectingAgentHTTP/0.1"
+    assert response.headers["Server"] == "KagentHTTP/0.1"
     assert "Python" not in response.headers["Server"]
     assert response.read() == b""
 head_ready_request = urllib.request.Request(f"{base_url}/ready", method="HEAD")

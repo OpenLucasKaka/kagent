@@ -948,27 +948,27 @@ runner starts. `full_trace` must be a JSON boolean; strings such as `"true"`
 return `400 invalid_request_body` before the agent runner starts. `goal` is
 capped by `KAGENT_SERVICE_MAX_GOAL_CHARS` and oversized goals return
 `413 goal_too_large` before the agent runner starts.
-The `SelfCorrectingAgentHighRequestLatency` alert fires when the 95th
+The `KagentHighRequestLatency` alert fires when the 95th
 percentile HTTP request latency from
 `kagent_request_duration_seconds_bucket` stays above 2 seconds.
 Check downstream run duration, trace storage latency, concurrency saturation,
 and gateway retries before raising timeout or concurrency limits.
-The `SelfCorrectingAgentSlowAgentRuns` alert fires when the 95th percentile
+The `KagentSlowAgentRuns` alert fires when the 95th percentile
 internal agent execution latency from
 `kagent_agent_run_duration_seconds_bucket` stays above 2
-seconds. If this fires without `SelfCorrectingAgentHighRequestLatency`, focus on
+seconds. If this fires without `KagentHighRequestLatency`, focus on
 planner, tool, verifier, and retry behavior rather than HTTP transport.
-The `SelfCorrectingAgentSlowRuntimeRuns` alert fires when the 95th percentile
+The `KagentSlowRuntimeRuns` alert fires when the 95th percentile
 Codex-style runtime run latency from
 `kagent_runtime_run_duration_seconds_bucket` stays above 5
-seconds. If this fires without `SelfCorrectingAgentSlowAgentRuns`, focus on
+seconds. If this fires without `KagentSlowAgentRuns`, focus on
 runtime planning depth, approval gates, external tool latency, and iteration
 budget pressure rather than the deterministic `/run` path.
-The `SelfCorrectingAgentMalformedRunRequests` alert fires when malformed
+The `KagentMalformedRunRequests` alert fires when malformed
 `/run` requests persist, including invalid `Content-Length`, incomplete bodies,
 or missing/duplicated/non-JSON `Content-Type`. Check gateway normalization,
 client HTTP libraries, and whether probes or scanners are reaching `/run`.
-The `SelfCorrectingAgentOversizedRunRequests` alert fires when
+The `KagentOversizedRunRequests` alert fires when
 `request_too_large` or `goal_too_large` responses persist. Check whether a
 client is sending unbounded prompts, whether a gateway body limit is higher
 than the service limit, or whether `KAGENT_SERVICE_MAX_REQUEST_BYTES`

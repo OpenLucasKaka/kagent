@@ -29,7 +29,7 @@ def test_internal_rollout_guide_is_linked_and_actionable():
     assert "invalid_evidence" in guide
     assert "scripts/staging_acceptance.sh" in guide
     assert "kagent_runtime_stale_pending_approvals_current" in guide
-    assert "SelfCorrectingAgentRuntimeStalePendingApprovals" in guide
+    assert "KagentRuntimeStalePendingApprovals" in guide
     assert "--provider-smoke-evidence" in guide
     assert "--require-provider-smoke" in guide
     assert "--staging-acceptance-evidence" in guide

@@ -105,20 +105,20 @@ REQUIRED_GRAFANA_METRICS = (
 )
 
 REQUIRED_PROMETHEUS_ALERTS = (
-    "SelfCorrectingAgentServiceDown",
-    "SelfCorrectingAgentHighErrorRate",
-    "SelfCorrectingAgentSlowRuntimeRuns",
-    "SelfCorrectingAgentRuntimeSubjectRunFailures",
-    "SelfCorrectingAgentRuntimeStalePendingApprovals",
-    "SelfCorrectingAgentRuntimeSubjectResumes",
-    "SelfCorrectingAgentRuntimeProgressSinkFailures",
-    "SelfCorrectingAgentRuntimeToolExecutionTimeouts",
-    "SelfCorrectingAgentTracePersistenceFailures",
-    "SelfCorrectingAgentConcurrencySaturated",
-    "SelfCorrectingAgentRequestBodyTimeouts",
-    "SelfCorrectingAgentMalformedRunRequests",
-    "SelfCorrectingAgentOversizedRunRequests",
-    "SelfCorrectingAgentUnknownRouteTraffic",
+    "KagentServiceDown",
+    "KagentHighErrorRate",
+    "KagentSlowRuntimeRuns",
+    "KagentRuntimeSubjectRunFailures",
+    "KagentRuntimeStalePendingApprovals",
+    "KagentRuntimeSubjectResumes",
+    "KagentRuntimeProgressSinkFailures",
+    "KagentRuntimeToolExecutionTimeouts",
+    "KagentTracePersistenceFailures",
+    "KagentConcurrencySaturated",
+    "KagentRequestBodyTimeouts",
+    "KagentMalformedRunRequests",
+    "KagentOversizedRunRequests",
+    "KagentUnknownRouteTraffic",
 )
 
 REQUIRED_PROMETHEUS_RULE_METRICS = (

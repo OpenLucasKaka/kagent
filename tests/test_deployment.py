@@ -54,13 +54,13 @@ def test_deployment_documentation_is_linked_from_readme():
     assert "CronJob" in deployment
     assert "deploy/prometheus/kagent-rules.yaml" in deployment
     assert "deploy/prometheus/kagent-servicemonitor.yaml" in deployment
-    assert "SelfCorrectingAgentHighRequestLatency" in deployment
-    assert "SelfCorrectingAgentSlowAgentRuns" in deployment
-    assert "SelfCorrectingAgentSlowRuntimeRuns" in deployment
+    assert "KagentHighRequestLatency" in deployment
+    assert "KagentSlowAgentRuns" in deployment
+    assert "KagentSlowRuntimeRuns" in deployment
     assert "runtime tool execution timeout" in deployment
     assert "per-subject runtime resume alerting" in deployment
-    assert "SelfCorrectingAgentMalformedRunRequests" in deployment
-    assert "SelfCorrectingAgentOversizedRunRequests" in deployment
+    assert "KagentMalformedRunRequests" in deployment
+    assert "KagentOversizedRunRequests" in deployment
     assert "ServiceMonitor" in deployment
     assert "request body timeout" in deployment
     assert "KAGENT_SERVICE_AUTH_TOKEN" in deployment
@@ -359,38 +359,38 @@ def test_prometheus_alert_rules_cover_service_and_agent_health():
     alert_count = sum(
         1
         for line in rules.splitlines()
-        if line.strip().startswith("- alert: SelfCorrectingAgent")
+        if line.strip().startswith("- alert: Kagent")
     )
     assert "groups:" in rules
     assert "  - name: kagent.rules" in rules
     assert alert_count == 27
-    assert "SelfCorrectingAgentServiceDown" in rules
-    assert "SelfCorrectingAgentHighErrorRate" in rules
-    assert "SelfCorrectingAgentHighRequestLatency" in rules
-    assert "SelfCorrectingAgentSlowAgentRuns" in rules
-    assert "SelfCorrectingAgentSlowRuntimeRuns" in rules
-    assert "SelfCorrectingAgentRunTimeouts" in rules
-    assert "SelfCorrectingAgentRunFailures" in rules
-    assert "SelfCorrectingAgentRuntimeRunFailures" in rules
-    assert "SelfCorrectingAgentRuntimeSubjectRunFailures" in rules
-    assert "SelfCorrectingAgentRuntimeApprovalsPending" in rules
-    assert "SelfCorrectingAgentRuntimeSubjectApprovalsPending" in rules
-    assert "SelfCorrectingAgentRuntimeStalePendingApprovals" in rules
-    assert "SelfCorrectingAgentRuntimeSubjectResumes" in rules
-    assert "SelfCorrectingAgentRuntimeBudgetExhausted" in rules
-    assert "SelfCorrectingAgentRuntimeProgressSinkFailures" in rules
-    assert "SelfCorrectingAgentRuntimeToolExecutionTimeouts" in rules
-    assert "SelfCorrectingAgentTracePersistenceFailures" in rules
-    assert "SelfCorrectingAgentConcurrencySaturated" in rules
-    assert "SelfCorrectingAgentRateLimited" in rules
-    assert "SelfCorrectingAgentIdempotencyConflicts" in rules
-    assert "SelfCorrectingAgentIdempotencyCacheEvictions" in rules
-    assert "SelfCorrectingAgentRequestBodyTimeouts" in rules
-    assert "SelfCorrectingAgentMalformedRunRequests" in rules
-    assert "SelfCorrectingAgentOversizedRunRequests" in rules
-    assert "SelfCorrectingAgentSuspiciousHttpFraming" in rules
-    assert "SelfCorrectingAgentUnknownMethodTraffic" in rules
-    assert "SelfCorrectingAgentUnknownRouteTraffic" in rules
+    assert "KagentServiceDown" in rules
+    assert "KagentHighErrorRate" in rules
+    assert "KagentHighRequestLatency" in rules
+    assert "KagentSlowAgentRuns" in rules
+    assert "KagentSlowRuntimeRuns" in rules
+    assert "KagentRunTimeouts" in rules
+    assert "KagentRunFailures" in rules
+    assert "KagentRuntimeRunFailures" in rules
+    assert "KagentRuntimeSubjectRunFailures" in rules
+    assert "KagentRuntimeApprovalsPending" in rules
+    assert "KagentRuntimeSubjectApprovalsPending" in rules
+    assert "KagentRuntimeStalePendingApprovals" in rules
+    assert "KagentRuntimeSubjectResumes" in rules
+    assert "KagentRuntimeBudgetExhausted" in rules
+    assert "KagentRuntimeProgressSinkFailures" in rules
+    assert "KagentRuntimeToolExecutionTimeouts" in rules
+    assert "KagentTracePersistenceFailures" in rules
+    assert "KagentConcurrencySaturated" in rules
+    assert "KagentRateLimited" in rules
+    assert "KagentIdempotencyConflicts" in rules
+    assert "KagentIdempotencyCacheEvictions" in rules
+    assert "KagentRequestBodyTimeouts" in rules
+    assert "KagentMalformedRunRequests" in rules
+    assert "KagentOversizedRunRequests" in rules
+    assert "KagentSuspiciousHttpFraming" in rules
+    assert "KagentUnknownMethodTraffic" in rules
+    assert "KagentUnknownRouteTraffic" in rules
     assert "up{" in rules
     assert "kagent_responses_total" in rules
     assert "histogram_quantile" in rules
@@ -458,7 +458,7 @@ def test_grafana_dashboard_covers_internal_runtime_operations():
 
     assert dashboard["title"] == "Kagent Runtime"
     assert dashboard["schemaVersion"] >= 39
-    assert "SelfCorrectingAgent" in dashboard["tags"]
+    assert "Kagent" in dashboard["tags"]
     assert "Service Health" in panel_titles
     assert "HTTP 5xx Rate" in panel_titles
     assert "Runtime p95 Latency" in panel_titles

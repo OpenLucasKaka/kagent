@@ -1,16 +1,16 @@
 groups:
   - name: kagent.rules
     rules:
-      - alert: SelfCorrectingAgentServiceDown
+      - alert: KagentServiceDown
         expr: up{job="kagent"} == 0
         for: 2m
         labels:
           severity: critical
         annotations:
-          summary: Self-correcting agent service is not being scraped
+          summary: Kagent service is not being scraped
           description: Prometheus has not scraped a healthy service target for 2 minutes.
 
-      - alert: SelfCorrectingAgentHighErrorRate
+      - alert: KagentHighErrorRate
         expr: |
           sum(rate(kagent_responses_total{status=~"5.."}[5m]))
             /
@@ -19,10 +19,10 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: Self-correcting agent HTTP 5xx rate is elevated
+          summary: Kagent HTTP 5xx rate is elevated
           description: More than 5 percent of HTTP responses are 5xx over 10 minutes.
 
-      - alert: SelfCorrectingAgentHighRequestLatency
+      - alert: KagentHighRequestLatency
         expr: |
           histogram_quantile(
             0.95,
@@ -32,10 +32,10 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: Self-correcting agent HTTP request latency is elevated
+          summary: Kagent HTTP request latency is elevated
           description: 95th percentile HTTP request latency has exceeded 2 seconds for 10 minutes.
 
-      - alert: SelfCorrectingAgentSlowAgentRuns
+      - alert: KagentSlowAgentRuns
         expr: |
           histogram_quantile(
             0.95,
@@ -45,10 +45,10 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: Self-correcting agent run latency is elevated
+          summary: Kagent run latency is elevated
           description: 95th percentile internal agent run latency has exceeded 2 seconds for 10 minutes.
 
-      - alert: SelfCorrectingAgentSlowRuntimeRuns
+      - alert: KagentSlowRuntimeRuns
         expr: |
           histogram_quantile(
             0.95,
@@ -61,25 +61,25 @@ groups:
           summary: Codex-style runtime run latency is elevated
           description: 95th percentile Codex-style runtime latency has exceeded 5 seconds for 10 minutes.
 
-      - alert: SelfCorrectingAgentRunTimeouts
+      - alert: KagentRunTimeouts
         expr: sum(rate(kagent_run_status_total{status="timeout"}[5m])) > 0
         for: 5m
         labels:
           severity: warning
         annotations:
-          summary: Self-correcting agent runs are timing out
+          summary: Kagent runs are timing out
           description: At least one /run request has exceeded the configured run timeout.
 
-      - alert: SelfCorrectingAgentRunFailures
+      - alert: KagentRunFailures
         expr: sum(rate(kagent_run_status_total{status="failed"}[5m])) > 0
         for: 10m
         labels:
           severity: warning
         annotations:
-          summary: Self-correcting agent runs are failing
+          summary: Kagent runs are failing
           description: Agent execution failures have been observed in the last 10 minutes.
 
-      - alert: SelfCorrectingAgentRuntimeRunFailures
+      - alert: KagentRuntimeRunFailures
         expr: sum(rate(kagent_runtime_run_status_total{status="failed"}[5m])) > 0
         for: 10m
         labels:
@@ -88,7 +88,7 @@ groups:
           summary: Codex-style runtime runs are failing
           description: Runtime executions are ending in failed status; inspect latest_failed_* run summaries.
 
-      - alert: SelfCorrectingAgentRuntimeSubjectRunFailures
+      - alert: KagentRuntimeSubjectRunFailures
         expr: |
           sum by (auth_subject) (
             rate(
@@ -104,7 +104,7 @@ groups:
           summary: Codex-style runtime runs are failing for an internal subject
           description: A named internal auth subject has runtime executions ending in failed status.
 
-      - alert: SelfCorrectingAgentRuntimeApprovalsPending
+      - alert: KagentRuntimeApprovalsPending
         expr: sum(rate(kagent_runtime_approval_required_total[5m])) > 0
         for: 10m
         labels:
@@ -113,7 +113,7 @@ groups:
           summary: Codex-style runtime runs require human approval
           description: Runtime policy gates are producing approval-required observations.
 
-      - alert: SelfCorrectingAgentRuntimeSubjectApprovalsPending
+      - alert: KagentRuntimeSubjectApprovalsPending
         expr: |
           sum by (auth_subject) (
             rate(
@@ -129,7 +129,7 @@ groups:
           summary: Codex-style runtime runs require approval for an internal subject
           description: A named internal auth subject is producing approval-required runtime runs.
 
-      - alert: SelfCorrectingAgentRuntimeStalePendingApprovals
+      - alert: KagentRuntimeStalePendingApprovals
         expr: sum(kagent_runtime_stale_pending_approvals_current) > 0
         for: 15m
         labels:
@@ -138,7 +138,7 @@ groups:
           summary: Codex-style runtime approvals are stale
           description: Pending approvals have exceeded the configured stale approval threshold.
 
-      - alert: SelfCorrectingAgentRuntimeSubjectResumes
+      - alert: KagentRuntimeSubjectResumes
         expr: |
           sum by (auth_subject) (
             rate(kagent_runtime_resumes_by_auth_subject_total[5m])
@@ -150,7 +150,7 @@ groups:
           summary: Codex-style runtime runs are being resumed by an internal subject
           description: A named internal auth subject is resuming pending runtime runs; inspect resumed_by_auth_subject audit fields.
 
-      - alert: SelfCorrectingAgentRuntimeBudgetExhausted
+      - alert: KagentRuntimeBudgetExhausted
         expr: sum(rate(kagent_runtime_failed_budget_exhaustions_total[5m])) > 0
         for: 10m
         labels:
@@ -159,7 +159,7 @@ groups:
           summary: Codex-style runtime runs are exhausting iteration budgets
           description: Failed runtime executions spent all allowed planner iterations.
 
-      - alert: SelfCorrectingAgentRuntimeProgressSinkFailures
+      - alert: KagentRuntimeProgressSinkFailures
         expr: sum(rate(kagent_runtime_progress_event_sink_failures_total[5m])) > 0
         for: 5m
         labels:
@@ -168,7 +168,7 @@ groups:
           summary: Codex-style runtime progress event sinks are failing
           description: Runtime progress events could not be delivered to an operator UI, webhook, or streaming sink.
 
-      - alert: SelfCorrectingAgentRuntimeToolExecutionTimeouts
+      - alert: KagentRuntimeToolExecutionTimeouts
         expr: |
           sum(rate(
             kagent_runtime_observation_errors_total{
@@ -182,7 +182,7 @@ groups:
           summary: Codex-style runtime tools are timing out
           description: Runtime tool handlers are exceeding their declared timeout_seconds budgets.
 
-      - alert: SelfCorrectingAgentTracePersistenceFailures
+      - alert: KagentTracePersistenceFailures
         expr: |
           sum(rate(
             kagent_error_responses_total{error_code="trace_persistence_failed"}[5m]
@@ -191,10 +191,10 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: Self-correcting agent trace persistence is failing
+          summary: Kagent trace persistence is failing
           description: Completed runs could not persist trace files; check trace storage and mounts.
 
-      - alert: SelfCorrectingAgentConcurrencySaturated
+      - alert: KagentConcurrencySaturated
         expr: |
           sum(rate(
             kagent_error_responses_total{error_code="too_many_concurrent_runs"}[5m]
@@ -203,10 +203,10 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: Self-correcting agent run concurrency is saturated
+          summary: Kagent run concurrency is saturated
           description: /run requests are being rejected because all run slots are occupied.
 
-      - alert: SelfCorrectingAgentRateLimited
+      - alert: KagentRateLimited
         expr: |
           sum(rate(
             kagent_error_responses_total{error_code="rate_limit_exceeded"}[5m]
@@ -215,10 +215,10 @@ groups:
         labels:
           severity: info
         annotations:
-          summary: Self-correcting agent clients are being rate limited
+          summary: Kagent clients are being rate limited
           description: One or more clients are hitting the configured /run rate limit.
 
-      - alert: SelfCorrectingAgentIdempotencyConflicts
+      - alert: KagentIdempotencyConflicts
         expr: |
           sum(rate(
             kagent_error_responses_total{error_code="idempotency_key_conflict"}[5m]
@@ -227,20 +227,20 @@ groups:
         labels:
           severity: info
         annotations:
-          summary: Self-correcting agent clients are misusing idempotency keys
+          summary: Kagent clients are misusing idempotency keys
           description: One or more clients reused an Idempotency-Key with a different /run body.
 
-      - alert: SelfCorrectingAgentIdempotencyCacheEvictions
+      - alert: KagentIdempotencyCacheEvictions
         expr: |
           sum(increase(kagent_idempotency_cache_evictions[10m])) > 0
         for: 10m
         labels:
           severity: info
         annotations:
-          summary: Self-correcting agent idempotency cache is evicting entries
+          summary: Kagent idempotency cache is evicting entries
           description: Idempotency cache entries are being evicted during the retry window.
 
-      - alert: SelfCorrectingAgentRequestBodyTimeouts
+      - alert: KagentRequestBodyTimeouts
         expr: |
           sum(rate(
             kagent_error_responses_total{error_code="request_body_timeout"}[5m]
@@ -249,10 +249,10 @@ groups:
         labels:
           severity: info
         annotations:
-          summary: Self-correcting agent clients are timing out while sending bodies
+          summary: Kagent clients are timing out while sending bodies
           description: One or more clients or gateways stalled before completing request bodies.
 
-      - alert: SelfCorrectingAgentMalformedRunRequests
+      - alert: KagentMalformedRunRequests
         expr: |
           sum(rate(
             kagent_error_responses_total{
@@ -263,10 +263,10 @@ groups:
         labels:
           severity: info
         annotations:
-          summary: Self-correcting agent is rejecting malformed /run requests
+          summary: Kagent is rejecting malformed /run requests
           description: Clients are sending invalid lengths, incomplete bodies, or non-JSON media types.
 
-      - alert: SelfCorrectingAgentOversizedRunRequests
+      - alert: KagentOversizedRunRequests
         expr: |
           sum(rate(
             kagent_error_responses_total{
@@ -277,10 +277,10 @@ groups:
         labels:
           severity: info
         annotations:
-          summary: Self-correcting agent is rejecting oversized /run requests
+          summary: Kagent is rejecting oversized /run requests
           description: Request bodies or goals are exceeding configured /run size limits.
 
-      - alert: SelfCorrectingAgentSuspiciousHttpFraming
+      - alert: KagentSuspiciousHttpFraming
         expr: |
           sum(rate(
             kagent_error_responses_total{
@@ -291,10 +291,10 @@ groups:
         labels:
           severity: info
         annotations:
-          summary: Self-correcting agent received unsupported HTTP framing headers
+          summary: Kagent received unsupported HTTP framing headers
           description: Transfer-Encoding or Expect headers reached /run; check gateways and clients.
 
-      - alert: SelfCorrectingAgentUnknownMethodTraffic
+      - alert: KagentUnknownMethodTraffic
         expr: |
           sum(rate(
             kagent_requests_by_method_total{method="__unknown__"}[5m]
@@ -303,10 +303,10 @@ groups:
         labels:
           severity: info
         annotations:
-          summary: Self-correcting agent is receiving unknown HTTP methods
+          summary: Kagent is receiving unknown HTTP methods
           description: Unknown HTTP methods are being requested; check access logs for raw methods.
 
-      - alert: SelfCorrectingAgentUnknownRouteTraffic
+      - alert: KagentUnknownRouteTraffic
         expr: |
           sum(rate(
             kagent_requests_by_path_total{path="__unknown__"}[5m]
@@ -319,5 +319,5 @@ groups:
         labels:
           severity: info
         annotations:
-          summary: Self-correcting agent is receiving unknown route traffic
+          summary: Kagent is receiving unknown route traffic
           description: Unknown HTTP paths are being requested; check access logs for raw paths.

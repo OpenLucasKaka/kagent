@@ -281,7 +281,7 @@ def _subject_tools_map(value: str) -> dict[str, tuple[str, ...]]:
 
 
 class _AgentRequestHandler(BaseHTTPRequestHandler):
-    server_version = "SelfCorrectingAgentHTTP/0.1"
+    server_version = "KagentHTTP/0.1"
 
     def version_string(self) -> str:
         return self.server_version

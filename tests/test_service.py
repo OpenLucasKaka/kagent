@@ -2936,7 +2936,7 @@ def test_service_server_header_does_not_expose_python_runtime_over_http():
         server.server_close()
         thread.join(timeout=5)
 
-    assert server_header == "SelfCorrectingAgentHTTP/0.1"
+    assert server_header == "KagentHTTP/0.1"
     assert "Python" not in server_header
 
 

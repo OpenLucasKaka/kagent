@@ -263,14 +263,14 @@ ClusterIP Service through a `ServiceMonitor`; clusters without the
 the base Kubernetes manifest. Load the rules into your Prometheus or Prometheus
 Operator rule pipeline after adjusting the `job` selector to match your scrape
 configuration. The baseline rules include service availability, HTTP 5xx rate,
-`SelfCorrectingAgentHighRequestLatency`, `SelfCorrectingAgentSlowAgentRuns`,
-`SelfCorrectingAgentSlowRuntimeRuns`,
+`KagentHighRequestLatency`, `KagentSlowAgentRuns`,
+`KagentSlowRuntimeRuns`,
 run timeout, failed-run, Codex-style runtime failed-run, runtime approval
 pressure, runtime budget exhaustion, rate-limit, idempotency conflict,
 per-subject runtime resume alerting, runtime tool execution timeout,
 idempotency cache eviction, request body timeout,
-`SelfCorrectingAgentMalformedRunRequests`,
-`SelfCorrectingAgentOversizedRunRequests`, and unknown route or method alerts.
+`KagentMalformedRunRequests`,
+`KagentOversizedRunRequests`, and unknown route or method alerts.
 Grafana dashboard JSON for the same runtime signals lives in
 `deploy/grafana/kagent-dashboard.json`; import it after the
 Prometheus datasource is available to get baseline service health, HTTP error,
