@@ -6,6 +6,7 @@ from typing import Any
 
 from kagent.cli.memory import (
     load_runtime_session_memory,
+    redact_runtime_session_memory_text,
     save_runtime_session_memory,
 )
 from kagent.cli.trace import persist_runtime_cli_trace_or_raise
@@ -267,7 +268,7 @@ def _runtime_memory_answer_from_observations(observations: Any) -> str:
 
 
 def _compact_runtime_memory_text(text: str) -> str:
-    compact = " ".join(str(text).split())
+    compact = " ".join(redact_runtime_session_memory_text(str(text)).split())
     if len(compact) > 500:
         return compact[:497] + "..."
     return compact

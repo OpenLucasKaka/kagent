@@ -55,7 +55,7 @@ TTY sessions show live progress and a compact operator transcript by default.
 Use `/json`, `/compact`, `/last`, `/trace`, `/memory`, `/clear`, and `/help`
 inside the shell. Persisted session memory is owner-only on read and write,
 rejects symlink memory files, and redacts common API keys, bearer tokens, and
-URL credentials before writing to disk. The CLI
+URL credentials before reusing memory in later turns or writing it to disk. The CLI
 defaults to the runtime for both `kagent` and `kagent "goal"`; use
 `--deterministic` only for the legacy regression graph. Runtime turns use three
 planning iterations by default. TTY sessions persist memory by default at

@@ -226,6 +226,70 @@ if grep "Traceback" /tmp/kagent-session-memory-symlink.stderr >/dev/null; then
     echo "symlink session memory unexpectedly emitted traceback" >&2
     exit 1
 fi
+PYTHONWARNINGS=ignore .venv/bin/python - <<'PY'
+import io
+import sys
+
+from kagent.cli import _run_runtime_interactive
+
+api_key = "sk-" + "runtime" + "-memory" + "-secret"
+bearer = "runtime" + "-memory" + "-bearer" + "-token"
+calls = []
+
+
+class FakeTTYInput:
+    def __init__(self):
+        self.lines = [
+            f"记住 {api_key} 和 https://user:pass@example.com/v1\n",
+            "复述上一轮\n",
+            "exit\n",
+        ]
+
+    def isatty(self):
+        return True
+
+    def readline(self):
+        return self.lines.pop(0) if self.lines else ""
+
+
+def fake_run_runtime_agent(goal, **_kwargs):
+    calls.append(goal)
+    return {"status": "done", "answer": f"Authorization: Bearer {bearer}"}
+
+
+original_stdin = sys.stdin
+original_stdout = sys.stdout
+original_stderr = sys.__stderr__
+try:
+    sys.stdin = FakeTTYInput()
+    sys.stdout = io.StringIO()
+    sys.__stderr__ = io.StringIO()
+    _run_runtime_interactive(
+        provider=object(),
+        run_runtime_agent=fake_run_runtime_agent,
+        max_iterations=1,
+        fail_on_agent_failure=False,
+    )
+finally:
+    sys.stdin = original_stdin
+    sys.stdout = original_stdout
+    sys.__stderr__ = original_stderr
+
+memory_prompt = calls[1]
+if api_key in memory_prompt:
+    raise SystemExit("interactive memory leaked API key")
+if bearer in memory_prompt:
+    raise SystemExit("interactive memory leaked bearer token")
+if "user:pass@example.com" in memory_prompt:
+    raise SystemExit("interactive memory leaked URL credentials")
+for marker in (
+    "[REDACTED_API_KEY]",
+    "Bearer [REDACTED_TOKEN]",
+    "https://[REDACTED_CREDENTIALS]@example.com/v1",
+):
+    if marker not in memory_prompt:
+        raise SystemExit(f"interactive memory missing redaction marker: {marker}")
+PY
 PYTHONWARNINGS=ignore .venv/bin/python -m kagent.eval.evaluator --fail-on-failure >/tmp/kagent-eval.json
 PYTHONWARNINGS=ignore .venv/bin/kagent-eval --list-cases >/tmp/kagent-entrypoint-eval-cases.json
 PYTHONWARNINGS=ignore .venv/bin/python -m kagent.eval.evaluator --list-cases >/tmp/kagent-eval-cases.json

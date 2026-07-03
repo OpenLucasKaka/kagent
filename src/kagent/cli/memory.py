@@ -116,6 +116,10 @@ def _redact_session_memory_turns(turns: list[dict[str, str]]) -> list[dict[str, 
 
 
 def _redact_session_memory_text(text: str) -> str:
+    return redact_runtime_session_memory_text(text)
+
+
+def redact_runtime_session_memory_text(text: str) -> str:
     redacted = _API_KEY_PATTERN.sub("[REDACTED_API_KEY]", text)
     redacted = _BEARER_TOKEN_PATTERN.sub(r"\1[REDACTED_TOKEN]", redacted)
     return _URL_CREDENTIAL_PATTERN.sub(r"\1[REDACTED_CREDENTIALS]@", redacted)

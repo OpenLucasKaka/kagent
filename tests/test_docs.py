@@ -160,6 +160,7 @@ def test_readme_documents_console_script_entrypoints():
     assert "session-memory.json" in readme
     assert "owner-only on read and write" in readme
     assert "rejects symlink memory files" in readme
+    assert "before reusing memory in later turns" in readme
     assert "progress_event_count" in readme
     assert 'kagent "draft an internal rollout checklist"' in readme
     assert "--deterministic" in readme

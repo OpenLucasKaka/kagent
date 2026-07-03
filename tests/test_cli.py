@@ -1361,6 +1361,60 @@ def test_cli_interactive_runtime_carries_session_memory_between_turns(
     assert "你是卡卡。" in captured.out
 
 
+def test_cli_interactive_runtime_redacts_secrets_before_memory_reuse(
+    monkeypatch,
+    capsys,
+):
+    from kagent.cli import _run_runtime_interactive
+
+    api_key = "sk-" + "interactive-secret-value"
+    bearer_token = "super-secret-runtime-token"
+
+    class FakeTTYInput:
+        def __init__(self):
+            self.lines = [
+                (
+                    f"记住 {api_key} 和 "
+                    "https://user:pass@example.com/v1\n"
+                ),
+                "复述一下上一轮\n",
+                "exit\n",
+            ]
+
+        def isatty(self):
+            return True
+
+        def readline(self):
+            return self.lines.pop(0) if self.lines else ""
+
+    calls = []
+
+    def fake_run_runtime_agent(goal, **_kwargs):
+        calls.append(goal)
+        return {
+            "status": "done",
+            "answer": f"Authorization: Bearer {bearer_token}",
+        }
+
+    monkeypatch.setattr(sys, "stdin", FakeTTYInput())
+    monkeypatch.setattr(sys, "__stderr__", sys.stderr)
+
+    _run_runtime_interactive(
+        provider=object(),
+        run_runtime_agent=fake_run_runtime_agent,
+        max_iterations=1,
+        fail_on_agent_failure=False,
+    )
+
+    assert api_key not in calls[1]
+    assert bearer_token not in calls[1]
+    assert "user:pass@example.com" not in calls[1]
+    assert "[REDACTED_API_KEY]" in calls[1]
+    assert "Bearer [REDACTED_TOKEN]" in calls[1]
+    assert "https://[REDACTED_CREDENTIALS]@example.com/v1" in calls[1]
+    capsys.readouterr()
+
+
 def test_cli_interactive_runtime_persists_session_memory_between_shells(
     tmp_path,
     monkeypatch,
