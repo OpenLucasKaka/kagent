@@ -16,10 +16,11 @@ _URL_SECRET_KEY_PARTS = (
     "secret",
     "token",
 )
-_SECRET_VALUE_PATTERNS = (
-    re.compile(r"sk-[A-Za-z0-9:_-]{6,}"),
-    re.compile(r"(?i)\bbearer[\s-]+[A-Za-z0-9._:/+=-]{6,}"),
+_API_KEY_PATTERN = re.compile(r"\bsk-[A-Za-z0-9:_-]{6,}\b")
+_BEARER_TOKEN_PATTERN = re.compile(
+    r"(?i)\b(bearer[\s-]+)([A-Za-z0-9._:/+=-]{6,})"
 )
+_SECRET_VALUE_PATTERNS = (_API_KEY_PATTERN, _BEARER_TOKEN_PATTERN)
 
 
 def redact_runtime_payload(value: Any) -> Any:
@@ -33,7 +34,9 @@ def redact_runtime_payload(value: Any) -> Any:
 
 
 def redact_runtime_text(value: str) -> str:
-    return _URL_PATTERN.sub(lambda match: _redact_url(match.group(0)), value)
+    redacted = _URL_PATTERN.sub(lambda match: _redact_url(match.group(0)), value)
+    redacted = _API_KEY_PATTERN.sub(REDACTED_VALUE, redacted)
+    return _BEARER_TOKEN_PATTERN.sub(lambda match: match.group(1) + REDACTED_VALUE, redacted)
 
 
 def _redact_url(value: str) -> str:

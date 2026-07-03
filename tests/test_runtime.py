@@ -1,4 +1,6 @@
 import json
+import shlex
+import sys
 
 import pytest
 
@@ -243,6 +245,68 @@ def test_runtime_agent_redacts_secret_like_urls_in_result_payload():
     assert result["plans"][0]["actions"][0]["input"]["url"] == result[
         "pending_approval"
     ]["input"]["url"]
+
+
+def test_runtime_agent_redacts_secret_like_plain_strings_in_result_payload():
+    api_key = "s" + "k-runtime-plain-secret"
+    provider = FakeLLMProvider(
+        json.dumps(
+            {
+                "actions": [
+                    {
+                        "id": "step-1",
+                        "tool": "note",
+                        "input": {
+                            "text": f"provider key {api_key} and Bearer runtime-token"
+                        },
+                        "reason": "capture sensitive text",
+                    }
+                ]
+            }
+        )
+    )
+
+    result = run_runtime_agent("capture sensitive text", provider=provider)
+    serialized = json.dumps(result, sort_keys=True)
+
+    assert result["status"] == "done"
+    assert api_key not in serialized
+    assert "runtime-token" not in serialized
+    assert "[REDACTED]" in serialized
+
+
+def test_runtime_agent_redacts_shell_command_output_and_command_text():
+    api_key = "s" + "k-runtime-shell-secret"
+    command = (
+        f"{shlex.quote(sys.executable)} -c "
+        f"'import sys; print(\"{api_key}\"); print(\"Bearer runtime-token\", file=sys.stderr)'"
+    )
+    provider = FakeLLMProvider(
+        json.dumps(
+            {
+                "actions": [
+                    {
+                        "id": "step-1",
+                        "tool": "shell_command",
+                        "input": {"command": command},
+                        "reason": "capture shell output",
+                    }
+                ]
+            }
+        )
+    )
+
+    result = run_runtime_agent(
+        "capture shell output",
+        provider=provider,
+        policy=RuntimePolicy(allowed_tools={"shell_command"}),
+    )
+    serialized = json.dumps(result, sort_keys=True)
+
+    assert result["status"] == "done"
+    assert api_key not in serialized
+    assert "runtime-token" not in serialized
+    assert "[REDACTED]" in serialized
 
 
 def test_runtime_agent_can_execute_action_after_explicit_approval():
