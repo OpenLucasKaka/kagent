@@ -184,7 +184,9 @@ def _pending_approval_plan(
     ]
     if len(matching_actions) != 1:
         return None
-    resumable_plan: Dict[str, Any] = {"actions": [matching_actions[0]]}
+    pending_action = dict(matching_actions[0])
+    pending_action.pop("depends_on", None)
+    resumable_plan: Dict[str, Any] = {"actions": [pending_action]}
     final_answer = plan.get("final_answer")
     if isinstance(final_answer, str) and final_answer:
         resumable_plan["final_answer"] = final_answer

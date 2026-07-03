@@ -1456,6 +1456,61 @@ def test_service_router_runtime_resume_executes_only_pending_approval_action(
     assert resume_payload["observations"][0]["output"]["body_text"] == "resumed fetch"
 
 
+def test_service_router_runtime_resume_treats_prior_dependencies_as_satisfied(
+    tmp_path,
+    monkeypatch,
+):
+    url = _mock_public_http_request(monkeypatch, b"dependency satisfied")
+    first_status, first_payload = service_router.handle_request(
+        "POST",
+        "/runtime/run",
+        json.dumps(
+            {
+                "goal": "record then fetch with dependency",
+                "plan": {
+                    "actions": [
+                        {
+                            "id": "step-1",
+                            "tool": "note",
+                            "input": {"text": "dependency already done"},
+                            "reason": "record context",
+                        },
+                        {
+                            "id": "step-2",
+                            "tool": "http_request",
+                            "input": {"url": url},
+                            "reason": "fetch after approval",
+                            "depends_on": ["step-1"],
+                        },
+                    ]
+                },
+            }
+        ).encode("utf-8"),
+        config=ServiceConfig(trace_dir=str(tmp_path)),
+    )
+
+    resume_status, resume_payload = service_router.handle_request(
+        "POST",
+        "/runtime/resume",
+        json.dumps(
+            {
+                "run_id": first_payload["run_id"],
+                "approved_action_ids": ["step-2"],
+            }
+        ).encode("utf-8"),
+        config=ServiceConfig(trace_dir=str(tmp_path)),
+    )
+
+    assert first_status == 200
+    assert first_payload["status"] == "requires_approval"
+    assert resume_status == 200
+    assert resume_payload["status"] == "done"
+    assert resume_payload["observations"][0]["action_id"] == "step-2"
+    assert resume_payload["observations"][0]["output"]["body_text"] == (
+        "dependency satisfied"
+    )
+
+
 def test_service_router_runtime_resume_preserves_metadata_and_tags(
     tmp_path,
     monkeypatch,
