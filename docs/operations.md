@@ -718,6 +718,9 @@ operators can separate planner failures, tool failures, approval queues,
 error-code clusters, latest plan shape, dependency-heavy plans, tool-specific
 clusters, final-answer guardrail corrections, artifact categories, artifact
 formats, artifact tags, and artifact byte volume before opening full traces.
+summary scalar metadata is limited to strings and non-boolean numbers for run,
+plan, observation, and artifact index fields; nested objects and arrays are
+omitted from dashboard summaries instead of being stringified.
 Use `GET /runtime/runs/summary` to aggregate
 `final_answer_guardrail_applied_count` and
 `final_answer_guardrail_reason_counts` across visible traces without exposing

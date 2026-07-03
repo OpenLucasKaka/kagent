@@ -399,7 +399,7 @@ def runtime_status_summary(
     trace_dir: str,
     requested_run_id: str,
 ) -> Dict[str, Any]:
-    run_id = str(trace.get("run_id", requested_run_id))
+    run_id = _runtime_string(trace.get("run_id")) or requested_run_id
     observations = trace.get("observations")
     artifact_ids = _observation_artifact_ids(observations)
     approved_action_ids = _trace_approved_action_ids(trace)
@@ -408,15 +408,15 @@ def runtime_status_summary(
     summary = {
         "trace_type": RUNTIME_TRACE_TYPE,
         "run_id": run_id,
-        "status": str(trace.get("status", "")),
-        "goal": str(trace.get("goal", "")),
-        "auth_subject": str(trace.get("auth_subject", "")),
+        "status": _runtime_scalar(trace.get("status")),
+        "goal": _runtime_scalar(trace.get("goal")),
+        "auth_subject": _runtime_scalar(trace.get("auth_subject")),
         "metadata": _trace_metadata(trace),
         "metadata_keys": _trace_metadata_keys(trace),
         "tags": _trace_tags(trace),
         "trace_path": _runtime_trace_path(trace, trace_dir, run_id),
         "iteration_count": _runtime_iteration_count(trace),
-        "max_iterations": str(trace.get("max_iterations", "")),
+        "max_iterations": _runtime_scalar(trace.get("max_iterations")),
         "iteration_budget_remaining": _runtime_iteration_budget_remaining(trace),
         "plan_count": str(_list_count(trace.get("plans"))),
         "observation_count": str(_list_count(observations)),
@@ -671,6 +671,24 @@ def _parse_non_negative_int(value: Any) -> int:
     return max(0, parsed)
 
 
+def _runtime_string(value: Any) -> str:
+    if not isinstance(value, str):
+        return ""
+    return value.strip()
+
+
+def _runtime_scalar(value: Any) -> str:
+    if isinstance(value, bool):
+        return ""
+    if isinstance(value, str):
+        return value.strip()
+    if isinstance(value, int):
+        return str(value)
+    if isinstance(value, float):
+        return str(value)
+    return ""
+
+
 def _list_count(value: Any) -> int:
     return len(value) if isinstance(value, list) else 0
 
@@ -678,14 +696,14 @@ def _list_count(value: Any) -> int:
 def _runtime_iteration_count(trace: Dict[str, Any]) -> str:
     value = trace.get("iteration_count")
     if value is not None:
-        return str(value)
+        return _runtime_scalar(value)
     return str(_list_count(trace.get("plans")))
 
 
 def _runtime_iteration_budget_remaining(trace: Dict[str, Any]) -> str:
     value = trace.get("iteration_budget_remaining")
     if value is not None:
-        return str(value)
+        return _runtime_scalar(value)
     iteration_count = _parse_int_string(_runtime_iteration_count(trace))
     max_iterations = _parse_int_string(trace.get("max_iterations"))
     if iteration_count is None or max_iterations is None:
@@ -717,11 +735,12 @@ def _trace_metadata(trace: Dict[str, Any]) -> Dict[str, str]:
     value = trace.get("metadata")
     if not isinstance(value, dict):
         return {}
-    metadata = {
-        str(key): str(metadata_value)
-        for key, metadata_value in value.items()
-        if str(key).strip()
-    }
+    metadata = {}
+    for key, metadata_value in value.items():
+        key_value = _runtime_string(key)
+        field_value = _runtime_scalar(metadata_value)
+        if key_value and field_value:
+            metadata[key_value] = field_value
     return {key: metadata[key] for key in sorted(metadata)}
 
 
@@ -745,7 +764,7 @@ def _trace_tags(trace: Dict[str, Any]) -> list[str]:
 def _pending_approval_field(value: Any, field: str) -> str:
     if not isinstance(value, dict):
         return ""
-    return str(value.get(field, ""))
+    return _runtime_scalar(value.get(field))
 
 
 def _pending_age_seconds(
@@ -767,13 +786,13 @@ def _latest_failed_observation(value: Any) -> Dict[str, Any]:
     if not isinstance(value, list):
         return {}
     for item in reversed(value):
-        if isinstance(item, dict) and str(item.get("status", "")) == "failed":
+        if isinstance(item, dict) and _runtime_scalar(item.get("status")) == "failed":
             return item
     return {}
 
 
 def _observation_field(value: Dict[str, Any], field: str) -> str:
-    return str(value.get(field, "")) if value else ""
+    return _runtime_scalar(value.get(field)) if value else ""
 
 
 def _observation_status_count(value: Any, status: str) -> int:
@@ -782,7 +801,7 @@ def _observation_status_count(value: Any, status: str) -> int:
     return sum(
         1
         for item in value
-        if isinstance(item, dict) and str(item.get("status", "")) == status
+        if isinstance(item, dict) and _runtime_scalar(item.get("status")) == status
     )
 
 
@@ -793,8 +812,8 @@ def _failed_observation_tool_count(value: Any, tool: str) -> int:
         1
         for item in value
         if isinstance(item, dict)
-        and str(item.get("status", "")) == "failed"
-        and str(item.get("tool", "")) == tool
+        and _runtime_scalar(item.get("status")) == "failed"
+        and _runtime_scalar(item.get("tool")) == tool
     )
 
 
@@ -805,8 +824,8 @@ def _failed_non_planner_observation_count(value: Any) -> int:
         1
         for item in value
         if isinstance(item, dict)
-        and str(item.get("status", "")) == "failed"
-        and str(item.get("tool", "")) != "planner"
+        and _runtime_scalar(item.get("status")) == "failed"
+        and _runtime_scalar(item.get("tool")) != "planner"
     )
 
 
@@ -814,9 +833,9 @@ def _observation_tool_names(value: Any) -> list[str]:
     if not isinstance(value, list):
         return []
     tool_names = {
-        str(item.get("tool", ""))
+        _runtime_scalar(item.get("tool"))
         for item in value
-        if isinstance(item, dict) and str(item.get("tool", "")).strip()
+        if isinstance(item, dict) and _runtime_scalar(item.get("tool"))
     }
     return sorted(tool_names)
 
@@ -828,8 +847,8 @@ def _observation_error_code_counts(value: Any) -> Dict[str, str]:
     for item in value:
         if not isinstance(item, dict):
             continue
-        error_code = str(item.get("error_code", ""))
-        if not error_code.strip():
+        error_code = _runtime_scalar(item.get("error_code"))
+        if not error_code:
             continue
         counts[error_code] = counts.get(error_code, 0) + 1
     return {error_code: str(counts[error_code]) for error_code in sorted(counts)}
@@ -850,9 +869,9 @@ def _latest_plan_action_count(value: Any) -> int:
 
 def _latest_plan_action_ids(value: Any) -> list[str]:
     return [
-        str(action.get("id", ""))
+        _runtime_scalar(action.get("id"))
         for action in _latest_plan_actions(value)
-        if str(action.get("id", "")).strip()
+        if _runtime_scalar(action.get("id"))
     ]
 
 
@@ -861,7 +880,9 @@ def _plan_dependency_edge_count(value: Any) -> int:
     for action in _latest_plan_actions(value):
         depends_on = action.get("depends_on")
         if isinstance(depends_on, list):
-            edge_count += len(depends_on)
+            edge_count += sum(
+                1 for dependency in depends_on if isinstance(dependency, str) and dependency.strip()
+            )
     return edge_count
 
 
@@ -869,11 +890,11 @@ def _observation_artifact_ids(value: Any) -> list[str]:
     if not isinstance(value, list):
         return []
     artifact_ids = {
-        str(output.get("artifact_id", ""))
+        _runtime_scalar(output.get("artifact_id"))
         for item in value
         if isinstance(item, dict)
         for output in [item.get("output")]
-        if isinstance(output, dict) and str(output.get("artifact_id", "")).strip()
+        if isinstance(output, dict) and _runtime_scalar(output.get("artifact_id"))
     }
     return sorted(artifact_ids)
 
@@ -882,13 +903,13 @@ def _observation_artifact_kinds(value: Any) -> list[str]:
     if not isinstance(value, list):
         return []
     artifact_kinds = {
-        str(output.get("kind", ""))
+        _runtime_scalar(output.get("kind"))
         for item in value
         if isinstance(item, dict)
         for output in [item.get("output")]
         if isinstance(output, dict)
-        and str(output.get("artifact_id", "")).strip()
-        and str(output.get("kind", "")).strip()
+        and _runtime_scalar(output.get("artifact_id"))
+        and _runtime_scalar(output.get("kind"))
     }
     return sorted(artifact_kinds)
 
@@ -897,13 +918,13 @@ def _observation_artifact_formats(value: Any) -> list[str]:
     if not isinstance(value, list):
         return []
     artifact_formats = {
-        str(output.get("format", ""))
+        _runtime_scalar(output.get("format"))
         for item in value
         if isinstance(item, dict)
         for output in [item.get("output")]
         if isinstance(output, dict)
-        and str(output.get("artifact_id", "")).strip()
-        and str(output.get("format", "")).strip()
+        and _runtime_scalar(output.get("artifact_id"))
+        and _runtime_scalar(output.get("format"))
     }
     return sorted(artifact_formats)
 
@@ -917,7 +938,7 @@ def _observation_artifact_tags(value: Any) -> list[str]:
         if isinstance(item, dict)
         for output in [item.get("output")]
         if isinstance(output, dict)
-        and str(output.get("artifact_id", "")).strip()
+        and _runtime_scalar(output.get("artifact_id"))
         for tags in [output.get("tags")]
         if isinstance(tags, list)
         for tag in tags
@@ -949,13 +970,13 @@ def _observation_artifact_byte_records(value: Any) -> list[tuple[str, int]]:
         output = item.get("output")
         if not isinstance(output, dict):
             continue
-        artifact_id = str(output.get("artifact_id", "")).strip()
+        artifact_id = _runtime_scalar(output.get("artifact_id"))
         if not artifact_id or artifact_id in records:
             continue
         byte_count = _artifact_byte_count(output.get("bytes"))
         if byte_count is None:
             continue
-        records[artifact_id] = (str(output.get("kind", "")).strip(), byte_count)
+        records[artifact_id] = (_runtime_scalar(output.get("kind")), byte_count)
     return [records[artifact_id] for artifact_id in sorted(records)]
 
 

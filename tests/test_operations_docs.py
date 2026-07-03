@@ -91,6 +91,7 @@ def test_operations_runbook_documents_continuous_iteration_and_failure_triage():
     assert "pending_approval.input" in runbook
     assert "GET /runtime/runs" in runbook
     assert "GET /runtime/runs/summary" in runbook
+    assert "summary scalar metadata" in runbook
     assert "pending_approval_count" in runbook
     assert "GET /runtime/runs/{run_id}" in runbook
     assert "GET /runtime/runs/{run_id}/timeline" in runbook

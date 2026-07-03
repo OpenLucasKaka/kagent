@@ -2334,6 +2334,104 @@ def test_service_router_runtime_status_reports_persisted_run_summary(tmp_path):
     assert payload["tool_names"] == ["http_request"]
 
 
+def test_service_router_runtime_status_filters_non_scalar_summary_metadata(tmp_path):
+    persist_trace(
+        {
+            "trace_type": "codex_runtime",
+            "run_id": "malformed-summary-metadata",
+            "status": {"secret": "status"},
+            "goal": {"secret": "goal"},
+            "auth_subject": {"secret": "auth"},
+            "metadata": {
+                "safe": "value",
+                "nested": {"secret": "metadata"},
+            },
+            "tags": ["safe", {"secret": "tag"}],
+            "max_iterations": {"secret": "max"},
+            "iteration_count": {"secret": "iteration"},
+            "iteration_budget_remaining": {"secret": "budget"},
+            "approved_action_ids": ["step-1", {"secret": "approved"}],
+            "plan": {
+                "actions": [
+                    {"id": "step-1"},
+                    {"id": {"secret": "plan-id"}},
+                    {"depends_on": ["step-1", {"secret": "dependency"}]},
+                ]
+            },
+            "observations": [
+                {
+                    "action_id": {"secret": "action"},
+                    "tool": {"secret": "tool"},
+                    "status": "failed",
+                    "error_code": {"secret": "error-code"},
+                    "output": {
+                        "artifact_id": {"secret": "artifact-id"},
+                        "kind": {"secret": "kind"},
+                        "format": {"secret": "format"},
+                        "tags": ["safe-artifact", {"secret": "artifact-tag"}],
+                        "bytes": 10,
+                    },
+                },
+                {
+                    "action_id": "step-2",
+                    "tool": "note",
+                    "status": "ok",
+                    "output": {
+                        "artifact_id": "artifact-safe",
+                        "kind": "report",
+                        "format": "markdown",
+                        "tags": ["release"],
+                        "bytes": 10,
+                    },
+                },
+            ],
+        },
+        str(tmp_path),
+    )
+
+    status_code, payload = service_router.handle_request(
+        "GET",
+        "/runtime/runs/malformed-summary-metadata",
+        b"",
+        config=ServiceConfig(trace_dir=str(tmp_path)),
+    )
+    list_status, list_payload = service_router.handle_request(
+        "GET",
+        "/runtime/runs?limit=10",
+        b"",
+        config=ServiceConfig(trace_dir=str(tmp_path)),
+    )
+
+    assert status_code == 200
+    assert list_status == 200
+    assert payload["run_id"] == "malformed-summary-metadata"
+    assert payload["status"] == ""
+    assert payload["goal"] == ""
+    assert payload["auth_subject"] == ""
+    assert payload["metadata"] == {"safe": "value"}
+    assert payload["metadata_keys"] == ["safe"]
+    assert payload["tags"] == ["safe"]
+    assert payload["max_iterations"] == ""
+    assert payload["iteration_count"] == ""
+    assert payload["iteration_budget_remaining"] == ""
+    assert payload["pending_approval_action_id"] == ""
+    assert payload["pending_approval_tool"] == ""
+    assert payload["approved_action_ids"] == ["step-1"]
+    assert payload["latest_plan_action_ids"] == ["step-1"]
+    assert payload["dependency_edge_count"] == "1"
+    assert payload["tool_names"] == ["note"]
+    assert payload["error_code_counts"] == {}
+    assert payload["artifact_ids"] == ["artifact-safe"]
+    assert payload["artifact_kinds"] == ["report"]
+    assert payload["artifact_formats"] == ["markdown"]
+    assert payload["artifact_tags"] == ["release"]
+    assert payload["artifact_total_bytes"] == "10"
+    assert payload["artifact_bytes_by_kind"] == {"report": "10"}
+    assert list_payload["runs"][0] == payload
+    assert "secret" not in json.dumps(payload)
+    assert "secret" not in json.dumps(list_payload)
+
+
 def test_service_router_runtime_status_derives_trace_path_from_store(tmp_path):
     persist_trace(
         {
