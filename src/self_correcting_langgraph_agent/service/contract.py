@@ -393,7 +393,7 @@ def service_openapi() -> Dict[str, Any]:
                         "trace_path": {"type": "string"},
                         "action_id": {"type": "string"},
                         "tool": {"type": "string"},
-                        "artifact": {"type": "object"},
+                        "artifact": _runtime_artifact_detail_schema(),
                     },
                     "additionalProperties": False,
                 },
@@ -416,7 +416,7 @@ def service_openapi() -> Dict[str, Any]:
                         "count": {"type": "string"},
                         "artifacts": {
                             "type": "array",
-                            "items": {"type": "object"},
+                            "items": _runtime_artifact_list_item_schema(),
                         },
                     },
                     "additionalProperties": False,
@@ -1962,6 +1962,63 @@ def _pending_approval_schema() -> Dict[str, Any]:
             "reason": {"type": "string"},
         },
         "required": ["id", "tool", "input"],
+        "additionalProperties": False,
+    }
+
+
+def _runtime_artifact_list_item_schema() -> Dict[str, Any]:
+    return {
+        "type": "object",
+        "required": [
+            "artifact_id",
+            "action_id",
+            "tool",
+            "title",
+            "kind",
+            "format",
+            "tags",
+            "bytes",
+        ],
+        "properties": {
+            "artifact_id": {"type": "string"},
+            "action_id": {"type": "string"},
+            "tool": {"type": "string"},
+            "title": {"type": "string"},
+            "kind": {"type": "string"},
+            "format": {"type": "string"},
+            "tags": {"type": "array", "items": {"type": "string"}},
+            "bytes": {"type": "string"},
+        },
+        "additionalProperties": False,
+    }
+
+
+def _runtime_artifact_detail_schema() -> Dict[str, Any]:
+    return {
+        "type": "object",
+        "required": [
+            "artifact_id",
+            "title",
+            "kind",
+            "format",
+            "content",
+            "tags",
+            "bytes",
+        ],
+        "properties": {
+            "artifact_id": {"type": "string"},
+            "title": {"type": "string"},
+            "kind": {"type": "string"},
+            "format": {"type": "string"},
+            "content": {"type": "string"},
+            "tags": {"type": "array", "items": {"type": "string"}},
+            "bytes": {
+                "oneOf": [
+                    {"type": "integer", "minimum": 0},
+                    {"type": "string"},
+                ]
+            },
+        },
         "additionalProperties": False,
     }
 

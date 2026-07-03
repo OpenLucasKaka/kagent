@@ -1006,7 +1006,30 @@ def test_service_contract_documents_named_success_schemas():
     ]
     assert schemas["RuntimeArtifactListResponse"]["properties"]["artifacts"] == {
         "type": "array",
-        "items": {"type": "object"},
+        "items": {
+            "type": "object",
+            "required": [
+                "artifact_id",
+                "action_id",
+                "tool",
+                "title",
+                "kind",
+                "format",
+                "tags",
+                "bytes",
+            ],
+            "properties": {
+                "artifact_id": {"type": "string"},
+                "action_id": {"type": "string"},
+                "tool": {"type": "string"},
+                "title": {"type": "string"},
+                "kind": {"type": "string"},
+                "format": {"type": "string"},
+                "tags": {"type": "array", "items": {"type": "string"}},
+                "bytes": {"type": "string"},
+            },
+            "additionalProperties": False,
+        },
     }
     assert schemas["RuntimeArtifactResponse"]["required"] == [
         "trace_type",
@@ -1020,7 +1043,31 @@ def test_service_contract_documents_named_success_schemas():
         "type": "string"
     }
     assert schemas["RuntimeArtifactResponse"]["properties"]["artifact"] == {
-        "type": "object"
+        "type": "object",
+        "required": [
+            "artifact_id",
+            "title",
+            "kind",
+            "format",
+            "content",
+            "tags",
+            "bytes",
+        ],
+        "properties": {
+            "artifact_id": {"type": "string"},
+            "title": {"type": "string"},
+            "kind": {"type": "string"},
+            "format": {"type": "string"},
+            "content": {"type": "string"},
+            "tags": {"type": "array", "items": {"type": "string"}},
+            "bytes": {
+                "oneOf": [
+                    {"type": "integer", "minimum": 0},
+                    {"type": "string"},
+                ]
+            },
+        },
+        "additionalProperties": False,
     }
     assert schemas["RuntimeTimelineResponse"]["required"] == [
         "trace_type",
