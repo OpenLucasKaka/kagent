@@ -587,7 +587,7 @@ def service_openapi() -> Dict[str, Any]:
                         "count": {"type": "string"},
                         "approvals": {
                             "type": "array",
-                            "items": {"type": "object"},
+                            "items": _runtime_approval_queue_item_schema(),
                         },
                     },
                     "additionalProperties": False,
@@ -2018,6 +2018,34 @@ def _runtime_artifact_detail_schema() -> Dict[str, Any]:
                     {"type": "string"},
                 ]
             },
+        },
+        "additionalProperties": False,
+    }
+
+
+def _runtime_approval_queue_item_schema() -> Dict[str, Any]:
+    return {
+        "type": "object",
+        "required": [
+            "run_id",
+            "status",
+            "goal",
+            "auth_subject",
+            "trace_path",
+            "pending_approval_action_id",
+            "pending_approval_tool",
+        ],
+        "properties": {
+            "run_id": {"type": "string"},
+            "status": {"type": "string"},
+            "goal": {"type": "string"},
+            "auth_subject": {"type": "string"},
+            "trace_path": {"type": "string"},
+            "pending_approval_action_id": {"type": "string"},
+            "pending_approval_tool": {"type": "string"},
+            "started_at": {"type": "string"},
+            "duration_seconds": {"type": "string"},
+            "pending_age_seconds": {"type": "string"},
         },
         "additionalProperties": False,
     }

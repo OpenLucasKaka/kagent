@@ -922,7 +922,31 @@ def test_service_contract_documents_named_success_schemas():
     ]
     assert schemas["RuntimeApprovalQueueResponse"]["properties"]["approvals"] == {
         "type": "array",
-        "items": {"type": "object"},
+        "items": {
+            "type": "object",
+            "required": [
+                "run_id",
+                "status",
+                "goal",
+                "auth_subject",
+                "trace_path",
+                "pending_approval_action_id",
+                "pending_approval_tool",
+            ],
+            "properties": {
+                "run_id": {"type": "string"},
+                "status": {"type": "string"},
+                "goal": {"type": "string"},
+                "auth_subject": {"type": "string"},
+                "trace_path": {"type": "string"},
+                "pending_approval_action_id": {"type": "string"},
+                "pending_approval_tool": {"type": "string"},
+                "started_at": {"type": "string"},
+                "duration_seconds": {"type": "string"},
+                "pending_age_seconds": {"type": "string"},
+            },
+            "additionalProperties": False,
+        },
     }
     assert schemas["RuntimeApprovalSummaryResponse"]["required"] == [
         "trace_type",
