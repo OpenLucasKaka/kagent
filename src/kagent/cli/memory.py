@@ -5,17 +5,33 @@ import os
 import re
 import tempfile
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
 from kagent.utils.json_output import json_ready
 
 SESSION_MEMORY_SCHEMA_VERSION = "1"
+SESSION_MEMORY_ENV_VAR = "KAGENT_SESSION_MEMORY_PATH"
 _API_KEY_PATTERN = re.compile(r"\bsk-[A-Za-z0-9:_-]{8,}\b")
 _BEARER_TOKEN_PATTERN = re.compile(
     r"\b(Authorization:\s*Bearer\s+|Bearer\s+)([A-Za-z0-9._~+/:-]{8,})",
     re.IGNORECASE,
 )
 _URL_CREDENTIAL_PATTERN = re.compile(r"\b(https?://)([^/\s:@]+):([^/\s@]+)@")
+
+
+def default_runtime_session_memory_path(
+    env: Mapping[str, str] | None = None,
+) -> str:
+    source = os.environ if env is None else env
+    if SESSION_MEMORY_ENV_VAR in source:
+        return source[SESSION_MEMORY_ENV_VAR]
+    state_home = source.get("XDG_STATE_HOME", "").strip()
+    if state_home:
+        return str(Path(state_home) / "kagent" / "session-memory.json")
+    home = source.get("HOME", "").strip()
+    if not home:
+        return ""
+    return str(Path(home) / ".local" / "state" / "kagent" / "session-memory.json")
 
 
 def load_runtime_session_memory(path: str, *, max_turns: int) -> list[dict[str, str]]:

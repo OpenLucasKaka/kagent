@@ -3,12 +3,14 @@ from __future__ import annotations
 import argparse
 import contextlib
 import io
+import sys
 import warnings
 from typing import Any
 
 from kagent.cli.interactive import (
     run_runtime_interactive as _run_runtime_interactive,
 )
+from kagent.cli.memory import default_runtime_session_memory_path
 from kagent.cli.trace import (
     persist_runtime_cli_trace,
 )
@@ -242,6 +244,10 @@ def main() -> None:
 
         if args.interactive:
             try:
+                session_memory_path = _session_memory_path_from_args(
+                    args,
+                    interactive_tty=sys.stdin.isatty(),
+                )
                 provider = (
                     FakeLLMProvider(args.runtime_plan)
                     if args.runtime_plan
@@ -257,13 +263,13 @@ def main() -> None:
                     tags=runtime_tags,
                     trace_dir=args.trace_dir,
                     persist_trace=persist_trace,
-                    session_memory_path=args.session_memory,
+                    session_memory_path=session_memory_path,
                 )
                 return
             except ValueError as exc:
                 config_error = str(exc)
             except OSError as exc:
-                config_error = f"could not use --session-memory: {exc}"
+                config_error = f"could not use session memory: {exc}"
         elif args.goal is None:
             parser.error(
                 "goal is required unless --interactive, --list-tools, "
@@ -326,6 +332,18 @@ def _apply_default_cli_mode(args: argparse.Namespace) -> None:
 
 def _is_introspection_command(args: argparse.Namespace) -> bool:
     return bool(args.list_tools or args.list_faults or args.graph or args.version)
+
+
+def _session_memory_path_from_args(
+    args: argparse.Namespace,
+    *,
+    interactive_tty: bool,
+) -> str:
+    if args.session_memory:
+        return args.session_memory
+    if not interactive_tty:
+        return ""
+    return default_runtime_session_memory_path()
 
 
 def _runtime_labels_from_args(

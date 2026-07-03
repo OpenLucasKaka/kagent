@@ -29,6 +29,8 @@ def test_operations_runbook_documents_continuous_iteration_and_failure_triage():
     assert "live progress" in runbook
     assert "compact operator" in runbook
     assert "--session-memory PATH" in runbook
+    assert "KAGENT_SESSION_MEMORY_PATH" in runbook
+    assert "session-memory.json" in runbook
     assert "owner-only" in runbook
     assert "progress_event_count" in runbook
     assert "exclude tool inputs" in runbook

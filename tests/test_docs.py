@@ -146,6 +146,8 @@ def test_readme_documents_console_script_entrypoints():
     assert "live progress" in readme
     assert "compact operator transcript" in readme
     assert "--session-memory PATH" in readme
+    assert "KAGENT_SESSION_MEMORY_PATH" in readme
+    assert "session-memory.json" in readme
     assert "progress_event_count" in readme
     assert "--runtime" in readme
     assert "--runtime-plan" in readme

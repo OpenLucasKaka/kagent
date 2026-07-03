@@ -49,10 +49,14 @@ Use `/json`, `/compact`, `/last`, `/trace`, `/memory`, `/clear`, and `/help`
 inside the shell. Persisted session memory is owner-only and redacts common
 API keys, bearer tokens, and URL credentials before writing to disk. The CLI
 defaults to the runtime interactive shell, with three planning iterations per
-turn. Use `--max-iterations` to override the iteration budget,
-`--session-memory PATH` to persist memory, `--runtime-plan` for deterministic
-runtime tests, and `--interactive-json` when you need full traces. Runtime and
-service config values must use JSON integers, not strings or booleans.
+turn. TTY sessions persist memory by default at
+`${XDG_STATE_HOME:-~/.local/state}/kagent/session-memory.json`; set
+`KAGENT_SESSION_MEMORY_PATH` to override that path or to an empty value to
+disable default persistence. Use `--max-iterations` to override the iteration
+budget, `--session-memory PATH` for an explicit memory file, `--runtime-plan`
+for deterministic runtime tests, and `--interactive-json` when you need full
+traces. Runtime and service config values must use JSON integers, not strings
+or booleans.
 
 ## What It Can Do
 

@@ -3,6 +3,7 @@ import json
 import os
 import subprocess
 import sys
+from argparse import Namespace
 from pathlib import Path
 
 
@@ -1441,6 +1442,55 @@ def test_cli_session_memory_requires_interactive_runtime():
     assert completed.returncode == 2
     assert "--session-memory requires --interactive" in completed.stderr
     assert "Traceback" not in completed.stderr
+
+
+def test_cli_defaults_session_memory_to_xdg_state_for_tty(monkeypatch, tmp_path):
+    from kagent.cli.main import _session_memory_path_from_args
+
+    state_home = tmp_path / "state"
+    monkeypatch.setenv("XDG_STATE_HOME", str(state_home))
+
+    memory_path = _session_memory_path_from_args(
+        Namespace(session_memory=""),
+        interactive_tty=True,
+    )
+
+    assert memory_path == str(state_home / "kagent" / "session-memory.json")
+
+
+def test_cli_does_not_default_session_memory_for_piped_interactive_runs(
+    monkeypatch,
+    tmp_path,
+):
+    from kagent.cli.main import _session_memory_path_from_args
+
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
+
+    assert (
+        _session_memory_path_from_args(
+            Namespace(session_memory=""),
+            interactive_tty=False,
+        )
+        == ""
+    )
+
+
+def test_cli_session_memory_env_override_can_disable_default_memory(
+    monkeypatch,
+    tmp_path,
+):
+    from kagent.cli.main import _session_memory_path_from_args
+
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
+    monkeypatch.setenv("KAGENT_SESSION_MEMORY_PATH", "")
+
+    assert (
+        _session_memory_path_from_args(
+            Namespace(session_memory=""),
+            interactive_tty=True,
+        )
+        == ""
+    )
 
 
 def test_cli_interactive_runtime_passes_metadata_and_tags_to_each_run(

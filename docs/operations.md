@@ -497,12 +497,16 @@ replay the most recent compact result, `/trace` to print the most recent full
 JSON trace once, `/memory` to inspect the current session memory, `/clear` to
 clear it, and `/help` to list shell commands. The default turn budget is three
 planning iterations; add `--max-iterations N` only when a workflow needs a
-different budget. Session memory is in-process by default; add
-`--session-memory PATH` to persist compact memory across shell restarts. The
-memory file is written owner-only, and `/clear` also clears the persisted file.
-Before writing session memory to disk, the CLI redacts common API keys, bearer
-tokens, and URL credentials so accidental provider or service secrets are not
-preserved in the memory file.
+different budget. TTY sessions persist compact memory across shell restarts by
+default at `${XDG_STATE_HOME:-~/.local/state}/kagent/session-memory.json`;
+piped interactive runs keep memory in-process and do not write a default file.
+Add `--session-memory PATH` for an explicit memory file. Set
+`KAGENT_SESSION_MEMORY_PATH` to override the default location, or set it to an
+empty value to disable default persistence for TTY sessions. The memory file is
+written owner-only, and `/clear` also clears the persisted file. Before writing
+session memory to disk, the CLI redacts common API keys, bearer tokens, and URL
+credentials so accidental provider or service secrets are not preserved in the
+memory file.
 
 `/openapi.json` includes named schemas for production integration, including
 `RunRequest`, `RunResponse`, readiness, config, tools, version, metrics, and
