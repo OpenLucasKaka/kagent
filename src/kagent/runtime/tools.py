@@ -88,6 +88,7 @@ _SHELL_PIPE_TO_SHELL_PATTERN = re.compile(
 class _PatchOperation:
     operation: str
     relative_path: str
+    destination_path: str = ""
     content: str = ""
     lines: tuple[str, ...] = ()
 
@@ -145,7 +146,7 @@ _APPLY_PATCH_CHANGED_FILE_OUTPUT_SCHEMA = {
     "required": ["path", "operation", "bytes", "sha256"],
     "properties": {
         "path": {"type": "string"},
-        "operation": {"type": "string", "enum": ["add", "update", "delete"]},
+        "operation": {"type": "string", "enum": ["add", "update", "delete", "move"]},
         "bytes": {"type": "number", "minimum": 0},
         "sha256": {"type": "string"},
     },
@@ -381,7 +382,7 @@ def default_runtime_tools() -> Dict[str, RuntimeToolSpec]:
             name="apply_patch",
             description=(
                 "Apply a Codex-style workspace patch. Supports adding, updating, "
-                "and deleting files "
+                "moving, and deleting files "
                 "inside the current workspace and rejects absolute paths, parent "
                 "traversal, unsafe deletes, and accidental overwrites. To create hello.md, "
                 "use exactly: *** Begin Patch\n*** Add File: hello.md\n+content\n*** End Patch"
@@ -1074,6 +1075,38 @@ def _apply_patch(input_payload: Dict[str, Any]) -> Dict[str, Any]:
             if target.is_dir():
                 raise ValueError(f"path is a directory: {operation.relative_path}")
             next_content = None
+        elif operation.operation == "move":
+            if current_content is None:
+                raise ValueError(f"file does not exist: {operation.relative_path}")
+            if target.is_dir():
+                raise ValueError(f"path is a directory: {operation.relative_path}")
+            destination = _resolve_workspace_relative_path(
+                workspace_root,
+                operation.destination_path,
+            )
+            if destination == target:
+                raise ValueError("move destination must differ from source")
+            if _staged_or_disk_content(destination, staged_contents) is not None:
+                raise ValueError(f"file already exists: {operation.destination_path}")
+            next_content = current_content
+            if operation.lines:
+                next_content = _apply_update_lines(
+                    current_content,
+                    operation.lines,
+                    operation.relative_path,
+                )
+            staged_contents[target] = None
+            staged_contents[destination] = next_content
+            encoded = next_content.encode("utf-8")
+            changed_files.append(
+                {
+                    "path": operation.destination_path,
+                    "operation": operation.operation,
+                    "bytes": len(encoded),
+                    "sha256": hashlib.sha256(encoded).hexdigest(),
+                }
+            )
+            continue
         else:  # pragma: no cover - parser owns the operation enum
             raise ValueError(f"unsupported patch operation: {operation.operation}")
 
@@ -1090,7 +1123,8 @@ def _apply_patch(input_payload: Dict[str, Any]) -> Dict[str, Any]:
 
     for target, content in staged_contents.items():
         if content is None:
-            target.unlink()
+            if target.exists():
+                target.unlink()
             continue
         target.parent.mkdir(parents=True, exist_ok=True)
         with target.open("w", encoding="utf-8", newline="") as handle:
@@ -1135,6 +1169,12 @@ def _parse_workspace_patch(patch: str) -> list[_PatchOperation]:
             if not relative_path:
                 raise ValueError("patch file path is required")
             index += 1
+            destination_path = ""
+            if index < len(lines) - 1 and lines[index].startswith("*** Move to: "):
+                destination_path = lines[index].removeprefix("*** Move to: ").strip()
+                if not destination_path:
+                    raise ValueError("move destination path is required")
+                index += 1
             update_lines = []
             while index < len(lines) - 1 and not lines[index].startswith("*** "):
                 update_line = lines[index]
@@ -1143,8 +1183,18 @@ def _parse_workspace_patch(patch: str) -> list[_PatchOperation]:
                     continue
                 update_lines.append(update_line)
                 index += 1
-            if not update_lines:
+            if not update_lines and not destination_path:
                 raise ValueError("update file patch must contain at least one change line")
+            if destination_path:
+                operations.append(
+                    _PatchOperation(
+                        operation="move",
+                        relative_path=relative_path,
+                        destination_path=destination_path,
+                        lines=tuple(update_lines),
+                    )
+                )
+                continue
             operations.append(
                 _PatchOperation(
                     operation="update",
@@ -1162,7 +1212,9 @@ def _parse_workspace_patch(patch: str) -> list[_PatchOperation]:
                 _PatchOperation(operation="delete", relative_path=relative_path)
             )
             continue
-        raise ValueError("only Add File, Update File, and Delete File patch hunks are supported")
+        raise ValueError(
+            "only Add File, Update File, Move to, and Delete File patch hunks are supported"
+        )
     if not operations:
         raise ValueError("patch must contain at least one file hunk")
     return operations

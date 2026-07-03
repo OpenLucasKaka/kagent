@@ -410,6 +410,92 @@ def test_apply_patch_tool_deletes_existing_file(tmp_path, monkeypatch):
     assert observation.output["changed_files"][0]["operation"] == "delete"
 
 
+def test_apply_patch_tool_moves_existing_file(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    source = tmp_path / "drafts" / "pilot.md"
+    source.parent.mkdir()
+    source.write_text("# Pilot\n\nready\n", encoding="utf-8")
+
+    observation = execute_runtime_tool(
+        default_runtime_tools(),
+        "apply_patch",
+        {
+            "patch": (
+                "*** Begin Patch\n"
+                "*** Update File: drafts/pilot.md\n"
+                "*** Move to: docs/pilot.md\n"
+                "*** End Patch\n"
+            )
+        },
+        action_id="step-1",
+    )
+
+    moved = tmp_path / "docs" / "pilot.md"
+    assert observation.status == "ok"
+    assert not source.exists()
+    assert moved.read_text(encoding="utf-8") == "# Pilot\n\nready\n"
+    assert observation.output["file_count"] == 1
+    assert observation.output["changed_files"][0]["path"] == "docs/pilot.md"
+    assert observation.output["changed_files"][0]["operation"] == "move"
+    assert observation.output["changed_files"][0]["bytes"] == len(
+        "# Pilot\n\nready\n".encode("utf-8")
+    )
+
+
+def test_apply_patch_tool_rejects_move_to_existing_file(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    source = tmp_path / "draft.md"
+    target = tmp_path / "final.md"
+    source.write_text("draft\n", encoding="utf-8")
+    target.write_text("keep\n", encoding="utf-8")
+
+    observation = execute_runtime_tool(
+        default_runtime_tools(),
+        "apply_patch",
+        {
+            "patch": (
+                "*** Begin Patch\n"
+                "*** Update File: draft.md\n"
+                "*** Move to: final.md\n"
+                "*** End Patch\n"
+            )
+        },
+        action_id="step-1",
+    )
+
+    assert observation.status == "failed"
+    assert observation.error_code == "invalid_tool_input"
+    assert "file already exists: final.md" in observation.error
+    assert source.read_text(encoding="utf-8") == "draft\n"
+    assert target.read_text(encoding="utf-8") == "keep\n"
+
+
+def test_apply_patch_tool_rejects_move_path_traversal(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    source = tmp_path / "draft.md"
+    source.write_text("draft\n", encoding="utf-8")
+
+    observation = execute_runtime_tool(
+        default_runtime_tools(),
+        "apply_patch",
+        {
+            "patch": (
+                "*** Begin Patch\n"
+                "*** Update File: draft.md\n"
+                "*** Move to: ../outside.md\n"
+                "*** End Patch\n"
+            )
+        },
+        action_id="step-1",
+    )
+
+    assert observation.status == "failed"
+    assert observation.error_code == "invalid_tool_input"
+    assert "path must stay inside the workspace" in observation.error
+    assert source.read_text(encoding="utf-8") == "draft\n"
+    assert not (tmp_path.parent / "outside.md").exists()
+
+
 def test_apply_patch_tool_rejects_update_when_context_is_missing(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     target = tmp_path / "notes.md"
@@ -966,7 +1052,7 @@ def test_runtime_tool_specs_expose_output_schemas_for_planning_and_clients():
     ]
     assert tools["apply_patch"].output_schema["properties"]["changed_files"]["items"][
         "properties"
-    ]["operation"]["enum"] == ["add", "update", "delete"]
+    ]["operation"]["enum"] == ["add", "update", "delete", "move"]
     assert tools["artifact"].output_schema == {
         "type": "object",
         "required": ["artifact_id", "title", "kind", "format", "content", "tags", "bytes"],
@@ -1250,6 +1336,9 @@ def test_registered_runtime_tool_metadata_includes_input_schemas():
         "changed_files",
         "file_count",
     ]
+    assert by_name["apply_patch"]["output_schema"]["properties"]["changed_files"][
+        "items"
+    ]["properties"]["operation"]["enum"] == ["add", "update", "delete", "move"]
     assert by_name["artifact"]["approval_required_by_default"] == "false"
     assert by_name["artifact"]["timeout_seconds"] == "30.0"
     assert by_name["artifact"]["input_schema"]["required"] == [

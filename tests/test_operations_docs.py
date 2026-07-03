@@ -250,6 +250,8 @@ def test_operations_runbook_documents_continuous_iteration_and_failure_triage():
     assert "decision_matrix" in runbook
     assert "list_files" in runbook
     assert "symlink entries" in runbook
+    assert "*** Move to: PATH" in runbook
+    assert "operation=move" in runbook
     assert "http_request" in runbook
     assert "SSRF" in runbook
     assert "private, loopback, and link-local" in runbook

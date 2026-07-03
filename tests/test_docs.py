@@ -150,6 +150,8 @@ def test_readme_documents_console_script_entrypoints():
     assert old_console_name not in readme
     assert "live progress" in readme
     assert "compact operator transcript" in readme
+    assert "moving" in readme
+    assert "apply_patch" in readme
     assert "bounded local shell commands" in readme
     assert "secret-exposing" in readme
     assert "--session-memory PATH" in readme

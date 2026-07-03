@@ -101,3 +101,5 @@ Initial production-oriented LangGraph agent package.
 - Made the CLI default to the Codex-style runtime for both `kagent` and
   `kagent "goal"`, with `--deterministic` reserved for legacy graph regression
   checks.
+- Added Codex-style `*** Move to:` support to the audited runtime `apply_patch`
+  tool so agents can move workspace files without shell access.

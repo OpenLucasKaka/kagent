@@ -9,3 +9,4 @@ def test_changelog_documents_current_release_capabilities():
     assert "0.1.0" in changelog
     assert "LangGraph" in changelog
     assert "continuous iteration" in changelog
+    assert "*** Move to:" in changelog
