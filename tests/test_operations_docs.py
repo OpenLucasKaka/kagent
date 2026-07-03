@@ -100,6 +100,7 @@ def test_operations_runbook_documents_continuous_iteration_and_failure_triage():
     assert "cancelled_by_auth_subject" in runbook
     assert "compact timeline" in runbook
     assert "artifact metadata" in runbook
+    assert "string tags" in runbook
     assert "POST /runtime/resume" in runbook
     assert "operationId" in runbook
     assert "run_id" in runbook

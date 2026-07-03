@@ -791,6 +791,46 @@ def test_service_router_runtime_artifacts_lists_persisted_artifact_metadata(tmp_
     assert all("content" not in artifact for artifact in payload["artifacts"])
 
 
+def test_service_router_runtime_artifacts_filters_non_string_tags(tmp_path):
+    persist_trace(
+        {
+            "trace_type": "codex_runtime",
+            "run_id": "malformed-artifact-tags",
+            "status": "done",
+            "goal": "inspect artifact tags",
+            "observations": [
+                {
+                    "action_id": "step-1",
+                    "tool": "artifact",
+                    "status": "ok",
+                    "output": {
+                        "artifact_id": "artifact-tags",
+                        "title": "Tagged",
+                        "kind": "report",
+                        "format": "markdown",
+                        "tags": ["release", {"secret": "metadata"}, 123, "ops"],
+                        "bytes": 10,
+                        "content": "not listed",
+                    },
+                }
+            ],
+        },
+        str(tmp_path),
+    )
+
+    status_code, payload = service_router.handle_request(
+        "GET",
+        "/runtime/runs/malformed-artifact-tags/artifacts",
+        b"",
+        config=ServiceConfig(trace_dir=str(tmp_path)),
+    )
+
+    assert status_code == 200
+    assert payload["artifacts"][0]["tags"] == ["release", "ops"]
+    assert "secret" not in json.dumps(payload)
+    assert "content" not in payload["artifacts"][0]
+
+
 def test_service_router_runtime_artifacts_returns_empty_manifest(tmp_path):
     run_status, run_payload = service_router.handle_request(
         "POST",

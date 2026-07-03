@@ -742,7 +742,9 @@ the same count so dashboards can alert on broken event delivery without opening
 full traces.
 Use
 `GET /runtime/runs/{run_id}/artifacts` to list artifact metadata without
-content before selecting a specific deliverable. Use
+content before selecting a specific deliverable. The listing normalizes tags to
+non-empty string tags only, so malformed trace metadata cannot leak nested
+objects through operator dashboards. Use
 `GET /runtime/runs/{run_id}/artifacts/{artifact_id}` to fetch one persisted
 artifact body by ID without returning the full trace; the response includes
 `trace_path` for audit correlation. If the target trace cannot be decoded or

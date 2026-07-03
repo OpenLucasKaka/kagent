@@ -1016,11 +1016,17 @@ def _runtime_trace_artifacts(trace: Dict[str, Any]) -> list[Dict[str, Any]]:
                 "title": str(output.get("title", "")),
                 "kind": str(output.get("kind", "")),
                 "format": str(output.get("format", "")),
-                "tags": output.get("tags") if isinstance(output.get("tags"), list) else [],
+                "tags": _artifact_tag_list(output.get("tags")),
                 "bytes": str(output.get("bytes", "")),
             }
         )
     return artifacts
+
+
+def _artifact_tag_list(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [tag for tag in value if isinstance(tag, str) and tag.strip()]
 
 
 def _runtime_timeline_events(value: Any) -> list[Dict[str, Any]]:
