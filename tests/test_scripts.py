@@ -1487,6 +1487,47 @@ def test_production_readiness_audit_blocks_secret_bearing_evidence(tmp_path):
     assert secret_value not in completed.stderr
 
 
+def test_production_readiness_audit_blocks_structured_secret_like_evidence(
+    tmp_path,
+):
+    evidence_path = tmp_path / "provider-smoke.json"
+    evidence_path.write_text(
+        json.dumps(
+            {
+                "status": "failed",
+                "authorization": {
+                    "configured": True,
+                    "redacted": True,
+                },
+            }
+        )
+        + "\n"
+    )
+
+    completed = subprocess.run(
+        [
+            ".venv/bin/python",
+            "scripts/production_readiness_audit.py",
+            "--provider-smoke-evidence",
+            str(evidence_path),
+        ],
+        capture_output=True,
+        text=True,
+    )
+    payload = json.loads(completed.stdout)
+
+    assert completed.returncode == 1
+    assert payload["status"] == "failed"
+    assert "evidence_secret_detected" in payload["summary"]["failed_checks"]
+    assert payload["summary"]["evidence_secret_findings"] == [
+        {
+            "label": "provider_smoke",
+            "path": "$.authorization",
+            "reason": "secret_like_key",
+        }
+    ]
+
+
 def test_production_readiness_audit_rejects_incomplete_provider_smoke_evidence(
     tmp_path,
 ):

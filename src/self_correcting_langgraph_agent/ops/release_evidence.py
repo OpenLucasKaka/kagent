@@ -788,9 +788,21 @@ def _is_secret_like_key(key: str, value: Any) -> bool:
     normalized = key.lower().replace("-", "_")
     if normalized in SECRET_KEY_ALLOWLIST:
         return False
-    if not isinstance(value, str) or not value.strip():
+    if not _has_present_secret_like_key_value(value):
         return False
     return any(token in normalized for token in SECRET_LIKE_KEYS)
+
+
+def _has_present_secret_like_key_value(value: Any) -> bool:
+    if value is None:
+        return False
+    if isinstance(value, str):
+        return bool(value.strip())
+    if isinstance(value, (list, dict)):
+        return bool(value)
+    if isinstance(value, bool):
+        return value
+    return True
 
 
 def _is_secret_like_value(value: str) -> bool:
