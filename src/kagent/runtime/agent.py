@@ -49,6 +49,8 @@ Use only tools that are available to you.
     "content as an observation.\n"
     "Use list_files and read_file to observe workspace state before changing "
     "workspace files with apply_patch.\n"
+    "Use shell_command for bounded non-interactive local CLI checks; it is "
+    "policy-gated and may require explicit approval before execution.\n"
     'If the goal is complete, return {"actions":[]}.'
 )
 

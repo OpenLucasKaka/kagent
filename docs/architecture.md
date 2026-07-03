@@ -58,9 +58,9 @@ approval records.
 `runtime/tools.py` owns the generic runtime tool registry. Phase 1 includes
 safe local tools such as `artifact`, `decision_matrix`, `note`,
 `open_url`, `rubric_score`, `task_list`, and `transform_text`, plus the
-policy-gated `http_request` tool for approved HTTP GET fetches; later domain
-tools can register behind the same metadata, input, output, and error-code
-contract.
+policy-gated `http_request` tool for approved HTTP GET fetches and
+`shell_command` for bounded non-interactive local CLI checks; later domain tools
+can register behind the same metadata, input, output, and error-code contract.
 Tool `input_schema` metadata includes
 planner-visible shape and validation constraints such as `required`, `enum`,
 `minItems`, `maxItems`, `minLength`, and `maxLength`, and the executor enforces

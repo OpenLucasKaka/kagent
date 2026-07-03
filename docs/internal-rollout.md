@@ -262,8 +262,9 @@ passing output is rejected as `invalid_evidence`.
 
 During rollout, verify `/runtime/tools` exposes `approval_required_by_default`.
 Direct local tools such as `artifact` should report `false`, while
-policy-gated tools such as `http_request` should report `true` unless an
-explicit deployment allowlist changes the runtime policy path. Also verify
+policy-gated tools such as `http_request` and `shell_command` should report
+`true` unless an explicit deployment allowlist changes the runtime policy path.
+Also verify
 `/runtime/policy` for each team token and confirm `effective_tool_policy`
 matches the intended execution boundary: allowed tools report
 `approval_required=false`, and blocked tools report `approval_required=true`.

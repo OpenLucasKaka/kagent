@@ -66,6 +66,7 @@ The runtime currently includes tools for:
 - task lists, rubrics, text transforms, and decision matrices;
 - approved HTTP GET requests with SSRF protections;
 - opening URLs in the local browser;
+- approved bounded local shell commands for internal CLI checks;
 - creating workspace files through an audited `apply_patch` flow.
 
 Risky tools are policy-gated. Runs expose structured events, observations,

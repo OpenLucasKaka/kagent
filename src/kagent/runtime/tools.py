@@ -54,6 +54,16 @@ _APPLY_PATCH_MAX_BYTES = 20000
 _READ_FILE_MAX_BYTES = 65536
 _LIST_FILES_MAX_DEPTH = 5
 _LIST_FILES_MAX_ENTRIES = 500
+_SHELL_COMMAND_MAX_LENGTH = 2000
+_SHELL_COMMAND_MAX_OUTPUT_BYTES = 32768
+_SHELL_COMMAND_DEFAULT_TIMEOUT_SECONDS = 10.0
+_SHELL_COMMAND_MAX_TIMEOUT_SECONDS = 30.0
+_SHELL_BACKGROUND_PATTERN = re.compile(r"(?<!&)&(?!&)")
+_SHELL_INTERACTIVE_PATTERNS = (
+    re.compile(r"\bpython[0-9.]*\s+-i\b"),
+    re.compile(r"\b(ipython|node|ruby|irb)\b\s*$"),
+    re.compile(r"\b(read|vim|vi|nano|less|more|top|tail\s+-f)\b"),
+)
 
 
 @dataclass(frozen=True)
@@ -321,6 +331,31 @@ _LIST_FILES_OUTPUT_SCHEMA = {
     "additionalProperties": False,
 }
 
+_SHELL_COMMAND_OUTPUT_SCHEMA = {
+    "type": "object",
+    "required": [
+        "command",
+        "cwd",
+        "exit_code",
+        "stdout",
+        "stderr",
+        "duration_seconds",
+        "timed_out",
+        "truncated",
+    ],
+    "properties": {
+        "command": {"type": "string"},
+        "cwd": {"type": "string"},
+        "exit_code": {"type": "number"},
+        "stdout": {"type": "string"},
+        "stderr": {"type": "string"},
+        "duration_seconds": {"type": "number", "minimum": 0},
+        "timed_out": {"type": "boolean"},
+        "truncated": {"type": "boolean"},
+    },
+    "additionalProperties": False,
+}
+
 
 def default_runtime_tools() -> Dict[str, RuntimeToolSpec]:
     return {
@@ -554,6 +589,41 @@ def default_runtime_tools() -> Dict[str, RuntimeToolSpec]:
                 "additionalProperties": False,
             },
             output_schema=_READ_FILE_OUTPUT_SCHEMA,
+        ),
+        "shell_command": RuntimeToolSpec(
+            name="shell_command",
+            description=(
+                "Run a bounded non-interactive shell command inside the current "
+                "workspace. Captures stdout/stderr, returns the process exit code, "
+                "rejects workspace escapes and obvious interactive/background "
+                "commands, and is policy-gated by default."
+            ),
+            handler=_shell_command,
+            input_schema={
+                "type": "object",
+                "required": ["command"],
+                "properties": {
+                    "command": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": _SHELL_COMMAND_MAX_LENGTH,
+                    },
+                    "cwd": {"type": "string", "maxLength": 2048},
+                    "timeout_seconds": {
+                        "type": "number",
+                        "minimum": 1,
+                        "maximum": _SHELL_COMMAND_MAX_TIMEOUT_SECONDS,
+                    },
+                    "max_output_bytes": {
+                        "type": "number",
+                        "minimum": 1,
+                        "maximum": _SHELL_COMMAND_MAX_OUTPUT_BYTES,
+                    },
+                },
+                "additionalProperties": False,
+            },
+            output_schema=_SHELL_COMMAND_OUTPUT_SCHEMA,
+            timeout_seconds=_SHELL_COMMAND_MAX_TIMEOUT_SECONDS + 1,
         ),
         "task_list": RuntimeToolSpec(
             name="task_list",
@@ -846,6 +916,103 @@ def _list_files(input_payload: Dict[str, Any]) -> Dict[str, Any]:
         "file_count": len(entries),
         "truncated": truncated,
     }
+
+
+def _shell_command(input_payload: Dict[str, Any]) -> Dict[str, Any]:
+    command = input_payload.get("command")
+    if not isinstance(command, str) or not command.strip():
+        raise ValueError("command must be a non-empty string")
+    normalized_command = command.strip()
+    _validate_shell_command(normalized_command)
+
+    timeout_seconds = float(
+        input_payload.get("timeout_seconds", _SHELL_COMMAND_DEFAULT_TIMEOUT_SECONDS)
+    )
+    max_output_bytes = int(
+        input_payload.get("max_output_bytes", _SHELL_COMMAND_MAX_OUTPUT_BYTES)
+    )
+    workspace_root = Path.cwd().resolve()
+    cwd = _resolve_shell_cwd(workspace_root, input_payload.get("cwd", "."))
+    started = time.perf_counter()
+    timed_out = False
+    try:
+        completed = subprocess.run(
+            normalized_command,
+            shell=True,
+            cwd=str(cwd),
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=False,
+            timeout=timeout_seconds,
+            start_new_session=True,
+        )
+        exit_code = completed.returncode
+        stdout = completed.stdout or b""
+        stderr = completed.stderr or b""
+    except subprocess.TimeoutExpired as exc:
+        timed_out = True
+        exit_code = -1
+        stdout = exc.stdout or b""
+        stderr = exc.stderr or b""
+    duration_seconds = time.perf_counter() - started
+    stdout, stderr, truncated = _truncate_shell_output(
+        stdout,
+        stderr,
+        max_output_bytes=max_output_bytes,
+    )
+    return {
+        "command": normalized_command,
+        "cwd": _workspace_output_path(workspace_root, cwd),
+        "exit_code": exit_code,
+        "stdout": stdout.decode("utf-8", errors="replace"),
+        "stderr": stderr.decode("utf-8", errors="replace"),
+        "duration_seconds": float(f"{duration_seconds:.4f}"),
+        "timed_out": timed_out,
+        "truncated": truncated,
+    }
+
+
+def _validate_shell_command(command: str) -> None:
+    if "\x00" in command or "\n" in command or "\r" in command:
+        raise ValueError("command must be a single line")
+    if _SHELL_BACKGROUND_PATTERN.search(command):
+        raise ValueError("background shell commands are not supported")
+    for pattern in _SHELL_INTERACTIVE_PATTERNS:
+        if pattern.search(command):
+            raise ValueError("interactive shell commands are not supported")
+
+
+def _resolve_shell_cwd(workspace_root: Path, relative_path: Any) -> Path:
+    if relative_path in {"", "."}:
+        return workspace_root
+    if not isinstance(relative_path, str) or not relative_path.strip():
+        raise ValueError("cwd must be a string")
+    cwd = _resolve_workspace_relative_path(workspace_root, relative_path.strip())
+    if not cwd.exists():
+        raise ValueError(f"cwd does not exist: {relative_path}")
+    if not cwd.is_dir():
+        raise ValueError(f"cwd is not a directory: {relative_path}")
+    return cwd
+
+
+def _truncate_shell_output(
+    stdout: bytes,
+    stderr: bytes,
+    *,
+    max_output_bytes: int,
+) -> tuple[bytes, bytes, bool]:
+    remaining = max_output_bytes
+    truncated = False
+    if len(stdout) > remaining:
+        stdout = stdout[:remaining]
+        remaining = 0
+        truncated = True
+    else:
+        remaining -= len(stdout)
+    if len(stderr) > remaining:
+        stderr = stderr[:remaining]
+        truncated = True
+    return stdout, stderr, truncated
 
 
 def _apply_patch(input_payload: Dict[str, Any]) -> Dict[str, Any]:

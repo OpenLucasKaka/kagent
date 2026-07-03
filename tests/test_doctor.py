@@ -41,7 +41,7 @@ def test_doctor_payload_reports_runtime_policy_without_tokens(tmp_path):
     assert payload["runtime_policy"]["effective_allowed_tools"] == ["note"]
     assert payload["runtime_policy"]["subject_policy_count"] == "1"
     assert payload["runtime_policy"]["effective_allowed_tool_count"] == "1"
-    assert payload["runtime_policy"]["approval_required_tool_count"] == "10"
+    assert payload["runtime_policy"]["approval_required_tool_count"] == "11"
     assert "long-random-admin-token" not in serialized
     assert "long-random-team-token" not in serialized
 

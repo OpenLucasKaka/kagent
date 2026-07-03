@@ -15,6 +15,7 @@ def test_internal_rollout_guide_is_linked_and_actionable():
     assert "KAGENT_SERVICE_AUTH_TOKENS" in guide
     assert "KAGENT_SERVICE_RUNTIME_ALLOWED_TOOLS_BY_SUBJECT" in guide
     assert "Runtime Tool Policy" in guide
+    assert "shell_command" in guide
     assert "Provider Smoke" in guide
     assert "scripts/smoke_internal_runtime.sh" in guide
     assert "scripts/smoke_real_llm_runtime.sh" in guide

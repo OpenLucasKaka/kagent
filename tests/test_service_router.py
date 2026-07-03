@@ -193,6 +193,7 @@ def test_service_router_runtime_policy_reports_admin_audit_view_without_tokens()
         {"name": "open_url", "allowed": "false", "approval_required": "true"},
         {"name": "read_file", "allowed": "false", "approval_required": "true"},
         {"name": "rubric_score", "allowed": "false", "approval_required": "true"},
+        {"name": "shell_command", "allowed": "false", "approval_required": "true"},
         {"name": "task_list", "allowed": "true", "approval_required": "false"},
         {
             "name": "transform_text",
@@ -250,6 +251,7 @@ def test_service_router_runtime_policy_scopes_subject_audit_view():
         {"name": "open_url", "allowed": "false", "approval_required": "true"},
         {"name": "read_file", "allowed": "false", "approval_required": "true"},
         {"name": "rubric_score", "allowed": "false", "approval_required": "true"},
+        {"name": "shell_command", "allowed": "false", "approval_required": "true"},
         {"name": "task_list", "allowed": "false", "approval_required": "true"},
         {
             "name": "transform_text",

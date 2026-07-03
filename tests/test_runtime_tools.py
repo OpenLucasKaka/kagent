@@ -1,4 +1,6 @@
 import json
+import shlex
+import sys
 import time
 
 from kagent.runtime import tools as runtime_tools
@@ -159,6 +161,82 @@ def test_list_files_tool_skips_symlinks_to_avoid_external_metadata_leaks(
     assert observation.output["entries"] == [
         {"path": "safe.md", "type": "file", "bytes": 5}
     ]
+
+
+def test_shell_command_tool_executes_bounded_command_inside_workspace(
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.chdir(tmp_path)
+    command = f"{shlex.quote(sys.executable)} -c 'print(\"hello\")'"
+
+    observation = execute_runtime_tool(
+        default_runtime_tools(),
+        "shell_command",
+        {"command": command},
+        action_id="step-1",
+    )
+
+    assert observation.status == "ok"
+    assert observation.output["command"] == command
+    assert observation.output["cwd"] == "."
+    assert observation.output["exit_code"] == 0
+    assert observation.output["stdout"] == "hello\n"
+    assert observation.output["stderr"] == ""
+    assert observation.output["timed_out"] is False
+    assert observation.output["truncated"] is False
+
+
+def test_shell_command_tool_reports_nonzero_exit_without_failing_tool(
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.chdir(tmp_path)
+    command = f"{shlex.quote(sys.executable)} -c 'import sys; sys.exit(7)'"
+
+    observation = execute_runtime_tool(
+        default_runtime_tools(),
+        "shell_command",
+        {"command": command},
+        action_id="step-1",
+    )
+
+    assert observation.status == "ok"
+    assert observation.output["exit_code"] == 7
+    assert observation.output["timed_out"] is False
+
+
+def test_shell_command_tool_rejects_workspace_escape(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+
+    observation = execute_runtime_tool(
+        default_runtime_tools(),
+        "shell_command",
+        {"command": "pwd", "cwd": ".."},
+        action_id="step-1",
+    )
+
+    assert observation.status == "failed"
+    assert observation.error_code == "invalid_tool_input"
+    assert "path must stay inside the workspace" in observation.error
+
+
+def test_shell_command_tool_rejects_interactive_and_background_commands(
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.chdir(tmp_path)
+
+    for command in ["python -i", "sleep 1 &"]:
+        observation = execute_runtime_tool(
+            default_runtime_tools(),
+            "shell_command",
+            {"command": command},
+            action_id="step-1",
+        )
+
+        assert observation.status == "failed"
+        assert observation.error_code == "invalid_tool_input"
 
 
 def test_apply_patch_tool_adds_file_inside_workspace(tmp_path, monkeypatch):
@@ -1112,6 +1190,7 @@ def test_registered_runtime_tool_metadata_includes_input_schemas():
         "open_url",
         "read_file",
         "rubric_score",
+        "shell_command",
         "task_list",
         "transform_text",
     ]
@@ -1188,6 +1267,18 @@ def test_registered_runtime_tool_metadata_includes_input_schemas():
         "sha256",
     ]
     assert by_name["rubric_score"]["input_schema"]["required"] == ["criteria"]
+    assert by_name["shell_command"]["approval_required_by_default"] == "true"
+    assert by_name["shell_command"]["input_schema"]["required"] == ["command"]
+    assert by_name["shell_command"]["output_schema"]["required"] == [
+        "command",
+        "cwd",
+        "exit_code",
+        "stdout",
+        "stderr",
+        "duration_seconds",
+        "timed_out",
+        "truncated",
+    ]
     assert by_name["rubric_score"]["output_schema"]["required"] == [
         "criteria",
         "passed",
@@ -1501,6 +1592,13 @@ def test_default_policy_allows_workspace_read_tools():
 
     assert policy.authorize("read_file", {"path": "README.md"}).status == "allowed"
     assert policy.authorize("list_files", {"path": "."}).status == "allowed"
+
+
+def test_default_policy_gates_shell_command_tool():
+    decision = RuntimePolicy().authorize("shell_command", {"command": "pwd"})
+
+    assert decision.status == "denied"
+    assert decision.reason == "tool_not_allowed"
 
 
 def test_default_policy_allows_artifact_tool():
