@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import sys
+import textwrap
 from typing import Any
 
 from kagent.utils.json_output import json_ready
@@ -17,7 +19,7 @@ def runtime_ui_color_enabled() -> bool:
 
 
 def runtime_ready_message(*, color: bool = False) -> str:
-    return _dim("Kagent ready  /help", enabled=color)
+    return _dim("Kagent ready · /help for commands · exit to quit", enabled=color)
 
 
 def runtime_prompt(*, color: bool = False) -> str:
@@ -27,15 +29,15 @@ def runtime_prompt(*, color: bool = False) -> str:
 def runtime_interactive_help() -> str:
     return "\n".join(
         [
-            "commands",
-            "  /help      show commands",
-            "  /json      stream full JSON traces",
-            "  /compact   return to agent transcript output",
-            "  /last      replay the last transcript",
-            "  /trace     print the last full JSON trace once",
-            "  /memory    show session memory",
-            "  /clear     clear session memory",
-            "  exit       quit",
+            "Commands",
+            "  /help      Show commands",
+            "  /json      Stream full JSON traces",
+            "  /compact   Return to transcript output",
+            "  /last      Replay the last transcript",
+            "  /trace     Print the last full JSON trace once",
+            "  /memory    Show session memory",
+            "  /clear     Clear session memory",
+            "  exit       Quit",
         ]
     )
 
@@ -58,34 +60,30 @@ def format_runtime_interactive_summary(payload: Any, *, color: bool = False) -> 
         return str(payload)
 
     status = str(payload.get("status", "")).strip()
-    lines = [_run_card_header(payload, status, color=color)]
+    lines = [_format_run_status(payload, status, color=color)]
 
     answer = str(payload.get("answer", "")).strip()
     if answer:
-        lines.append(_box_blank())
-        lines.extend(_box_block(answer))
+        lines.append("")
+        lines.extend(_answer_lines(answer))
 
     error_code = str(payload.get("error_code", "")).strip()
     error = str(payload.get("error", "")).strip()
     if error_code or error:
-        lines.append(_box_blank())
-        lines.append(
-            _box_section(
-                "error",
-                detail=join_non_empty([error_code, error], " "),
-            )
-        )
+        lines.append("")
+        lines.append(_color("Error", "red", enabled=color))
+        lines.extend(_indented_lines(join_non_empty([error_code, error], " ")))
 
     pending = payload.get("pending_approval")
     if isinstance(pending, dict):
-        lines.append(_box_blank())
-        lines.append(_box_section("approval required"))
-        lines.extend(_box_block(_format_pending_approval(pending), prefix="  "))
+        lines.append("")
+        lines.append(_color("Approval required", "yellow", enabled=color))
+        lines.extend(_indented_lines(_format_pending_approval(pending)))
 
     visible_observations = visible_runtime_observations(payload.get("observations"))
     if visible_observations:
-        lines.append(_box_blank())
-        lines.append(_box_section("tools"))
+        lines.append("")
+        lines.append(_dim("Tools", enabled=color))
         for observation, repeat_count in visible_observations:
             lines.extend(
                 format_runtime_observation_lines(
@@ -93,7 +91,6 @@ def format_runtime_interactive_summary(payload: Any, *, color: bool = False) -> 
                 )
             )
 
-    lines.append(_box_close())
     return "\n".join(lines)
 
 
@@ -104,27 +101,34 @@ def format_runtime_progress_event(event: Any, *, color: bool = False) -> str:
     if event_type == "planner_started":
         iteration = str(event.get("iteration", "")).strip()
         suffix = f" iter {iteration}" if iteration else ""
-        return _dim(f"  thinking{suffix}...", enabled=color)
+        return _dim(f"  Thinking{suffix}...", enabled=color)
     if event_type == "planner_completed":
         action_count = str(event.get("action_count", "")).strip()
         duration = _progress_duration(event)
+        suffix = f" · {duration}" if duration else ""
         if action_count == "0":
-            return _dim(f"  finalizing{duration}", enabled=color)
-        return _dim(f"  planned {action_count} action(s){duration}", enabled=color)
+            return _dim(f"  Finalizing{suffix}", enabled=color)
+        action_label = "action" if action_count == "1" else "actions"
+        return _dim(f"  Plan ready · {action_count} {action_label}{suffix}", enabled=color)
     if event_type == "tool_started":
         tool = str(event.get("tool", "")).strip() or "tool"
-        return _dim(f"  running {tool}...", enabled=color)
+        if _is_internal_progress_tool(tool):
+            return ""
+        return _dim(f"  Running {tool}...", enabled=color)
     if event_type == "tool_completed":
         status = str(event.get("status", "")).strip()
         tool = str(event.get("tool", "")).strip() or "tool"
+        if _is_internal_progress_tool(tool) and status in {"ok", "done"}:
+            return ""
         icon = _status_icon(status, color=color)
-        return join_non_empty([f"  {icon}", tool, _progress_duration(event)], " ")
+        return join_non_empty([f"  {icon}", tool, _progress_duration(event)], " · ")
     if event_type == "approval_required":
         tool = str(event.get("tool", "")).strip() or "tool"
         return _color(f"  approval required for {tool}", "yellow", enabled=color)
     if event_type == "planner_failed":
         duration = _progress_duration(event)
-        return _color(f"  planner failed{duration}", "red", enabled=color)
+        suffix = f" · {duration}" if duration else ""
+        return _color(f"  Planner failed{suffix}", "red", enabled=color)
     return ""
 
 
@@ -169,16 +173,11 @@ def format_runtime_observation_lines(
     headline = [join_non_empty([_status_icon(status, color=color), tool + suffix], " ")]
     if duration:
         headline.append(_dim(f"{duration}s", enabled=color))
-    lines = [_box_line("  " + "  ".join(headline))]
     if summary:
-        lines.append(_box_line("    " + _dim(summary, enabled=color)))
+        headline.append(_dim(summary, enabled=color))
+    lines = ["  " + " · ".join(headline)]
     if error_code or error:
-        lines.append(
-            _box_line(
-                "    error",
-                detail=join_non_empty([error_code, error], " "),
-            )
-        )
+        lines.extend(_indented_lines(join_non_empty([error_code, error], " "), prefix="    "))
     return lines
 
 
@@ -219,10 +218,6 @@ def join_non_empty(values: list[str], separator: str) -> str:
     return separator.join(value for value in values if value)
 
 
-def _run_card_header(payload: dict, status: str, *, color: bool) -> str:
-    return "╭─ " + _format_run_status(payload, status, color=color)
-
-
 def _format_run_status(payload: dict, status: str, *, color: bool) -> str:
     parts = [
         join_non_empty(
@@ -260,37 +255,58 @@ def _format_pending_approval(pending: dict) -> str:
     return "\n".join(lines)
 
 
-def _indent_block(text: str, prefix: str = "  ") -> str:
-    return "\n".join(prefix + line if line else prefix.rstrip() for line in text.splitlines())
+def _answer_lines(text: str) -> list[str]:
+    return _wrapped_block_lines(text, prefix="")
 
 
-def _box_line(text: str, *, detail: str = "") -> str:
-    value = f"{text}: {detail}" if detail else text
-    return f"│ {value}".rstrip()
+def _indented_lines(text: str, prefix: str = "  ") -> list[str]:
+    return _wrapped_block_lines(text, prefix=prefix)
 
 
-def _box_section(text: str, *, detail: str = "") -> str:
-    value = f"{text}: {detail}" if detail else text
-    return f"├─ {value}".rstrip()
+def _wrapped_block_lines(text: str, *, prefix: str) -> list[str]:
+    width = max(40, shutil.get_terminal_size((100, 24)).columns)
+    wrap_width = max(20, width - len(prefix))
+    lines: list[str] = []
+    in_fence = False
+    for raw_line in text.splitlines():
+        line = raw_line.rstrip()
+        if line.strip().startswith("```"):
+            in_fence = not in_fence
+            lines.append(prefix + line)
+            continue
+        if in_fence or not line.strip():
+            lines.append(prefix + line)
+            continue
+        leading = line[: len(line) - len(line.lstrip())]
+        content = line.lstrip()
+        bullet_prefix = _markdown_continuation_prefix(content)
+        wrapped = textwrap.wrap(
+            content,
+            width=max(20, wrap_width - len(leading)),
+            break_long_words=False,
+            break_on_hyphens=False,
+        )
+        if not wrapped:
+            lines.append(prefix + line)
+            continue
+        lines.append(prefix + leading + wrapped[0])
+        for continuation in wrapped[1:]:
+            lines.append(prefix + leading + bullet_prefix + continuation)
+    return lines
 
 
-def _box_blank() -> str:
-    return "│"
-
-
-def _box_close() -> str:
-    return "╰─"
-
-
-def _box_block(text: str, *, prefix: str = "") -> list[str]:
-    if not text:
-        return []
-    return [_box_line(prefix + line) if line else _box_blank() for line in text.splitlines()]
+def _markdown_continuation_prefix(text: str) -> str:
+    stripped = text.lstrip()
+    if stripped.startswith(("- ", "* ")):
+        return "  "
+    if len(stripped) > 3 and stripped[0].isdigit() and stripped[1:3] == ". ":
+        return "   "
+    return ""
 
 
 def _progress_duration(event: dict) -> str:
     duration = str(event.get("duration_seconds", "")).strip()
-    return f" {duration}s" if duration else ""
+    return f"{duration}s" if duration else ""
 
 
 def _runtime_iteration_label(payload: dict) -> str:
@@ -336,6 +352,10 @@ def _is_internal_note_observation(observation: dict) -> bool:
         and not str(observation.get("error_code", "")).strip()
         and not str(observation.get("error", "")).strip()
     )
+
+
+def _is_internal_progress_tool(tool: str) -> bool:
+    return tool.strip() == "note"
 
 
 def _summarize_runtime_output_for_tool(tool: str, output: dict) -> str:
