@@ -60,7 +60,7 @@ def format_runtime_interactive_summary(payload: Any, *, color: bool = False) -> 
         return str(payload)
 
     status = str(payload.get("status", "")).strip()
-    lines = [_format_run_status(payload, status, color=color)]
+    lines = ["  " + _format_run_status(payload, status, color=color)]
 
     answer = str(payload.get("answer", "")).strip()
     if answer:
@@ -71,19 +71,19 @@ def format_runtime_interactive_summary(payload: Any, *, color: bool = False) -> 
     error = str(payload.get("error", "")).strip()
     if error_code or error:
         lines.append("")
-        lines.append(_color("Error", "red", enabled=color))
-        lines.extend(_indented_lines(join_non_empty([error_code, error], " ")))
+        lines.append("  " + _color("Error", "red", enabled=color))
+        lines.extend(_indented_lines(join_non_empty([error_code, error], " "), prefix="    "))
 
     pending = payload.get("pending_approval")
     if isinstance(pending, dict):
         lines.append("")
-        lines.append(_color("Approval required", "yellow", enabled=color))
-        lines.extend(_indented_lines(_format_pending_approval(pending)))
+        lines.append("  " + _color("Approval required", "yellow", enabled=color))
+        lines.extend(_indented_lines(_format_pending_approval(pending), prefix="    "))
 
     visible_observations = visible_runtime_observations(payload.get("observations"))
     if visible_observations:
         lines.append("")
-        lines.append(_dim("Tools", enabled=color))
+        lines.append("  " + _dim("Tools", enabled=color))
         for observation, repeat_count in visible_observations:
             lines.extend(
                 format_runtime_observation_lines(
@@ -175,7 +175,7 @@ def format_runtime_observation_lines(
         headline.append(_dim(f"{duration}s", enabled=color))
     if summary:
         headline.append(_dim(summary, enabled=color))
-    lines = ["  " + " · ".join(headline)]
+    lines = ["    " + " · ".join(headline)]
     if error_code or error:
         lines.extend(_indented_lines(join_non_empty([error_code, error], " "), prefix="    "))
     return lines
@@ -256,7 +256,7 @@ def _format_pending_approval(pending: dict) -> str:
 
 
 def _answer_lines(text: str) -> list[str]:
-    return _wrapped_block_lines(text, prefix="")
+    return _wrapped_block_lines(text, prefix="  ")
 
 
 def _indented_lines(text: str, prefix: str = "  ") -> list[str]:

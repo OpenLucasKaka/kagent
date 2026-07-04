@@ -1079,11 +1079,11 @@ def test_cli_interactive_runtime_tty_prints_production_summary(monkeypatch, caps
     captured = capsys.readouterr()
     assert "╭─" not in captured.out
     assert "╰─" not in captured.out
-    assert "✓ done" in captured.out
+    assert "\n  ✓ done" in captured.out
     assert "done" in captured.out
     assert "0.1200s" in captured.out
-    assert "已打开 GitHub。" in captured.out
-    assert "Tools" in captured.out
+    assert "\n\n  已打开 GitHub。" in captured.out
+    assert "\n\n  Tools\n    ✓ open_url" in captured.out
     assert "open_url" in captured.out
     assert "0.0300s" in captured.out
     assert "Google Chrome" in captured.out
@@ -1165,11 +1165,13 @@ def test_cli_interactive_runtime_tty_prints_live_progress(monkeypatch, capsys):
     )
 
     captured = capsys.readouterr()
-    assert "Thinking iter 1..." in captured.out
+    assert "› \n  Thinking iter 1..." in captured.out
     assert "Plan ready · 1 action · 0.2000s" in captured.out
     assert "Running apply_patch..." in captured.out
     assert "✓ · apply_patch · 0.0100s" in captured.out
-    assert "文件已创建。" in captured.out
+    assert "\n\n  ✓ done" in captured.out
+    assert "\n\n  文件已创建。" in captured.out
+    assert "\n\n  Tools\n    ✓ apply_patch" in captured.out
     assert "add hello.md 13B" in captured.out
 
 
@@ -1371,10 +1373,10 @@ def test_cli_interactive_runtime_tty_keeps_debug_details_out_of_default_output(
 
     captured = capsys.readouterr()
     assert "╭─" not in captured.out
-    assert "文件已创建。" in captured.out
+    assert "\n\n  文件已创建。" in captured.out
     assert "status" not in captured.out
-    assert "✓ done" in captured.out
-    assert "Tools" in captured.out
+    assert "\n  ✓ done" in captured.out
+    assert "\n\n  Tools\n    ✓ apply_patch" in captured.out
     assert "apply_patch" in captured.out
     assert "hello.md" in captured.out
     assert "private-run-id" not in captured.out

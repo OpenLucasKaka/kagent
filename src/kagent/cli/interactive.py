@@ -132,24 +132,33 @@ def _print_runtime_interactive_payload(payload: Any, *, full_json: bool) -> None
     if full_json:
         print(format_and_write_json(payload, ""))
         return
+    if sys.stdin.isatty():
+        print()
     print(
         format_runtime_interactive_summary(
             payload,
             color=runtime_ui_color_enabled(),
         )
     )
+    if sys.stdin.isatty():
+        print()
 
 
 def _runtime_interactive_progress_sink(*, enabled: bool) -> Any:
     if not enabled:
         return None
+    started = False
 
     def emit(event: Any) -> None:
+        nonlocal started
         line = format_runtime_progress_event(
             event,
             color=runtime_ui_color_enabled(),
         )
         if line:
+            if not started:
+                print()
+                started = True
             print(line)
 
     return emit
