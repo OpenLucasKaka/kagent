@@ -588,6 +588,58 @@ def test_cli_can_run_codex_style_runtime_with_inline_plan():
     assert payload["observations"][0]["output"]["score_percent"] == 100.0
 
 
+def test_cli_missing_runtime_provider_config_prints_actionable_error_without_usage():
+    env = os.environ.copy()
+    env.pop("KAGENT_LLM_BASE_URL", None)
+    env.pop("KAGENT_LLM_MODEL", None)
+    env.pop("KAGENT_LLM_API_KEY", None)
+
+    completed = subprocess.run(
+        [
+            ".venv/bin/python",
+            "-m",
+            "kagent.cli",
+        ],
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+
+    assert completed.returncode == 2
+    assert completed.stdout == ""
+    assert "Kagent runtime provider is not configured." in completed.stderr
+    assert "KAGENT_LLM_BASE_URL" in completed.stderr
+    assert "KAGENT_LLM_MODEL" in completed.stderr
+    assert "kagent --deterministic 'calculate 2 + 3'" in completed.stderr
+    assert "usage:" not in completed.stderr
+    assert "Traceback" not in completed.stderr
+
+
+def test_cli_missing_runtime_provider_config_for_goal_avoids_argparse_usage():
+    env = os.environ.copy()
+    env.pop("KAGENT_LLM_BASE_URL", None)
+    env.pop("KAGENT_LLM_MODEL", None)
+    env.pop("KAGENT_LLM_API_KEY", None)
+
+    completed = subprocess.run(
+        [
+            ".venv/bin/python",
+            "-m",
+            "kagent.cli",
+            "draft an internal rollout checklist",
+        ],
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+
+    assert completed.returncode == 2
+    assert completed.stdout == ""
+    assert "Kagent runtime provider is not configured." in completed.stderr
+    assert "usage:" not in completed.stderr
+    assert "Traceback" not in completed.stderr
+
+
 def test_cli_runtime_accepts_non_secret_metadata_and_tags():
     completed = subprocess.run(
         [

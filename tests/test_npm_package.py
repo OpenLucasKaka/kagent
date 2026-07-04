@@ -39,6 +39,16 @@ def test_npm_runner_uses_cache_venv_and_env_forwarding():
     assert "env: process.env" in runner
 
 
+def test_npm_runner_reinstalls_cached_python_runtime_when_sources_change():
+    runner = Path("npm/lib/python-runner.js").read_text(encoding="utf-8")
+
+    assert "sourceHash" in runner
+    assert 'crypto.createHash("sha256")' in runner
+    assert '"src"' in runner
+    assert "sourceFingerprintPaths(root)" in runner
+    assert "actual.sourceHash === expected.sourceHash" in runner
+
+
 def test_npm_wrapper_javascript_syntax_is_valid_when_node_is_available():
     node = shutil.which("node")
     if node is None:

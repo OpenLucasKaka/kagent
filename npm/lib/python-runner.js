@@ -1,6 +1,7 @@
 "use strict";
 
 const childProcess = require("child_process");
+const crypto = require("crypto");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
@@ -78,13 +79,46 @@ function markerPath(venvDir) {
 }
 
 function installMarker(root, version) {
-  const pyprojectPath = path.join(root, "pyproject.toml");
-  const pyprojectStat = fs.statSync(pyprojectPath);
   return {
     packageRoot: root,
     version,
-    pyprojectMtimeMs: Math.trunc(pyprojectStat.mtimeMs)
+    sourceHash: sourceHash(root)
   };
+}
+
+function sourceHash(root) {
+  const hasher = crypto.createHash("sha256");
+  for (const relativePath of sourceFingerprintPaths(root)) {
+    const absolutePath = path.join(root, relativePath);
+    hasher.update(relativePath);
+    hasher.update("\0");
+    hasher.update(fs.readFileSync(absolutePath));
+    hasher.update("\0");
+  }
+  return hasher.digest("hex");
+}
+
+function sourceFingerprintPaths(root) {
+  const paths = ["package.json", "pyproject.toml"];
+  collectRelativeFiles(path.join(root, "src"), "src", paths);
+  paths.sort();
+  return paths;
+}
+
+function collectRelativeFiles(directory, relativeDirectory, output) {
+  if (!fs.existsSync(directory)) {
+    return;
+  }
+  const entries = fs.readdirSync(directory, { withFileTypes: true });
+  for (const entry of entries) {
+    const relativePath = path.join(relativeDirectory, entry.name);
+    const absolutePath = path.join(directory, entry.name);
+    if (entry.isDirectory()) {
+      collectRelativeFiles(absolutePath, relativePath, output);
+    } else if (entry.isFile()) {
+      output.push(relativePath);
+    }
+  }
 }
 
 function markerMatches(venvDir, expected) {
@@ -97,7 +131,7 @@ function markerMatches(venvDir, expected) {
     return (
       actual.packageRoot === expected.packageRoot &&
       actual.version === expected.version &&
-      actual.pyprojectMtimeMs === expected.pyprojectMtimeMs
+      actual.sourceHash === expected.sourceHash
     );
   } catch (_error) {
     return false;

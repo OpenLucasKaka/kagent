@@ -26,6 +26,10 @@ from kagent.utils.json_output import format_and_write_json, json_ready
 DEFAULT_RUNTIME_MAX_ITERATIONS = 3
 
 
+class RuntimeProviderConfigError(ValueError):
+    pass
+
+
 def main() -> None:
     warnings.filterwarnings("ignore")
 
@@ -259,9 +263,12 @@ def main() -> None:
                     interactive_tty=sys.stdin.isatty(),
                 )
                 provider = (
-                    FakeLLMProvider(args.runtime_plan)
-                    if args.runtime_plan
-                    else OpenAICompatibleProvider(LLMProviderConfig.from_env())
+                    _runtime_provider_from_args(
+                        args,
+                        FakeLLMProvider,
+                        OpenAICompatibleProvider,
+                        LLMProviderConfig,
+                    )
                 )
                 _run_runtime_interactive(
                     provider=provider,
@@ -276,6 +283,8 @@ def main() -> None:
                     session_memory_path=session_memory_path,
                 )
                 return
+            except RuntimeProviderConfigError as exc:
+                _exit_runtime_provider_config_error(str(exc))
             except ValueError as exc:
                 config_error = str(exc)
             except OSError as exc:
@@ -289,9 +298,12 @@ def main() -> None:
         elif args.runtime:
             try:
                 provider = (
-                    FakeLLMProvider(args.runtime_plan)
-                    if args.runtime_plan
-                    else OpenAICompatibleProvider(LLMProviderConfig.from_env())
+                    _runtime_provider_from_args(
+                        args,
+                        FakeLLMProvider,
+                        OpenAICompatibleProvider,
+                        LLMProviderConfig,
+                    )
                 )
                 result = run_runtime_agent(
                     args.goal,
@@ -302,6 +314,8 @@ def main() -> None:
                 )
                 if args.trace_dir:
                     _persist_runtime_cli_trace_or_raise(result, args.trace_dir, persist_trace)
+            except RuntimeProviderConfigError as exc:
+                _exit_runtime_provider_config_error(str(exc))
             except ValueError as exc:
                 config_error = str(exc)
             except OSError as exc:
@@ -328,6 +342,44 @@ def main() -> None:
     _emit_json_payload(payload, args.output, parser)
     if args.fail_on_agent_failure and not args.plan and payload.get("status") == "failed":
         raise SystemExit(1)
+
+
+def _runtime_provider_from_args(
+    args: argparse.Namespace,
+    FakeLLMProvider,
+    OpenAICompatibleProvider,
+    LLMProviderConfig,
+):
+    if args.runtime_plan:
+        return FakeLLMProvider(args.runtime_plan)
+    config = LLMProviderConfig.from_env()
+    missing = []
+    if not config.base_url:
+        missing.append("KAGENT_LLM_BASE_URL")
+    if not config.model:
+        missing.append("KAGENT_LLM_MODEL")
+    if missing:
+        raise RuntimeProviderConfigError(_runtime_provider_config_message(missing))
+    return OpenAICompatibleProvider(config)
+
+
+def _runtime_provider_config_message(missing: list[str]) -> str:
+    missing_list = ", ".join(missing)
+    return (
+        "Kagent runtime provider is not configured.\n"
+        f"Missing: {missing_list}\n\n"
+        "Set the provider in your shell, then run kagent again:\n"
+        "  export KAGENT_LLM_BASE_URL='https://your-openai-compatible-endpoint/v1'\n"
+        "  export KAGENT_LLM_MODEL='qwen3.5-122b-a10b'\n"
+        "  export KAGENT_LLM_API_KEY='your-api-key'\n\n"
+        "For a local LLM-free smoke test, run:\n"
+        "  kagent --deterministic 'calculate 2 + 3'"
+    )
+
+
+def _exit_runtime_provider_config_error(message: str) -> None:
+    print(message, file=sys.__stderr__)
+    raise SystemExit(2)
 
 
 def _apply_default_cli_mode(args: argparse.Namespace) -> None:
