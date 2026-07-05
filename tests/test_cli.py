@@ -1127,6 +1127,42 @@ def test_cli_runtime_status_formats_empty_shell_state():
     )
 
 
+def test_cli_runtime_tools_formats_compact_action_list():
+    from kagent.cli.ui import format_runtime_interactive_tools
+
+    message = format_runtime_interactive_tools(
+        [
+            {
+                "name": "apply_patch",
+                "description": "Create, update, delete, or move files.",
+                "approval_required_by_default": "false",
+                "input_schema": {"type": "object"},
+            },
+            {
+                "name": "open_url",
+                "description": "Open a URL in the local desktop browser.",
+                "approval_required_by_default": "true",
+                "input_schema": {"type": "object"},
+            },
+            {
+                "name": "note",
+                "description": "Record a short internal note.",
+                "approval_required_by_default": "false",
+            },
+        ]
+    )
+
+    assert message == "\n".join(
+        [
+            "Kagent actions",
+            "  apply_patch  allowed   Create, update, delete, or move files.",
+            "  open_url     approval  Open a URL in the local desktop browser.",
+        ]
+    )
+    assert "input_schema" not in message
+    assert "note" not in message
+
+
 def test_cli_prompt_toolkit_reader_wraps_long_lines():
     from kagent.cli.interactive import _PromptToolkitLineReader
 
@@ -1585,6 +1621,45 @@ def test_cli_interactive_runtime_can_show_session_status(
     assert "last    done" in captured.out
     assert f"trace   {tmp_path / 'traces'}" in captured.out
     assert "private-run-id" not in captured.out
+
+
+def test_cli_interactive_runtime_can_show_registered_tools(monkeypatch, capsys):
+    from kagent.cli import _run_runtime_interactive
+
+    class FakeTTYInput:
+        def __init__(self):
+            self.lines = ["/tools\n", "exit\n"]
+
+        def isatty(self):
+            return True
+
+        def readline(self):
+            return self.lines.pop(0) if self.lines else ""
+
+    calls = []
+
+    def fake_run_runtime_agent(*_args, **_kwargs):
+        calls.append("called")
+        return {"status": "done"}
+
+    monkeypatch.setattr(sys, "stdin", FakeTTYInput())
+    monkeypatch.setattr(sys, "__stderr__", sys.stderr)
+
+    _run_runtime_interactive(
+        provider=object(),
+        run_runtime_agent=fake_run_runtime_agent,
+        max_iterations=1,
+        fail_on_agent_failure=False,
+    )
+
+    captured = capsys.readouterr()
+    assert calls == []
+    assert "Kagent actions" in captured.out
+    assert "apply_patch" in captured.out
+    assert "allowed" in captured.out
+    assert "open_url" in captured.out
+    assert "approval" in captured.out
+    assert "input_schema" not in captured.out
 
 
 def test_cli_interactive_runtime_carries_session_memory_between_turns(

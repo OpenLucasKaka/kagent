@@ -499,9 +499,10 @@ like an agent session instead of a debug trace. Use `/json` inside the shell
 for full trace output, `/compact` to return to the operator view, `/last` to
 replay the most recent compact result, `/trace` to print the most recent full
 JSON trace once, `/status` to inspect cwd, output mode, memory count, last run
-status, and trace persistence, `/memory` to inspect the current session memory,
-`/clear` to clear it, and `/help` to list shell commands. The default turn budget is three
-planning iterations; add `--max-iterations N` only when a workflow needs a
+status, and trace persistence, `/tools` to list available actions and their
+default approval posture, `/memory` to inspect the current session memory,
+`/clear` to clear it, and `/help` to list shell commands. The default turn
+budget is three planning iterations; add `--max-iterations N` only when a workflow needs a
 different budget. TTY sessions persist compact memory across shell restarts by
 default at `${XDG_STATE_HOME:-~/.local/state}/kagent/session-memory.json`;
 piped interactive runs keep memory in-process and do not write a default file.

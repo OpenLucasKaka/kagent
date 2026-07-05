@@ -91,7 +91,7 @@ kagent
 ```
 
 TTY sessions show live progress and a compact operator transcript by default.
-Use `/status`, `/json`, `/compact`, `/last`, `/trace`, `/memory`, `/clear`, and `/help`
+Use `/status`, `/tools`, `/json`, `/compact`, `/last`, `/trace`, `/memory`, `/clear`, and `/help`
 inside the shell. Persisted session memory is owner-only on read and write,
 uses `0700` parent directories, rejects symlink memory files or parent
 directories, and redacts common API keys, bearer tokens, and URL credentials

@@ -40,6 +40,7 @@ def runtime_interactive_help() -> str:
             "",
             "Session",
             "  /status    show shell state",
+            "  /tools     show available actions",
             "  /memory    review remembered turns",
             "  /clear     clear remembered turns",
             "  /last      replay last answer",
@@ -52,6 +53,30 @@ def runtime_interactive_help() -> str:
             "Debug",
             "  /help      command menu",
             "  exit       quit",
+        ]
+    )
+
+
+def format_runtime_interactive_tools(tools: list[dict[str, Any]]) -> str:
+    rows = []
+    for tool in sorted(tools, key=lambda item: str(item.get("name", ""))):
+        name = str(tool.get("name", "")).strip()
+        if not name:
+            continue
+        if name in {"note"}:
+            continue
+        approval = str(tool.get("approval_required_by_default", "")).strip().lower()
+        access = "approval" if approval == "true" else "allowed"
+        description = _one_line_text(str(tool.get("description", "")).strip())
+        rows.append((name, access, description))
+    if not rows:
+        return "Kagent actions\n  none"
+    name_width = max(len(name) for name, _access, _description in rows)
+    return "\n".join(
+        ["Kagent actions"]
+        + [
+            f"  {name.ljust(name_width)}  {access.ljust(8)}  {description}".rstrip()
+            for name, access, description in rows
         ]
     )
 
@@ -531,6 +556,13 @@ def _short_runtime_value(value: Any) -> str:
     if len(text) > 96:
         return text[:93] + "..."
     return text
+
+
+def _one_line_text(text: str) -> str:
+    compact = " ".join(text.split())
+    if len(compact) > 96:
+        return compact[:93] + "..."
+    return compact
 
 
 def _dim(text: str, *, enabled: bool) -> str:
