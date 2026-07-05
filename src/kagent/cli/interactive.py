@@ -49,14 +49,15 @@ def run_runtime_interactive(
         max_turns=_INTERACTIVE_MEMORY_MAX_TURNS,
     )
     last_payload: Any = None
+    line_reader: Any = None
     if interactive_tty:
-        _enable_interactive_line_editing()
+        line_reader = _runtime_interactive_line_reader(prompt_stream)
         print(runtime_ready_message(color=runtime_ui_color_enabled()), file=prompt_stream)
     while True:
         try:
             line = (
-                input(runtime_prompt(color=runtime_ui_color_enabled()))
-                if interactive_tty
+                line_reader.read(color=runtime_ui_color_enabled())
+                if interactive_tty and line_reader is not None
                 else sys.stdin.readline()
             )
         except EOFError:
@@ -126,6 +127,61 @@ def _enable_interactive_line_editing() -> None:
         import readline  # noqa: F401
     except ImportError:
         return
+
+
+class _RuntimeLineReader:
+    def read(self, *, color: bool) -> str:
+        raise NotImplementedError
+
+
+class _InputLineReader(_RuntimeLineReader):
+    def read(self, *, color: bool) -> str:
+        return input(runtime_prompt(color=color))
+
+
+class _PromptToolkitLineReader(_RuntimeLineReader):
+    def __init__(self, session: Any):
+        self._session = session
+
+    def read(self, *, color: bool) -> str:
+        message: Any = [("class:prompt", "› ")] if color else "› "
+        return self._session.prompt(
+            message,
+            wrap_lines=True,
+            multiline=False,
+        )
+
+
+def _runtime_interactive_line_reader(prompt_stream: Any) -> _RuntimeLineReader:
+    prompt_toolkit_session = _prompt_toolkit_session_for_tty(prompt_stream)
+    if prompt_toolkit_session is not None:
+        return _PromptToolkitLineReader(prompt_toolkit_session)
+    _enable_interactive_line_editing()
+    return _InputLineReader()
+
+
+def _prompt_toolkit_session_for_tty(prompt_stream: Any) -> Any:
+    if sys.stdin is not getattr(sys, "__stdin__", None):
+        return None
+    if not _stream_is_tty(sys.stdin):
+        return None
+    if not _stream_is_tty(prompt_stream):
+        return None
+    try:
+        from prompt_toolkit import PromptSession
+        from prompt_toolkit.styles import Style
+    except ImportError:
+        return None
+    return PromptSession(
+        complete_while_typing=False,
+        enable_history_search=True,
+        style=Style.from_dict({"prompt": "ansicyan"}),
+    )
+
+
+def _stream_is_tty(stream: Any) -> bool:
+    isatty = getattr(stream, "isatty", None)
+    return bool(callable(isatty) and isatty())
 
 
 def _print_runtime_interactive_payload(payload: Any, *, full_json: bool) -> None:
@@ -303,6 +359,7 @@ def _maybe_run_approved_runtime_action(
         approval_prompt(action_id, tool, color=runtime_ui_color_enabled())
     ).strip().lower()
     if answer not in {"y", "yes", "approve"}:
+        print("Skipped · action not approved")
         return None
     return json_ready(
         run_runtime_agent(

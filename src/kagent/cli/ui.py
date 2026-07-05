@@ -22,9 +22,9 @@ def runtime_ready_message(*, color: bool = False) -> str:
     return "\n".join(
         [
             _color("Kagent", "bold", enabled=color),
-            "  [K]  K-bot · local automation agent",
-            "  /|\\",
-            _dim("  / \\  ready · /help for commands · exit to quit", enabled=color),
+            "  [K]  (o_o)  K-bot",
+            "       /|K|\\  ask, approve, automate",
+            _dim("        / \\   ready · /help · /json · exit", enabled=color),
         ]
     )
 
@@ -36,14 +36,20 @@ def runtime_prompt(*, color: bool = False) -> str:
 def runtime_interactive_help() -> str:
     return "\n".join(
         [
-            "Kagent commands",
-            "  /help      show this help",
-            "  /json      show full JSON traces",
-            "  /compact   return to clean transcript",
+            "Kagent command menu",
+            "",
+            "Session",
+            "  /memory    review remembered turns",
+            "  /clear     clear remembered turns",
             "  /last      replay last answer",
-            "  /trace     print last JSON trace once",
-            "  /memory    show session memory",
-            "  /clear     clear session memory",
+            "",
+            "Output",
+            "  /compact   clean transcript",
+            "  /json      full JSON traces",
+            "  /trace     last JSON trace once",
+            "",
+            "Debug",
+            "  /help      command menu",
             "  exit       quit",
         ]
     )

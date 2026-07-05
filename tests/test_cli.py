@@ -1076,6 +1076,58 @@ def test_cli_colored_runtime_prompt_marks_ansi_as_readline_invisible():
     assert runtime_prompt(color=False) == "› "
 
 
+def test_cli_runtime_ready_message_feels_like_kagent_product_shell():
+    from kagent.cli.ui import runtime_ready_message
+
+    message = runtime_ready_message(color=False)
+
+    assert message.splitlines()[0] == "Kagent"
+    assert "K-bot" in message
+    assert "(o_o)" in message
+    assert "ask, approve, automate" in message
+    assert "/help" in message
+    assert ("self" + "-correcting") not in message.lower()
+    assert "runtime shell" not in message.lower()
+
+
+def test_cli_runtime_help_reads_like_a_command_palette():
+    from kagent.cli.ui import runtime_interactive_help
+
+    message = runtime_interactive_help()
+
+    assert message.splitlines()[0] == "Kagent command menu"
+    assert "Session" in message
+    assert "Output" in message
+    assert "Debug" in message
+    assert "/json" in message
+    assert "/compact" in message
+    assert "show this help" not in message
+
+
+def test_cli_prompt_toolkit_reader_wraps_long_lines():
+    from kagent.cli.interactive import _PromptToolkitLineReader
+
+    class FakeSession:
+        def __init__(self):
+            self.calls = []
+
+        def prompt(self, message, **kwargs):
+            self.calls.append({"message": message, **kwargs})
+            return "帮我制定一个很长很长的周末旅行攻略"
+
+    session = FakeSession()
+    reader = _PromptToolkitLineReader(session)
+
+    assert reader.read(color=True) == "帮我制定一个很长很长的周末旅行攻略"
+    assert session.calls == [
+        {
+            "message": [("class:prompt", "› ")],
+            "wrap_lines": True,
+            "multiline": False,
+        }
+    ]
+
+
 def test_cli_interactive_runtime_tty_prints_production_summary(monkeypatch, capsys):
     from kagent.cli import _run_runtime_interactive
 
@@ -2265,6 +2317,50 @@ def test_cli_interactive_runtime_can_approve_pending_tool(monkeypatch, capsys):
     assert "Approval ·" in captured.out
     assert "Done" in captured.out
     assert "step-2 http_request" not in captured.out
+
+
+def test_cli_interactive_runtime_reports_declined_approval(monkeypatch, capsys):
+    from kagent.cli import _run_runtime_interactive
+
+    class FakeTTYInput:
+        def __init__(self):
+            self.lines = ["打开 github\n", "n\n", "exit\n"]
+
+        def isatty(self):
+            return True
+
+        def readline(self):
+            return self.lines.pop(0) if self.lines else ""
+
+    calls = []
+
+    def fake_run_runtime_agent(goal, **kwargs):
+        calls.append({"goal": goal, **kwargs})
+        return {
+            "status": "requires_approval",
+            "pending_approval": {
+                "id": "step-2",
+                "tool": "open_url",
+                "input": {"url": "https://github.com"},
+            },
+        }
+
+    monkeypatch.setattr(sys, "stdin", FakeTTYInput())
+    monkeypatch.setattr(sys, "__stderr__", sys.stderr)
+
+    _run_runtime_interactive(
+        provider=object(),
+        run_runtime_agent=fake_run_runtime_agent,
+        max_iterations=3,
+        fail_on_agent_failure=False,
+    )
+
+    captured = capsys.readouterr()
+    assert len(calls) == 1
+    assert "Approval required" in captured.out
+    assert "tool    open_url" in captured.out
+    assert "target  https://github.com" in captured.out
+    assert "Skipped · action not approved" in captured.out
 
 
 def test_cli_writes_output_file_before_failure_exit(tmp_path):
