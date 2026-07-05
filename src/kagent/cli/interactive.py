@@ -6,7 +6,11 @@ import shlex
 import sys
 from typing import Any
 
-from kagent.cli.commands import runtime_interactive_completion_words
+from kagent.cli.commands import (
+    is_runtime_interactive_command,
+    runtime_interactive_command_suggestions,
+    runtime_interactive_completion_words,
+)
 from kagent.cli.memory import (
     clear_runtime_history,
     default_runtime_history_path,
@@ -84,6 +88,9 @@ def run_runtime_interactive(
         if goal.lower() in {"exit", "quit", ":q"}:
             return
         if interactive_tty and goal.startswith("/"):
+            if not is_runtime_interactive_command(goal):
+                _print_unknown_runtime_interactive_command(goal)
+                continue
             handled, full_json_mode = _handle_runtime_interactive_command(
                 goal,
                 full_json_mode,
@@ -363,6 +370,14 @@ def _handle_runtime_interactive_command(
         print(format_runtime_notice("Reset", "memory and prompt history cleared"))
         return True, full_json_mode
     return False, full_json_mode
+
+
+def _print_unknown_runtime_interactive_command(command: str) -> None:
+    suggestions = runtime_interactive_command_suggestions(command)
+    detail = "try /help"
+    if suggestions:
+        detail = "try " + ", ".join(suggestions)
+    print(format_runtime_notice("Unknown command", detail))
 
 
 def _save_last_runtime_trace(command: str, last_payload: Any) -> None:

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from difflib import get_close_matches
 
 
 @dataclass(frozen=True)
@@ -72,3 +73,26 @@ def runtime_interactive_completion_words() -> list[str]:
             if word not in words:
                 words.append(word)
     return words
+
+
+def is_runtime_interactive_command(text: str) -> bool:
+    command_name = _runtime_command_name(text)
+    if not command_name:
+        return False
+    return command_name in runtime_interactive_completion_words()
+
+
+def runtime_interactive_command_suggestions(text: str) -> list[str]:
+    command_name = _runtime_command_name(text)
+    if not command_name:
+        return []
+    return get_close_matches(
+        command_name,
+        runtime_interactive_completion_words(),
+        n=3,
+        cutoff=0.55,
+    )
+
+
+def _runtime_command_name(text: str) -> str:
+    return str(text).strip().split(maxsplit=1)[0].lower()

@@ -94,7 +94,8 @@ TTY sessions show live progress and a compact operator transcript by default.
 Use `/pwd`, `/cd PATH`, `/status`, `/doctor`, `/config`, `/tools`, `/json`,
 `/compact`, `/last`, `/trace`, `/save-trace PATH`, `/memory`, `/clear`,
 `/reset`, and `/help` inside the shell; prompt-toolkit terminals support
-slash-command completion with Tab.
+slash-command completion with Tab. Unknown slash commands are handled locally
+with suggestions and are not sent to the model as goals.
 Persisted session memory is owner-only on read and write,
 uses `0700` parent directories, rejects symlink memory files or parent
 directories, and redacts common API keys, bearer tokens, and URL credentials
