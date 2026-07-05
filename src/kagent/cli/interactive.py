@@ -5,6 +5,7 @@ import os
 import sys
 from typing import Any
 
+from kagent.cli.commands import runtime_interactive_completion_words
 from kagent.cli.memory import (
     clear_runtime_history,
     default_runtime_history_path,
@@ -189,11 +190,18 @@ def _prompt_toolkit_session_for_tty(prompt_stream: Any) -> Any:
         return None
     try:
         from prompt_toolkit import PromptSession
+        from prompt_toolkit.completion import WordCompleter
         from prompt_toolkit.styles import Style
     except ImportError:
         return None
+    completer = WordCompleter(
+        runtime_interactive_completion_words(),
+        ignore_case=True,
+        sentence=True,
+    )
     return PromptSession(
-        complete_while_typing=False,
+        complete_while_typing=True,
+        completer=completer,
         enable_history_search=True,
         history=runtime_prompt_history(default_runtime_history_path()),
         style=Style.from_dict({"prompt": "ansicyan"}),

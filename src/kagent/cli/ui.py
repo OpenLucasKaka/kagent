@@ -7,6 +7,7 @@ import sys
 import textwrap
 from typing import Any
 
+from kagent.cli.commands import runtime_interactive_commands
 from kagent.utils.json_output import json_ready
 
 
@@ -55,33 +56,22 @@ def runtime_setup_message(*, config_path: str, color: bool = False) -> str:
 
 
 def runtime_interactive_help() -> str:
-    return "\n".join(
-        [
-            "Kagent command palette",
-            "",
-            "Session",
-            "  /pwd          show working directory",
-            "  /cd PATH      change working directory",
-            "  /status       show shell state",
-            "  /memory       review remembered turns",
-            "  /clear        clear remembered turns",
-            "  /reset        clear memory and prompt history",
-            "  /last         replay last answer",
-            "",
-            "Provider",
-            "  /config       show redacted provider config",
-            "  /tools        show available actions",
-            "",
-            "Output",
-            "  /compact      clean transcript",
-            "  /json         full JSON traces",
-            "  /trace        last JSON trace once",
-            "",
-            "Debug",
-            "  /help         command palette",
-            "  exit          quit",
+    commands = runtime_interactive_commands()
+    command_width = max(len(command.primary) for command in commands)
+    lines = ["Kagent command palette"]
+    for section in ("Session", "Provider", "Output", "Debug"):
+        section_commands = [
+            command for command in commands if command.section == section
         ]
-    )
+        if not section_commands:
+            continue
+        lines.append("")
+        lines.append(section)
+        for command in section_commands:
+            lines.append(
+                f"  {command.primary.ljust(command_width)}  {command.description}"
+            )
+    return "\n".join(lines)
 
 
 def format_runtime_provider_config(provider: Any) -> str:

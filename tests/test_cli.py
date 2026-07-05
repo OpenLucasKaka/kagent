@@ -1123,6 +1123,22 @@ def test_cli_runtime_help_reads_like_a_command_palette():
     assert "show this help" not in message
 
 
+def test_cli_runtime_command_registry_feeds_help_and_completion():
+    from kagent.cli.commands import runtime_interactive_completion_words
+    from kagent.cli.ui import runtime_interactive_help
+
+    help_text = runtime_interactive_help()
+    completion_words = runtime_interactive_completion_words()
+
+    assert "/status" in help_text
+    assert "/reset" in help_text
+    assert "/config" in help_text
+    assert "/status" in completion_words
+    assert "/stat" in completion_words
+    assert "/reset-session" in completion_words
+    assert "exit" in completion_words
+
+
 def test_cli_runtime_status_formats_empty_shell_state():
     from kagent.cli.ui import format_runtime_interactive_status
 
@@ -1293,6 +1309,7 @@ def test_cli_prompt_toolkit_session_uses_persistent_history(
     monkeypatch,
     tmp_path,
 ):
+    from kagent.cli.commands import runtime_interactive_completion_words
     from kagent.cli.interactive import _prompt_toolkit_session_for_tty
 
     created_sessions = []
@@ -1314,6 +1331,11 @@ def test_cli_prompt_toolkit_session_uses_persistent_history(
 
     assert isinstance(session, FakePromptSession)
     assert created_sessions[0]["history"] is not None
+    assert created_sessions[0]["complete_while_typing"] is True
+    assert created_sessions[0]["completer"] is not None
+    assert set(created_sessions[0]["completer"].words) == set(
+        runtime_interactive_completion_words()
+    )
     assert (tmp_path / "history").stat().st_mode & 0o777 == 0o600
 
 

@@ -91,8 +91,10 @@ kagent
 ```
 
 TTY sessions show live progress and a compact operator transcript by default.
-Use `/pwd`, `/cd PATH`, `/status`, `/config`, `/tools`, `/json`, `/compact`, `/last`, `/trace`, `/memory`, `/clear`, `/reset`, and `/help`
-inside the shell. Persisted session memory is owner-only on read and write,
+Use `/pwd`, `/cd PATH`, `/status`, `/config`, `/tools`, `/json`, `/compact`,
+`/last`, `/trace`, `/memory`, `/clear`, `/reset`, and `/help` inside the
+shell; prompt-toolkit terminals support slash-command completion with Tab.
+Persisted session memory is owner-only on read and write,
 uses `0700` parent directories, rejects symlink memory files or parent
 directories, and redacts common API keys, bearer tokens, and URL credentials
 before reusing memory in later turns or writing it to disk. The CLI
