@@ -42,6 +42,7 @@ def runtime_interactive_help() -> str:
             "  /pwd       show working directory",
             "  /cd PATH   change working directory",
             "  /status    show shell state",
+            "  /config    show provider config",
             "  /tools     show available actions",
             "  /memory    review remembered turns",
             "  /clear     clear remembered turns",
@@ -55,6 +56,41 @@ def runtime_interactive_help() -> str:
             "Debug",
             "  /help      command menu",
             "  exit       quit",
+        ]
+    )
+
+
+def format_runtime_provider_config(provider: Any) -> str:
+    config = getattr(provider, "config", None)
+    snapshot_fn = getattr(config, "redacted_snapshot", None)
+    if not callable(snapshot_fn):
+        return "Kagent provider\n  provider  inline/test\n  api_key   not configured"
+    snapshot = snapshot_fn()
+    provider_name = str(
+        snapshot.get("llm_provider_display_name")
+        or snapshot.get("llm_provider")
+        or "unknown"
+    )
+    base_url = str(snapshot.get("llm_base_url", "")).strip() or "-"
+    model = str(snapshot.get("llm_model", "")).strip() or "-"
+    api_key_state = (
+        "configured"
+        if str(snapshot.get("llm_api_key_configured", "")).lower() == "true"
+        else "not configured"
+    )
+    timeout = str(snapshot.get("llm_timeout_seconds", "")).strip()
+    retries = str(snapshot.get("llm_max_retries", "")).strip()
+    backoff = str(snapshot.get("llm_retry_backoff_seconds", "")).strip()
+    return "\n".join(
+        [
+            "Kagent provider",
+            f"  provider  {provider_name}",
+            f"  base_url  {base_url}",
+            f"  model     {model}",
+            f"  api_key   {api_key_state}",
+            f"  timeout   {timeout}s" if timeout else "  timeout   -",
+            f"  retries   {retries}" if retries else "  retries   -",
+            f"  backoff   {backoff}s" if backoff else "  backoff   -",
         ]
     )
 

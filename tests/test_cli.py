@@ -1163,6 +1163,33 @@ def test_cli_runtime_tools_formats_compact_action_list():
     assert "note" not in message
 
 
+def test_cli_runtime_provider_config_redacts_secret_values():
+    from kagent.cli.ui import format_runtime_provider_config
+    from kagent.providers.llm import LLMProviderConfig, ProviderKind
+
+    class FakeProvider:
+        config = LLMProviderConfig(
+            provider=ProviderKind.QWEN_OPENAI_COMPATIBLE,
+            base_url="https://llm.example.test/v1",
+            api_key="sk-secret-value",
+            model="qwen3.5-122b-a10b",
+            timeout_seconds=45,
+            max_retries=3,
+            retry_backoff_seconds=0.5,
+        )
+
+    message = format_runtime_provider_config(FakeProvider())
+
+    assert "Kagent provider" in message
+    assert "provider  Qwen" in message
+    assert "base_url  https://llm.example.test/v1" in message
+    assert "model     qwen3.5-122b-a10b" in message
+    assert "api_key   configured" in message
+    assert "timeout   45s" in message
+    assert "retries   3" in message
+    assert "sk-secret-value" not in message
+
+
 def test_cli_prompt_toolkit_reader_wraps_long_lines():
     from kagent.cli.interactive import _PromptToolkitLineReader
 
@@ -1660,6 +1687,48 @@ def test_cli_interactive_runtime_can_show_registered_tools(monkeypatch, capsys):
     assert "open_url" in captured.out
     assert "approval" in captured.out
     assert "input_schema" not in captured.out
+
+
+def test_cli_interactive_runtime_can_show_provider_config_without_model_call(
+    monkeypatch,
+    capsys,
+):
+    from kagent.cli import _run_runtime_interactive
+    from kagent.providers.llm import LLMProviderConfig
+
+    class FakeTTYInput:
+        def __init__(self):
+            self.lines = ["/config\n", "exit\n"]
+
+        def isatty(self):
+            return True
+
+        def readline(self):
+            return self.lines.pop(0) if self.lines else ""
+
+    class FakeProvider:
+        config = LLMProviderConfig(
+            base_url="https://llm.example.test/v1",
+            api_key="sk-secret-value",
+            model="qwen3.5-122b-a10b",
+        )
+
+    calls = []
+    monkeypatch.setattr(sys, "stdin", FakeTTYInput())
+    monkeypatch.setattr(sys, "__stderr__", sys.stderr)
+
+    _run_runtime_interactive(
+        provider=FakeProvider(),
+        run_runtime_agent=lambda *_args, **_kwargs: calls.append("called"),
+        max_iterations=1,
+        fail_on_agent_failure=False,
+    )
+
+    captured = capsys.readouterr()
+    assert calls == []
+    assert "Kagent provider" in captured.out
+    assert "qwen3.5-122b-a10b" in captured.out
+    assert "sk-secret-value" not in captured.out
 
 
 def test_cli_interactive_runtime_can_change_working_directory(

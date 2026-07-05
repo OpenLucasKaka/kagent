@@ -17,6 +17,7 @@ from kagent.cli.ui import (
     format_runtime_interactive_summary,
     format_runtime_interactive_tools,
     format_runtime_progress_event,
+    format_runtime_provider_config,
     format_runtime_session_memory,
     join_non_empty,
     runtime_interactive_help,
@@ -80,6 +81,7 @@ def run_runtime_interactive(
                 last_payload,
                 session_memory_path=session_memory_path,
                 trace_dir=trace_dir,
+                provider=provider,
             )
             if handled:
                 continue
@@ -232,6 +234,7 @@ def _handle_runtime_interactive_command(
     *,
     session_memory_path: str = "",
     trace_dir: str = "",
+    provider: Any = None,
 ) -> tuple[bool, bool]:
     normalized = command.strip().lower()
     if normalized in {"/json", "/full", "/debug"}:
@@ -259,6 +262,9 @@ def _handle_runtime_interactive_command(
                 trace_dir=trace_dir,
             )
         )
+        return True, full_json_mode
+    if normalized in {"/config", "/provider"}:
+        print(format_runtime_provider_config(provider))
         return True, full_json_mode
     if normalized in {"/tools", "/actions"}:
         from kagent.runtime.tools import registered_runtime_tool_metadata
