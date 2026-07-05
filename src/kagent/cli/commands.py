@@ -44,6 +44,12 @@ _RUNTIME_INTERACTIVE_COMMANDS: tuple[RuntimeInteractiveCommand, ...] = (
         ("/full", "/debug"),
     ),
     RuntimeInteractiveCommand("/trace", "last JSON trace once", "Output", ("/last-json",)),
+    RuntimeInteractiveCommand(
+        "/doctor",
+        "show local diagnostics",
+        "Debug",
+        ("/diagnostics",),
+    ),
     RuntimeInteractiveCommand("/help", "command palette", "Debug", ("/?",)),
     RuntimeInteractiveCommand("exit", "quit", "Debug", ("quit", ":q")),
 )

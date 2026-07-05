@@ -17,6 +17,7 @@ from kagent.cli.memory import (
 from kagent.cli.trace import persist_runtime_cli_trace_or_raise
 from kagent.cli.ui import (
     approval_prompt,
+    format_runtime_interactive_doctor,
     format_runtime_interactive_status,
     format_runtime_interactive_summary,
     format_runtime_interactive_tools,
@@ -148,10 +149,16 @@ class _RuntimeLineReader:
     def clear_history(self) -> None:
         return
 
+    def line_editor_name(self) -> str:
+        return "input"
+
 
 class _InputLineReader(_RuntimeLineReader):
     def read(self, *, color: bool) -> str:
         return input(runtime_prompt(color=color))
+
+    def line_editor_name(self) -> str:
+        return "readline/input"
 
 
 class _PromptToolkitLineReader(_RuntimeLineReader):
@@ -171,6 +178,9 @@ class _PromptToolkitLineReader(_RuntimeLineReader):
         loaded_strings = getattr(history, "_loaded_strings", None)
         if isinstance(loaded_strings, list):
             loaded_strings.clear()
+
+    def line_editor_name(self) -> str:
+        return "prompt_toolkit"
 
 
 def _runtime_interactive_line_reader(prompt_stream: Any) -> _RuntimeLineReader:
@@ -284,6 +294,23 @@ def _handle_runtime_interactive_command(
                 session_memory=session_memory,
                 last_payload=last_payload,
                 trace_dir=trace_dir,
+            )
+        )
+        return True, full_json_mode
+    if normalized in {"/doctor", "/diagnostics"}:
+        line_editor = ""
+        if line_reader is not None:
+            line_editor_name = getattr(line_reader, "line_editor_name", None)
+            if callable(line_editor_name):
+                line_editor = str(line_editor_name())
+        print(
+            format_runtime_interactive_doctor(
+                cwd=os.getcwd(),
+                provider=provider,
+                session_memory_path=session_memory_path,
+                history_path=default_runtime_history_path(),
+                trace_dir=trace_dir,
+                line_editor=line_editor,
             )
         )
         return True, full_json_mode

@@ -75,11 +75,9 @@ def runtime_interactive_help() -> str:
 
 
 def format_runtime_provider_config(provider: Any) -> str:
-    config = getattr(provider, "config", None)
-    snapshot_fn = getattr(config, "redacted_snapshot", None)
-    if not callable(snapshot_fn):
+    snapshot = _provider_redacted_snapshot(provider)
+    if not snapshot:
         return "Kagent provider\n  provider   inline/test\n  api_key    not configured"
-    snapshot = snapshot_fn()
     provider_name = str(
         snapshot.get("llm_provider_display_name")
         or snapshot.get("llm_provider")
@@ -107,6 +105,15 @@ def format_runtime_provider_config(provider: Any) -> str:
             f"  backoff    {backoff}s" if backoff else "  backoff    -",
         ]
     )
+
+
+def _provider_redacted_snapshot(provider: Any) -> dict[str, Any]:
+    config = getattr(provider, "config", None)
+    snapshot_fn = getattr(config, "redacted_snapshot", None)
+    if not callable(snapshot_fn):
+        return {}
+    snapshot = snapshot_fn()
+    return snapshot if isinstance(snapshot, dict) else {}
 
 
 def format_runtime_interactive_tools(tools: list[dict[str, Any]]) -> str:
@@ -154,6 +161,48 @@ def format_runtime_interactive_status(
             f"  memory   {memory_count} {memory_label}",
             f"  last     {last_status}",
             f"  trace    {trace_dir or 'off'}",
+        ]
+    )
+
+
+def format_runtime_interactive_doctor(
+    *,
+    cwd: str,
+    provider: Any,
+    session_memory_path: str,
+    history_path: str,
+    trace_dir: str,
+    line_editor: str,
+) -> str:
+    provider_snapshot = _provider_redacted_snapshot(provider)
+    provider_name = str(
+        provider_snapshot.get("llm_provider_display_name")
+        or provider_snapshot.get("llm_provider")
+        or "inline/test"
+    )
+    model = str(provider_snapshot.get("llm_model", "")).strip() or "-"
+    base_url_state = (
+        "configured"
+        if str(provider_snapshot.get("llm_base_url", "")).strip()
+        else "not configured"
+    )
+    api_key_state = (
+        "configured"
+        if str(provider_snapshot.get("llm_api_key_configured", "")).lower() == "true"
+        else "not configured"
+    )
+    return "\n".join(
+        [
+            "Kagent doctor",
+            f"  cwd          {cwd}",
+            f"  provider     {provider_name}",
+            f"  model        {model}",
+            f"  base_url     {base_url_state}",
+            f"  api_key      {api_key_state}",
+            f"  memory       {session_memory_path or 'off'}",
+            f"  history      {history_path or 'off'}",
+            f"  line_editor  {line_editor or '-'}",
+            f"  trace        {trace_dir or 'off'}",
         ]
     )
 

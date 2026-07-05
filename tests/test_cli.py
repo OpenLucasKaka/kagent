@@ -1133,8 +1133,11 @@ def test_cli_runtime_command_registry_feeds_help_and_completion():
     assert "/status" in help_text
     assert "/reset" in help_text
     assert "/config" in help_text
+    assert "/doctor" in help_text
     assert "/status" in completion_words
     assert "/stat" in completion_words
+    assert "/doctor" in completion_words
+    assert "/diagnostics" in completion_words
     assert "/reset-session" in completion_words
     assert "exit" in completion_words
 
@@ -1160,6 +1163,39 @@ def test_cli_runtime_status_formats_empty_shell_state():
             "  trace    off",
         ]
     )
+
+
+def test_cli_runtime_doctor_redacts_provider_location_and_secret():
+    from kagent.cli.ui import format_runtime_interactive_doctor
+    from kagent.providers.llm import LLMProviderConfig, ProviderKind
+
+    class FakeProvider:
+        config = LLMProviderConfig(
+            provider=ProviderKind.QWEN_OPENAI_COMPATIBLE,
+            base_url="https://llm.example.test/v1",
+            api_key="sk-secret-value",
+            model="qwen3.5-122b-a10b",
+        )
+
+    message = format_runtime_interactive_doctor(
+        cwd="/workspace",
+        provider=FakeProvider(),
+        session_memory_path="/state/session-memory.json",
+        history_path="/state/history",
+        trace_dir="/traces",
+        line_editor="prompt_toolkit",
+    )
+
+    assert "Kagent doctor" in message
+    assert "provider     Qwen" in message
+    assert "model        qwen3.5-122b-a10b" in message
+    assert "base_url     configured" in message
+    assert "api_key      configured" in message
+    assert "memory       /state/session-memory.json" in message
+    assert "history      /state/history" in message
+    assert "line_editor  prompt_toolkit" in message
+    assert "https://llm.example.test/v1" not in message
+    assert "sk-secret-value" not in message
 
 
 def test_cli_runtime_tools_formats_compact_action_list():
@@ -1823,6 +1859,62 @@ def test_cli_interactive_runtime_can_show_session_status(
     assert "last     done" in captured.out
     assert f"trace    {tmp_path / 'traces'}" in captured.out
     assert "private-run-id" not in captured.out
+
+
+def test_cli_interactive_runtime_can_show_local_doctor(
+    tmp_path,
+    monkeypatch,
+    capsys,
+):
+    from kagent.cli import _run_runtime_interactive
+    from kagent.providers.llm import LLMProviderConfig, ProviderKind
+
+    class FakeTTYInput:
+        def __init__(self):
+            self.lines = ["/doctor\n", "exit\n"]
+
+        def isatty(self):
+            return True
+
+        def readline(self):
+            return self.lines.pop(0) if self.lines else ""
+
+    class FakeProvider:
+        config = LLMProviderConfig(
+            provider=ProviderKind.OPENAI_COMPATIBLE,
+            base_url="https://gateway.example/v1",
+            api_key="sk-secret-value",
+            model="gateway-model",
+        )
+
+    memory_path = tmp_path / "memory.json"
+    history_path = tmp_path / "history"
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("KAGENT_HISTORY_PATH", str(history_path))
+    monkeypatch.setattr(sys, "stdin", FakeTTYInput())
+    monkeypatch.setattr(sys, "__stderr__", sys.stderr)
+
+    _run_runtime_interactive(
+        provider=FakeProvider(),
+        run_runtime_agent=lambda *_args, **_kwargs: {"status": "done"},
+        max_iterations=4,
+        fail_on_agent_failure=False,
+        trace_dir=str(tmp_path / "traces"),
+        session_memory_path=str(memory_path),
+    )
+
+    captured = capsys.readouterr()
+    assert "Kagent doctor" in captured.out
+    assert f"cwd          {tmp_path}" in captured.out
+    assert "provider     OpenAI-compatible" in captured.out
+    assert "model        gateway-model" in captured.out
+    assert "base_url     configured" in captured.out
+    assert "api_key      configured" in captured.out
+    assert f"memory       {memory_path}" in captured.out
+    assert f"history      {history_path}" in captured.out
+    assert f"trace        {tmp_path / 'traces'}" in captured.out
+    assert "https://gateway.example/v1" not in captured.out
+    assert "sk-secret-value" not in captured.out
 
 
 def test_cli_interactive_runtime_can_show_registered_tools(monkeypatch, capsys):
