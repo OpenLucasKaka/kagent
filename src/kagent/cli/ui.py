@@ -238,24 +238,30 @@ def _format_run_status(payload: dict, status: str, *, color: bool) -> str:
 
 
 def _format_pending_approval(pending: dict) -> str:
-    action = join_non_empty(
-        [
-            str(pending.get("id", "")).strip(),
-            str(pending.get("tool", "")).strip(),
-        ],
-        " ",
-    )
+    tool = str(pending.get("tool", "")).strip()
     lines = []
-    if action:
-        lines.append(f"action  {action}")
+    if tool:
+        lines.append(f"tool    {tool}")
     reason = str(pending.get("reason", "")).strip()
     if reason:
         lines.append(f"reason  {reason}")
     action_input = pending.get("input")
-    input_summary = summarize_runtime_output(action_input)
+    input_summary = _summarize_pending_input(action_input, tool=tool)
     if input_summary:
-        lines.append(f"input   {input_summary}")
+        lines.append(f"target  {input_summary}")
     return "\n".join(lines)
+
+
+def _summarize_pending_input(action_input: Any, *, tool: str) -> str:
+    if not isinstance(action_input, dict):
+        return ""
+    if tool in {"open_url", "http_request"}:
+        return _short_runtime_value(action_input.get("url", ""))
+    if tool == "open_app":
+        return _short_runtime_value(action_input.get("application", ""))
+    if tool == "shell_command":
+        return _short_runtime_value(action_input.get("command", ""))
+    return summarize_runtime_output(action_input, tool=tool)
 
 
 def _answer_lines(text: str) -> list[str]:

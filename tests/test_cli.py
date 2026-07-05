@@ -2258,10 +2258,13 @@ def test_cli_interactive_runtime_can_approve_pending_tool(monkeypatch, capsys):
     assert calls[1]["goal"] == "打开 github"
     assert calls[1]["approved_action_ids"] == {"step-2"}
     assert "Approval required" in captured.out
+    assert "tool    http_request" in captured.out
+    assert "target  https://github.com" in captured.out
     assert "http_request" in captured.out
     assert "Approve this action? [y/N]" in captured.out
     assert "Approval ·" in captured.out
     assert "Done" in captured.out
+    assert "step-2 http_request" not in captured.out
 
 
 def test_cli_writes_output_file_before_failure_exit(tmp_path):
