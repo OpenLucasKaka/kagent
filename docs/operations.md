@@ -488,7 +488,7 @@ curl -s -X POST http://127.0.0.1:8000/runtime/resume \
 
 The CLI defaults to the Codex-style runtime for both one-shot goals and TTY
 sessions: run `kagent "goal"` for a single turn, or run `kagent` or
-`.venv/bin/python -m kagent.cli` with no goal to start the runtime shell. Use
+`.venv/bin/python -m kagent.cli` with no goal to start the Kagent terminal agent. Use
 `--deterministic` only for the legacy LangGraph regression path. Sessions start with
 a `Kagent` banner, the `[K]` terminal companion mark, and `/help` guidance.
 They print live progress while the planner and tools run, and then use a

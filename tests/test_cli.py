@@ -1082,12 +1082,30 @@ def test_cli_runtime_ready_message_feels_like_kagent_product_shell():
     message = runtime_ready_message(color=False)
 
     assert message.splitlines()[0] == "Kagent"
+    assert "Codex-style agent runtime" in message
     assert "K-bot" in message
+    assert "[K]" in message
     assert "(o_o)" in message
     assert "ask, approve, automate" in message
+    assert "/config provider" in message
     assert "/help" in message
     assert ("self" + "-correcting") not in message.lower()
     assert "runtime shell" not in message.lower()
+
+
+def test_cli_runtime_setup_message_keeps_brand_presence():
+    from kagent.cli.ui import runtime_setup_message
+
+    message = runtime_setup_message(
+        config_path="/Users/kaka/.config/kagent/provider.json",
+        color=False,
+    )
+
+    assert message.splitlines()[0] == "Kagent setup"
+    assert "K-bot" in message
+    assert "(o_o)" in message
+    assert "provider ready" in message
+    assert "/Users/kaka/.config/kagent/provider.json" in message
 
 
 def test_cli_runtime_help_reads_like_a_command_palette():
@@ -1095,8 +1113,9 @@ def test_cli_runtime_help_reads_like_a_command_palette():
 
     message = runtime_interactive_help()
 
-    assert message.splitlines()[0] == "Kagent command menu"
+    assert message.splitlines()[0] == "Kagent command palette"
     assert "Session" in message
+    assert "Provider" in message
     assert "Output" in message
     assert "Debug" in message
     assert "/json" in message
@@ -1117,12 +1136,12 @@ def test_cli_runtime_status_formats_empty_shell_state():
 
     assert message == "\n".join(
         [
-            "Kagent status",
-            "  cwd     /workspace",
-            "  output  compact",
-            "  memory  0 turns",
-            "  last    -",
-            "  trace   off",
+            "Kagent session",
+            "  cwd      /workspace",
+            "  output   compact",
+            "  memory   0 turns",
+            "  last     -",
+            "  trace    off",
         ]
     )
 
@@ -1181,12 +1200,12 @@ def test_cli_runtime_provider_config_redacts_secret_values():
     message = format_runtime_provider_config(FakeProvider())
 
     assert "Kagent provider" in message
-    assert "provider  Qwen" in message
-    assert "base_url  https://llm.example.test/v1" in message
-    assert "model     qwen3.5-122b-a10b" in message
-    assert "api_key   configured" in message
-    assert "timeout   45s" in message
-    assert "retries   3" in message
+    assert "provider   Qwen" in message
+    assert "base_url   https://llm.example.test/v1" in message
+    assert "model      qwen3.5-122b-a10b" in message
+    assert "api_key    configured" in message
+    assert "timeout    45s" in message
+    assert "retries    3" in message
     assert "sk-secret-value" not in message
 
 
@@ -1349,7 +1368,7 @@ def test_cli_interactive_runtime_tty_prints_production_summary(monkeypatch, caps
     assert "\nDone" in captured.out
     assert "Done · 0.1200s" in captured.out
     assert "0.1200s" in captured.out
-    assert "\n\n已打开 GitHub。" in captured.out
+    assert "\n\nAnswer\n  已打开 GitHub。" in captured.out
     assert "\n\nActions\n  ✓ open_url" in captured.out
     assert "open_url" in captured.out
     assert "0.0300s" in captured.out
@@ -1437,7 +1456,7 @@ def test_cli_interactive_runtime_tty_prints_live_progress(monkeypatch, capsys):
     assert "Running apply_patch..." in captured.out
     assert "✓ apply_patch · 0.0100s" in captured.out
     assert "\n\nDone" in captured.out
-    assert "\n\n文件已创建。" in captured.out
+    assert "\n\nAnswer\n  文件已创建。" in captured.out
     assert "\n\nActions\n  ✓ apply_patch" in captured.out
     assert "add hello.md 13B" in captured.out
 
@@ -1640,7 +1659,7 @@ def test_cli_interactive_runtime_tty_keeps_debug_details_out_of_default_output(
 
     captured = capsys.readouterr()
     assert "╭─" not in captured.out
-    assert "\n\n文件已创建。" in captured.out
+    assert "\n\nAnswer\n  文件已创建。" in captured.out
     assert "status" not in captured.out
     assert "\nDone · 1.2500s · iter 2/3" in captured.out
     assert "\n\nActions\n  ✓ apply_patch" in captured.out
@@ -1775,12 +1794,12 @@ def test_cli_interactive_runtime_can_show_session_status(
     )
 
     captured = capsys.readouterr()
-    assert "Kagent status" in captured.out
-    assert f"cwd     {tmp_path}" in captured.out
-    assert "output  full JSON" in captured.out
-    assert "memory  1 turn" in captured.out
-    assert "last    done" in captured.out
-    assert f"trace   {tmp_path / 'traces'}" in captured.out
+    assert "Kagent session" in captured.out
+    assert f"cwd      {tmp_path}" in captured.out
+    assert "output   full JSON" in captured.out
+    assert "memory   1 turn" in captured.out
+    assert "last     done" in captured.out
+    assert f"trace    {tmp_path / 'traces'}" in captured.out
     assert "private-run-id" not in captured.out
 
 
@@ -2733,7 +2752,7 @@ def test_cli_interactive_runtime_can_approve_pending_tool(monkeypatch, capsys):
     assert calls[1]["goal"] == "打开 github"
     assert calls[1]["approved_action_ids"] == {"step-2"}
     assert "Approval required" in captured.out
-    assert "tool    http_request" in captured.out
+    assert "action  http_request" in captured.out
     assert "target  https://github.com" in captured.out
     assert "http_request" in captured.out
     assert "Approve this action? [y/N]" in captured.out
@@ -2781,7 +2800,7 @@ def test_cli_interactive_runtime_reports_declined_approval(monkeypatch, capsys):
     captured = capsys.readouterr()
     assert len(calls) == 1
     assert "Approval required" in captured.out
-    assert "tool    open_url" in captured.out
+    assert "action  open_url" in captured.out
     assert "target  https://github.com" in captured.out
     assert "Skipped · action not approved" in captured.out
 

@@ -19,12 +19,21 @@ def runtime_ui_color_enabled() -> bool:
 
 
 def runtime_ready_message(*, color: bool = False) -> str:
+    subtitle = "Codex-style agent runtime for internal work"
     return "\n".join(
         [
             _color("Kagent", "bold", enabled=color),
-            "  [K]  (o_o)  K-bot",
-            "       /|K|\\  ask, approve, automate",
-            _dim("        / \\   ready · /help · /json · exit", enabled=color),
+            _dim(subtitle, enabled=color),
+            "",
+            "        .----------------.",
+            "        |   K-bot   [K]  |",
+            "        |     (o_o)      |",
+            "        |   /|_|\\        |",
+            "        '----/---\\-------'",
+            "",
+            "ask, approve, automate",
+            _dim("ready", enabled=color),
+            _dim("/help commands   /config provider   /status session", enabled=color),
         ]
     )
 
@@ -33,30 +42,44 @@ def runtime_prompt(*, color: bool = False) -> str:
     return _prompt_color("› ", "cyan", enabled=color)
 
 
+def runtime_setup_message(*, config_path: str, color: bool = False) -> str:
+    return "\n".join(
+        [
+            _color("Kagent setup", "bold", enabled=color),
+            "  [K] (o_o)  K-bot is getting your provider ready.",
+            _dim("Choose a provider once, then Kagent opens directly next time.", enabled=color),
+            "",
+            f"Config  {config_path}",
+        ]
+    )
+
+
 def runtime_interactive_help() -> str:
     return "\n".join(
         [
-            "Kagent command menu",
+            "Kagent command palette",
             "",
             "Session",
-            "  /pwd       show working directory",
-            "  /cd PATH   change working directory",
-            "  /status    show shell state",
-            "  /config    show provider config",
-            "  /tools     show available actions",
-            "  /memory    review remembered turns",
-            "  /clear     clear remembered turns",
-            "  /reset     clear memory and history",
-            "  /last      replay last answer",
+            "  /pwd          show working directory",
+            "  /cd PATH      change working directory",
+            "  /status       show shell state",
+            "  /memory       review remembered turns",
+            "  /clear        clear remembered turns",
+            "  /reset        clear memory and prompt history",
+            "  /last         replay last answer",
+            "",
+            "Provider",
+            "  /config       show redacted provider config",
+            "  /tools        show available actions",
             "",
             "Output",
-            "  /compact   clean transcript",
-            "  /json      full JSON traces",
-            "  /trace     last JSON trace once",
+            "  /compact      clean transcript",
+            "  /json         full JSON traces",
+            "  /trace        last JSON trace once",
             "",
             "Debug",
-            "  /help      command menu",
-            "  exit       quit",
+            "  /help         command palette",
+            "  exit          quit",
         ]
     )
 
@@ -65,7 +88,7 @@ def format_runtime_provider_config(provider: Any) -> str:
     config = getattr(provider, "config", None)
     snapshot_fn = getattr(config, "redacted_snapshot", None)
     if not callable(snapshot_fn):
-        return "Kagent provider\n  provider  inline/test\n  api_key   not configured"
+        return "Kagent provider\n  provider   inline/test\n  api_key    not configured"
     snapshot = snapshot_fn()
     provider_name = str(
         snapshot.get("llm_provider_display_name")
@@ -85,13 +108,13 @@ def format_runtime_provider_config(provider: Any) -> str:
     return "\n".join(
         [
             "Kagent provider",
-            f"  provider  {provider_name}",
-            f"  base_url  {base_url}",
-            f"  model     {model}",
-            f"  api_key   {api_key_state}",
-            f"  timeout   {timeout}s" if timeout else "  timeout   -",
-            f"  retries   {retries}" if retries else "  retries   -",
-            f"  backoff   {backoff}s" if backoff else "  backoff   -",
+            f"  provider   {provider_name}",
+            f"  base_url   {base_url}",
+            f"  model      {model}",
+            f"  api_key    {api_key_state}",
+            f"  timeout    {timeout}s" if timeout else "  timeout    -",
+            f"  retries    {retries}" if retries else "  retries    -",
+            f"  backoff    {backoff}s" if backoff else "  backoff    -",
         ]
     )
 
@@ -109,7 +132,7 @@ def format_runtime_interactive_tools(tools: list[dict[str, Any]]) -> str:
         description = _one_line_text(str(tool.get("description", "")).strip())
         rows.append((name, access, description))
     if not rows:
-        return "Kagent actions\n  none"
+        return "Kagent actions\n  no external actions registered"
     name_width = max(len(name) for name, _access, _description in rows)
     return "\n".join(
         ["Kagent actions"]
@@ -135,12 +158,12 @@ def format_runtime_interactive_status(
         last_status = str(last_payload.get("status", "")).strip() or "-"
     return "\n".join(
         [
-            "Kagent status",
-            f"  cwd     {cwd}",
-            f"  output  {'full JSON' if full_json_mode else 'compact'}",
-            f"  memory  {memory_count} {memory_label}",
-            f"  last    {last_status}",
-            f"  trace   {trace_dir or 'off'}",
+            "Kagent session",
+            f"  cwd      {cwd}",
+            f"  output   {'full JSON' if full_json_mode else 'compact'}",
+            f"  memory   {memory_count} {memory_label}",
+            f"  last     {last_status}",
+            f"  trace    {trace_dir or 'off'}",
         ]
     )
 
@@ -168,6 +191,7 @@ def format_runtime_interactive_summary(payload: Any, *, color: bool = False) -> 
     answer = str(payload.get("answer", "")).strip()
     if answer:
         lines.append("")
+        lines.append(_dim("Answer", enabled=color))
         lines.extend(_answer_lines(answer))
 
     error_code = str(payload.get("error_code", "")).strip()
@@ -337,7 +361,7 @@ def _format_pending_approval(pending: dict) -> str:
     tool = str(pending.get("tool", "")).strip()
     lines = []
     if tool:
-        lines.append(f"tool    {tool}")
+        lines.append(f"action  {tool}")
     reason = str(pending.get("reason", "")).strip()
     if reason:
         lines.append(f"reason  {reason}")
@@ -361,7 +385,7 @@ def _summarize_pending_input(action_input: Any, *, tool: str) -> str:
 
 
 def _answer_lines(text: str) -> list[str]:
-    return _wrapped_block_lines(text, prefix="")
+    return _wrapped_block_lines(text, prefix="  ")
 
 
 def _indented_lines(text: str, prefix: str = "  ") -> list[str]:
@@ -369,7 +393,7 @@ def _indented_lines(text: str, prefix: str = "  ") -> list[str]:
 
 
 def _wrapped_block_lines(text: str, *, prefix: str) -> list[str]:
-    width = max(40, shutil.get_terminal_size((100, 24)).columns)
+    width = _ui_width()
     wrap_width = max(20, width - len(prefix))
     lines: list[str] = []
     in_fence = False
@@ -602,6 +626,10 @@ def _one_line_text(text: str) -> str:
     if len(compact) > 96:
         return compact[:93] + "..."
     return compact
+
+
+def _ui_width() -> int:
+    return max(40, shutil.get_terminal_size((100, 24)).columns)
 
 
 def _dim(text: str, *, enabled: bool) -> str:

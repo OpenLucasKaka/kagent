@@ -18,6 +18,7 @@ from kagent.cli.trace import (
 from kagent.cli.trace import (
     persist_runtime_cli_trace_or_raise as _persist_runtime_cli_trace_or_raise,
 )
+from kagent.cli.ui import runtime_setup_message, runtime_ui_color_enabled
 from kagent.runtime.metadata import (
     validate_runtime_metadata,
     validate_runtime_tags,
@@ -56,7 +57,7 @@ def main() -> None:
     parser.add_argument(
         "--interactive",
         action="store_true",
-        help="Start an interactive runtime shell that reads goals from stdin.",
+        help="Start the Kagent terminal agent that reads goals from stdin.",
     )
     parser.add_argument(
         "--interactive-json",
@@ -440,8 +441,13 @@ def _configure_runtime_provider_interactively(
 ) -> object:
     prompt_stream = sys.__stderr__ or sys.stderr
     config_path = default_config_path()
-    print("Kagent first-time setup", file=prompt_stream)
-    print(f"Provider config will be saved to: {config_path}", file=prompt_stream)
+    print(
+        runtime_setup_message(
+            config_path=config_path,
+            color=runtime_ui_color_enabled(),
+        ),
+        file=prompt_stream,
+    )
     provider_option = _select_provider_for_setup(
         default_model=default_model,
         input_fn=input_fn,
