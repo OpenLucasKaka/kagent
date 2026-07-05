@@ -39,6 +39,7 @@ def runtime_interactive_help() -> str:
             "Kagent command menu",
             "",
             "Session",
+            "  /status    show shell state",
             "  /memory    review remembered turns",
             "  /clear     clear remembered turns",
             "  /last      replay last answer",
@@ -51,6 +52,31 @@ def runtime_interactive_help() -> str:
             "Debug",
             "  /help      command menu",
             "  exit       quit",
+        ]
+    )
+
+
+def format_runtime_interactive_status(
+    *,
+    cwd: str,
+    full_json_mode: bool,
+    session_memory: list[dict[str, str]],
+    last_payload: Any,
+    trace_dir: str = "",
+) -> str:
+    memory_count = len(session_memory)
+    memory_label = "turn" if memory_count == 1 else "turns"
+    last_status = "-"
+    if isinstance(last_payload, dict):
+        last_status = str(last_payload.get("status", "")).strip() or "-"
+    return "\n".join(
+        [
+            "Kagent status",
+            f"  cwd     {cwd}",
+            f"  output  {'full JSON' if full_json_mode else 'compact'}",
+            f"  memory  {memory_count} {memory_label}",
+            f"  last    {last_status}",
+            f"  trace   {trace_dir or 'off'}",
         ]
     )
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 from typing import Any
 
@@ -12,6 +13,7 @@ from kagent.cli.memory import (
 from kagent.cli.trace import persist_runtime_cli_trace_or_raise
 from kagent.cli.ui import (
     approval_prompt,
+    format_runtime_interactive_status,
     format_runtime_interactive_summary,
     format_runtime_progress_event,
     format_runtime_session_memory,
@@ -76,6 +78,7 @@ def run_runtime_interactive(
                 session_memory,
                 last_payload,
                 session_memory_path=session_memory_path,
+                trace_dir=trace_dir,
             )
             if handled:
                 continue
@@ -227,6 +230,7 @@ def _handle_runtime_interactive_command(
     last_payload: Any,
     *,
     session_memory_path: str = "",
+    trace_dir: str = "",
 ) -> tuple[bool, bool]:
     normalized = command.strip().lower()
     if normalized in {"/json", "/full", "/debug"}:
@@ -237,6 +241,17 @@ def _handle_runtime_interactive_command(
         return True, False
     if normalized in {"/help", "/?"}:
         print(runtime_interactive_help())
+        return True, full_json_mode
+    if normalized in {"/status", "/stat"}:
+        print(
+            format_runtime_interactive_status(
+                cwd=os.getcwd(),
+                full_json_mode=full_json_mode,
+                session_memory=session_memory,
+                last_payload=last_payload,
+                trace_dir=trace_dir,
+            )
+        )
         return True, full_json_mode
     if normalized in {"/memory", "/mem"}:
         print(format_runtime_session_memory(session_memory))

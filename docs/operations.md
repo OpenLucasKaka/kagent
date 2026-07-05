@@ -493,13 +493,14 @@ sessions: run `kagent "goal"` for a single turn, or run `kagent` or
 a `Kagent` banner, the `[K]` terminal companion mark, and `/help` guidance.
 They print live progress while the planner and tools run, and then use a
 compact operator transcript by default: status first, answer second, and only
-real external tool observations under `Tools`.
+real external tool observations under `Actions`.
 Internal `note` observations stay hidden in the default view so the shell reads
 like an agent session instead of a debug trace. Use `/json` inside the shell
 for full trace output, `/compact` to return to the operator view, `/last` to
 replay the most recent compact result, `/trace` to print the most recent full
-JSON trace once, `/memory` to inspect the current session memory, `/clear` to
-clear it, and `/help` to list shell commands. The default turn budget is three
+JSON trace once, `/status` to inspect cwd, output mode, memory count, last run
+status, and trace persistence, `/memory` to inspect the current session memory,
+`/clear` to clear it, and `/help` to list shell commands. The default turn budget is three
 planning iterations; add `--max-iterations N` only when a workflow needs a
 different budget. TTY sessions persist compact memory across shell restarts by
 default at `${XDG_STATE_HOME:-~/.local/state}/kagent/session-memory.json`;

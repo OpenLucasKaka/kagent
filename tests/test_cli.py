@@ -1104,6 +1104,29 @@ def test_cli_runtime_help_reads_like_a_command_palette():
     assert "show this help" not in message
 
 
+def test_cli_runtime_status_formats_empty_shell_state():
+    from kagent.cli.ui import format_runtime_interactive_status
+
+    message = format_runtime_interactive_status(
+        cwd="/workspace",
+        full_json_mode=False,
+        session_memory=[],
+        last_payload=None,
+        trace_dir="",
+    )
+
+    assert message == "\n".join(
+        [
+            "Kagent status",
+            "  cwd     /workspace",
+            "  output  compact",
+            "  memory  0 turns",
+            "  last    -",
+            "  trace   off",
+        ]
+    )
+
+
 def test_cli_prompt_toolkit_reader_wraps_long_lines():
     from kagent.cli.interactive import _PromptToolkitLineReader
 
@@ -1519,6 +1542,49 @@ def test_cli_interactive_runtime_can_show_and_clear_session_memory(
     assert "agent  你好，卡卡。" in captured.out
     assert "Memory cleared." in captured.out
     assert "Memory is empty." in captured.out
+
+
+def test_cli_interactive_runtime_can_show_session_status(
+    tmp_path,
+    monkeypatch,
+    capsys,
+):
+    from kagent.cli import _run_runtime_interactive
+
+    class FakeTTYInput:
+        def __init__(self):
+            self.lines = ["我是卡卡\n", "/json\n", "/status\n", "exit\n"]
+
+        def isatty(self):
+            return True
+
+        def readline(self):
+            return self.lines.pop(0) if self.lines else ""
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(sys, "stdin", FakeTTYInput())
+    monkeypatch.setattr(sys, "__stderr__", sys.stderr)
+
+    _run_runtime_interactive(
+        provider=object(),
+        run_runtime_agent=lambda *_args, **_kwargs: {
+            "status": "done",
+            "answer": "你好，卡卡。",
+            "run_id": "private-run-id",
+        },
+        max_iterations=4,
+        fail_on_agent_failure=False,
+        trace_dir=str(tmp_path / "traces"),
+    )
+
+    captured = capsys.readouterr()
+    assert "Kagent status" in captured.out
+    assert f"cwd     {tmp_path}" in captured.out
+    assert "output  full JSON" in captured.out
+    assert "memory  1 turn" in captured.out
+    assert "last    done" in captured.out
+    assert f"trace   {tmp_path / 'traces'}" in captured.out
+    assert "private-run-id" not in captured.out
 
 
 def test_cli_interactive_runtime_carries_session_memory_between_turns(
