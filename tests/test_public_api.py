@@ -1,8 +1,10 @@
 from kagent import (
     FakeLLMProvider,
     LLMProviderConfig,
+    ProviderKind,
     __version__,
     agent_topology,
+    detect_provider_kind,
     evaluate_agent,
     registered_evaluation_cases,
     registered_tool_metadata,
@@ -68,3 +70,8 @@ def test_public_api_exports_runtime_agent_entrypoint():
 
     assert result["status"] == "done"
     assert LLMProviderConfig.from_env({}).redacted_snapshot()["llm_provider"] == "unconfigured"
+
+
+def test_public_api_exports_provider_kind_helpers():
+    assert ProviderKind.DEEPSEEK.value == "deepseek"
+    assert detect_provider_kind("https://api.deepseek.com/v1") == ProviderKind.DEEPSEEK

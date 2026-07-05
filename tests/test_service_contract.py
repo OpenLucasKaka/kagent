@@ -1174,8 +1174,15 @@ def test_service_contract_documents_llm_provider_audit_fields():
     expected_properties = {
         "llm_provider": {
             "type": "string",
-            "enum": ["openai_compatible", "unconfigured"],
+            "enum": [
+                "openai_compatible",
+                "deepseek",
+                "qwen_openai_compatible",
+                "ollama_openai_compatible",
+                "unconfigured",
+            ],
         },
+        "llm_provider_display_name": {"type": "string"},
         "llm_base_url": {"type": "string"},
         "llm_model": {"type": "string"},
         "llm_api_key_configured": {

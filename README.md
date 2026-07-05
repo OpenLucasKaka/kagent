@@ -5,7 +5,7 @@ Production-shaped LangGraph agent runtime for internal, non-coding workflows.
 It provides two execution paths:
 
 - deterministic graph runs for local tests, demos, and regression checks;
-- a Codex-style runtime that plans with an OpenAI-compatible LLM provider,
+- a Codex-style runtime that plans with a configured LLM provider,
   executes policy-gated tools, records structured observations, and can replan
   after failures.
 
@@ -28,6 +28,8 @@ configured yet, Kagent starts a first-time setup flow and asks for your
 OpenAI-compatible base URL, model, and API key. The local provider config is
 stored at `${XDG_CONFIG_HOME:-~/.config}/kagent/provider.json` with owner-only
 permissions.
+Provider is inferred from the Base URL and model when possible; you can also
+choose `openai_compatible`, `deepseek`, `qwen`, or `ollama` during setup.
 
 To reconfigure later:
 
@@ -36,8 +38,8 @@ kagent --configure
 ```
 
 Environment variables still override the local config for CI or temporary
-operator sessions: `KAGENT_LLM_BASE_URL`, `KAGENT_LLM_API_KEY`, and
-`KAGENT_LLM_MODEL`.
+operator sessions: `KAGENT_LLM_PROVIDER`, `KAGENT_LLM_BASE_URL`,
+`KAGENT_LLM_API_KEY`, and `KAGENT_LLM_MODEL`.
 
 One-shot runs use the same command:
 
@@ -63,8 +65,8 @@ Start the LLM-backed terminal agent after setting provider environment
 variables:
 
 ```sh
-# Set KAGENT_LLM_BASE_URL, KAGENT_LLM_API_KEY, and
-# KAGENT_LLM_MODEL in your shell or secret manager.
+# Set KAGENT_LLM_PROVIDER, KAGENT_LLM_BASE_URL, KAGENT_LLM_API_KEY,
+# and KAGENT_LLM_MODEL in your shell or secret manager.
 
 kagent
 ```
@@ -155,8 +157,8 @@ tool policy, diagnostics protection, and production preflight checks.
   status, approvals, resume/cancel, trace store, and transport helpers.
 - `src/kagent/cli/`: command line and interactive
   terminal UI.
-- `src/kagent/providers/`: OpenAI-compatible provider
-  and fake provider test support.
+- `src/kagent/providers/`: provider detection, OpenAI-compatible protocol
+  adapter, and fake provider test support.
 - `src/kagent/eval/`: evaluation cases and runner.
 - `src/kagent/ops/`: doctor, metrics, release
   evidence, release manifest, batch, and trace replay commands.

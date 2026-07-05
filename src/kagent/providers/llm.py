@@ -8,6 +8,7 @@ import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
+from enum import Enum
 from os import environ
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Mapping, Optional
@@ -16,8 +17,16 @@ DEFAULT_LLM_MODEL = "qwen3.5-122b-a10b"
 PROVIDER_CONFIG_SCHEMA_VERSION = "1"
 
 
+class ProviderKind(str, Enum):
+    OPENAI_COMPATIBLE = "openai_compatible"
+    DEEPSEEK = "deepseek"
+    QWEN_OPENAI_COMPATIBLE = "qwen_openai_compatible"
+    OLLAMA_OPENAI_COMPATIBLE = "ollama_openai_compatible"
+
+
 @dataclass(frozen=True)
 class LLMProviderConfig:
+    provider: ProviderKind = ProviderKind.OPENAI_COMPATIBLE
     base_url: str = ""
     api_key: str = ""
     model: str = ""
@@ -28,10 +37,13 @@ class LLMProviderConfig:
     @classmethod
     def from_env(cls, env: Optional[Mapping[str, str]] = None) -> "LLMProviderConfig":
         source = env if env is not None else environ
+        base_url = source.get("KAGENT_LLM_BASE_URL", cls.base_url)
+        model = source.get("KAGENT_LLM_MODEL", cls.model)
         return cls(
-            base_url=source.get("KAGENT_LLM_BASE_URL", cls.base_url),
+            provider=_provider_from_env(source, base_url=base_url, model=model),
+            base_url=base_url,
             api_key=source.get("KAGENT_LLM_API_KEY", cls.api_key),
-            model=source.get("KAGENT_LLM_MODEL", cls.model),
+            model=model,
             timeout_seconds=_env_float(
                 source,
                 "KAGENT_LLM_TIMEOUT_SECONDS",
@@ -58,6 +70,7 @@ class LLMProviderConfig:
         source = env if env is not None else environ
         file_config = load_provider_config(config_path)
         merged = {
+            "KAGENT_LLM_PROVIDER": file_config.provider.value,
             "KAGENT_LLM_BASE_URL": file_config.base_url,
             "KAGENT_LLM_API_KEY": file_config.api_key,
             "KAGENT_LLM_MODEL": file_config.model,
@@ -70,12 +83,25 @@ class LLMProviderConfig:
         for key, value in source.items():
             if key.startswith("KAGENT_LLM_") and value != "":
                 merged[key] = value
+        provider_overridden = bool(source.get("KAGENT_LLM_PROVIDER", "").strip())
+        endpoint_overridden = bool(
+            source.get("KAGENT_LLM_BASE_URL", "").strip()
+            or source.get("KAGENT_LLM_MODEL", "").strip()
+        )
+        if endpoint_overridden and not provider_overridden:
+            merged["KAGENT_LLM_PROVIDER"] = ""
         return cls.from_env(merged)
 
     def redacted_snapshot(self) -> Dict[str, str]:
-        provider = "openai_compatible" if self.base_url and self.model else "unconfigured"
+        provider = self.provider.value if self.base_url and self.model else "unconfigured"
+        display_name = (
+            provider_display_name(self.provider)
+            if self.base_url and self.model
+            else "Unconfigured"
+        )
         return {
             "llm_provider": provider,
+            "llm_provider_display_name": display_name,
             "llm_base_url": self.base_url,
             "llm_model": self.model,
             "llm_api_key_configured": str(bool(self.api_key)).lower(),
@@ -85,6 +111,7 @@ class LLMProviderConfig:
         }
 
     def __post_init__(self) -> None:
+        object.__setattr__(self, "provider", normalize_provider_kind(self.provider))
         if self.timeout_seconds <= 0:
             raise ValueError("timeout_seconds must be positive")
         if self.max_retries < 0:
@@ -113,10 +140,9 @@ def load_provider_config(path: str = "") -> LLMProviderConfig:
         raise ValueError("provider config must be a JSON object")
     if str(payload.get("schema_version", "")) != PROVIDER_CONFIG_SCHEMA_VERSION:
         raise ValueError("provider config schema_version is unsupported")
-    provider = str(payload.get("provider", "openai_compatible"))
-    if provider != "openai_compatible":
-        raise ValueError("provider config provider is unsupported")
+    provider = normalize_provider_kind(str(payload.get("provider", "openai_compatible")))
     return LLMProviderConfig(
+        provider=provider,
         base_url=str(payload.get("base_url", "")),
         api_key=str(payload.get("api_key", "")),
         model=str(payload.get("model", "")),
@@ -140,7 +166,7 @@ def save_provider_config(config: LLMProviderConfig, path: str = "") -> str:
     os.chmod(config_path.parent, 0o700)
     payload = {
         "schema_version": PROVIDER_CONFIG_SCHEMA_VERSION,
-        "provider": "openai_compatible",
+        "provider": config.provider.value,
         "base_url": config.base_url,
         "api_key": config.api_key,
         "model": config.model,
@@ -157,6 +183,70 @@ def save_provider_config(config: LLMProviderConfig, path: str = "") -> str:
         handle.write("\n")
     os.chmod(config_path, 0o600)
     return str(config_path)
+
+
+def normalize_provider_kind(value: object) -> ProviderKind:
+    if isinstance(value, ProviderKind):
+        return value
+    normalized = str(value or "").strip().lower().replace("-", "_")
+    aliases = {
+        "": ProviderKind.OPENAI_COMPATIBLE,
+        "openai": ProviderKind.OPENAI_COMPATIBLE,
+        "openai_compatible": ProviderKind.OPENAI_COMPATIBLE,
+        "openai-compatible": ProviderKind.OPENAI_COMPATIBLE,
+        "deepseek": ProviderKind.DEEPSEEK,
+        "qwen": ProviderKind.QWEN_OPENAI_COMPATIBLE,
+        "dashscope": ProviderKind.QWEN_OPENAI_COMPATIBLE,
+        "qwen_openai_compatible": ProviderKind.QWEN_OPENAI_COMPATIBLE,
+        "qwen-compatible": ProviderKind.QWEN_OPENAI_COMPATIBLE,
+        "ollama": ProviderKind.OLLAMA_OPENAI_COMPATIBLE,
+        "ollama_openai_compatible": ProviderKind.OLLAMA_OPENAI_COMPATIBLE,
+    }
+    if normalized in aliases:
+        return aliases[normalized]
+    try:
+        return ProviderKind(normalized)
+    except ValueError as exc:
+        raise ValueError(f"unsupported llm provider: {value}") from exc
+
+
+def detect_provider_kind(base_url: str, model: str = "") -> ProviderKind:
+    haystack = f"{base_url} {model}".strip().lower()
+    if not haystack:
+        return ProviderKind.OPENAI_COMPATIBLE
+    if "deepseek" in haystack:
+        return ProviderKind.DEEPSEEK
+    if any(marker in haystack for marker in ("dashscope", "aliyuncs", "qwen")):
+        return ProviderKind.QWEN_OPENAI_COMPATIBLE
+    if any(marker in haystack for marker in ("localhost:11434", "127.0.0.1:11434", "ollama")):
+        return ProviderKind.OLLAMA_OPENAI_COMPATIBLE
+    return ProviderKind.OPENAI_COMPATIBLE
+
+
+def provider_display_name(provider: object) -> str:
+    try:
+        kind = normalize_provider_kind(provider)
+    except ValueError:
+        kind = ProviderKind.OPENAI_COMPATIBLE
+    names = {
+        ProviderKind.OPENAI_COMPATIBLE: "OpenAI-compatible",
+        ProviderKind.DEEPSEEK: "DeepSeek",
+        ProviderKind.QWEN_OPENAI_COMPATIBLE: "Qwen",
+        ProviderKind.OLLAMA_OPENAI_COMPATIBLE: "Ollama",
+    }
+    return names[kind]
+
+
+def _provider_from_env(
+    env: Mapping[str, str],
+    *,
+    base_url: str,
+    model: str,
+) -> ProviderKind:
+    explicit = env.get("KAGENT_LLM_PROVIDER", "")
+    if explicit.strip():
+        return normalize_provider_kind(explicit)
+    return detect_provider_kind(base_url, model)
 
 
 def _validate_provider_config_path_for_read(path: Path) -> None:
@@ -282,6 +372,18 @@ class OpenAICompatibleProvider:
                 if self.config.retry_backoff_seconds:
                     self._sleep(self.config.retry_backoff_seconds)
         raise RuntimeError("llm provider request failed")
+
+
+def build_llm_provider(
+    config: LLMProviderConfig,
+    *,
+    urlopen: Callable[..., Any] = urllib.request.urlopen,
+    sleep: Callable[[float], None] = time.sleep,
+) -> OpenAICompatibleProvider:
+    # DeepSeek, Qwen, Ollama, and many company gateways expose the same
+    # /v1/chat/completions contract. Native protocol adapters can branch here.
+    normalize_provider_kind(config.provider)
+    return OpenAICompatibleProvider(config, urlopen=urlopen, sleep=sleep)
 
 
 def _env_float(env: Mapping[str, str], name: str, default: float) -> float:

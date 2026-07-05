@@ -7,9 +7,13 @@ from kagent.providers.llm import (
     FakeLLMProvider,
     LLMProviderConfig,
     OpenAICompatibleProvider,
+    ProviderKind,
     SequentialFakeLLMProvider,
+    build_llm_provider,
     default_provider_config_path,
+    detect_provider_kind,
     load_provider_config,
+    provider_display_name,
     save_provider_config,
 )
 
@@ -17,6 +21,7 @@ from kagent.providers.llm import (
 def test_provider_config_reads_openai_compatible_environment_without_exposing_key():
     config = LLMProviderConfig.from_env(
         {
+            "KAGENT_LLM_PROVIDER": "deepseek",
             "KAGENT_LLM_BASE_URL": "https://llm.example/v1",
             "KAGENT_LLM_API_KEY": "redactme",
             "KAGENT_LLM_MODEL": "agent-model",
@@ -26,13 +31,15 @@ def test_provider_config_reads_openai_compatible_environment_without_exposing_ke
         }
     )
 
+    assert config.provider == ProviderKind.DEEPSEEK
     assert config.base_url == "https://llm.example/v1"
     assert config.model == "agent-model"
     assert config.timeout_seconds == 12.5
     assert config.max_retries == 2
     assert config.retry_backoff_seconds == 0.25
     assert config.redacted_snapshot() == {
-        "llm_provider": "openai_compatible",
+        "llm_provider": "deepseek",
+        "llm_provider_display_name": "DeepSeek",
         "llm_base_url": "https://llm.example/v1",
         "llm_model": "agent-model",
         "llm_api_key_configured": "true",
@@ -48,6 +55,7 @@ def test_provider_config_defaults_to_unconfigured_runtime():
 
     assert config.redacted_snapshot() == {
         "llm_provider": "unconfigured",
+        "llm_provider_display_name": "Unconfigured",
         "llm_base_url": "",
         "llm_model": "",
         "llm_api_key_configured": "false",
@@ -62,6 +70,7 @@ def test_provider_config_can_be_saved_loaded_and_overridden_by_env(tmp_path):
 
     saved_path = save_provider_config(
         LLMProviderConfig(
+            provider=ProviderKind.QWEN_OPENAI_COMPATIBLE,
             base_url="https://stored.example/v1",
             api_key="stored-key",
             model=DEFAULT_LLM_MODEL,
@@ -79,6 +88,7 @@ def test_provider_config_can_be_saved_loaded_and_overridden_by_env(tmp_path):
     )
 
     assert saved_path == str(config_path)
+    assert loaded.provider == ProviderKind.QWEN_OPENAI_COMPATIBLE
     assert loaded.base_url == "https://stored.example/v1"
     assert loaded.api_key == "stored-key"
     assert loaded.model == DEFAULT_LLM_MODEL
@@ -87,6 +97,109 @@ def test_provider_config_can_be_saved_loaded_and_overridden_by_env(tmp_path):
     assert merged.model == "env-model"
     assert stat.S_IMODE(config_path.parent.stat().st_mode) == 0o700
     assert stat.S_IMODE(config_path.stat().st_mode) == 0o600
+
+
+def test_provider_config_reinfers_provider_when_env_overrides_base_or_model(tmp_path):
+    config_path = tmp_path / "provider.json"
+    save_provider_config(
+        LLMProviderConfig(
+            provider=ProviderKind.QWEN_OPENAI_COMPATIBLE,
+            base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+            api_key="stored-key",
+            model="qwen-plus",
+        ),
+        str(config_path),
+    )
+
+    merged = LLMProviderConfig.from_sources(
+        {
+            "KAGENT_LLM_BASE_URL": "https://api.deepseek.com/v1",
+            "KAGENT_LLM_MODEL": "deepseek-chat",
+        },
+        config_path=str(config_path),
+    )
+
+    assert merged.provider == ProviderKind.DEEPSEEK
+    assert merged.api_key == "stored-key"
+
+
+def test_provider_config_keeps_explicit_env_provider_when_url_is_generic(tmp_path):
+    config_path = tmp_path / "provider.json"
+    save_provider_config(
+        LLMProviderConfig(
+            provider=ProviderKind.QWEN_OPENAI_COMPATIBLE,
+            base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+            model="qwen-plus",
+        ),
+        str(config_path),
+    )
+
+    merged = LLMProviderConfig.from_sources(
+        {
+            "KAGENT_LLM_PROVIDER": "deepseek",
+            "KAGENT_LLM_BASE_URL": "https://gateway.example/v1",
+            "KAGENT_LLM_MODEL": "gateway-model",
+        },
+        config_path=str(config_path),
+    )
+
+    assert merged.provider == ProviderKind.DEEPSEEK
+
+
+def test_provider_config_autodetects_provider_when_provider_env_is_missing():
+    config = LLMProviderConfig.from_env(
+        {
+            "KAGENT_LLM_BASE_URL": "https://api.deepseek.com/v1",
+            "KAGENT_LLM_MODEL": "deepseek-chat",
+        }
+    )
+
+    assert config.provider == ProviderKind.DEEPSEEK
+    assert config.redacted_snapshot()["llm_provider_display_name"] == "DeepSeek"
+
+
+def test_detect_provider_kind_uses_url_and_model_hints_conservatively():
+    assert (
+        detect_provider_kind("https://api.deepseek.com/v1", "deepseek-chat")
+        == ProviderKind.DEEPSEEK
+    )
+    assert (
+        detect_provider_kind("https://dashscope.aliyuncs.com/compatible-mode/v1", "qwen-plus")
+        == ProviderKind.QWEN_OPENAI_COMPATIBLE
+    )
+    assert (
+        detect_provider_kind("http://localhost:11434/v1", "llama3")
+        == ProviderKind.OLLAMA_OPENAI_COMPATIBLE
+    )
+    assert (
+        detect_provider_kind("https://company.example/v1", "qwen/qwen3-coder-next")
+        == ProviderKind.QWEN_OPENAI_COMPATIBLE
+    )
+    assert (
+        detect_provider_kind("https://company.example/v1", "custom-model")
+        == ProviderKind.OPENAI_COMPATIBLE
+    )
+
+
+def test_provider_display_names_are_stable_for_setup_and_audit_output():
+    assert provider_display_name(ProviderKind.OPENAI_COMPATIBLE) == "OpenAI-compatible"
+    assert provider_display_name(ProviderKind.QWEN_OPENAI_COMPATIBLE) == "Qwen"
+    assert provider_display_name("unknown") == "OpenAI-compatible"
+
+
+def test_build_llm_provider_uses_configured_provider_kind():
+    provider = build_llm_provider(
+        LLMProviderConfig(
+            provider=ProviderKind.DEEPSEEK,
+            base_url="https://api.deepseek.com/v1",
+            api_key="x",
+            model="deepseek-chat",
+        ),
+        urlopen=lambda request, *, timeout: None,
+    )
+
+    assert isinstance(provider, OpenAICompatibleProvider)
+    assert provider.config.provider == ProviderKind.DEEPSEEK
 
 
 def test_default_provider_config_path_respects_xdg_and_explicit_override(tmp_path):

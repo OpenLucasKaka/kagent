@@ -337,9 +337,10 @@ ready for SRE review.
   and readiness probe files.
 - `/config`, `/metrics`, and Prometheus `kagent_build_info`
   expose redacted LLM provider audit fields, including `llm_provider`,
-  `llm_base_url`, `llm_model`, `llm_api_key_configured`, and
-  `llm_timeout_seconds`, plus retry policy fields `llm_max_retries` and
-  `llm_retry_backoff_seconds`, without exposing the raw provider key.
+  `llm_provider_display_name`, `llm_base_url`, `llm_model`,
+  `llm_api_key_configured`, and `llm_timeout_seconds`, plus retry policy fields
+  `llm_max_retries` and `llm_retry_backoff_seconds`, without exposing the raw
+  provider key.
 - OpenAI-compatible provider calls can retry transient 429 and 5xx failures
   through `KAGENT_LLM_MAX_RETRIES` and
   `KAGENT_LLM_RETRY_BACKOFF_SECONDS`; defaults use a small retry

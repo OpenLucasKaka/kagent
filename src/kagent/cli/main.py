@@ -232,7 +232,7 @@ def main() -> None:
             DEFAULT_LLM_MODEL,
             FakeLLMProvider,
             LLMProviderConfig,
-            OpenAICompatibleProvider,
+            build_llm_provider,
             default_provider_config_path,
             save_provider_config,
         )
@@ -286,7 +286,7 @@ def main() -> None:
                     _runtime_provider_from_args(
                         args,
                         FakeLLMProvider,
-                        OpenAICompatibleProvider,
+                        build_llm_provider,
                         LLMProviderConfig,
                         interactive_setup=sys.stdin.isatty(),
                         default_model=DEFAULT_LLM_MODEL,
@@ -325,7 +325,7 @@ def main() -> None:
                     _runtime_provider_from_args(
                         args,
                         FakeLLMProvider,
-                        OpenAICompatibleProvider,
+                        build_llm_provider,
                         LLMProviderConfig,
                         interactive_setup=sys.stdin.isatty(),
                         default_model=DEFAULT_LLM_MODEL,
@@ -375,7 +375,7 @@ def main() -> None:
 def _runtime_provider_from_args(
     args: argparse.Namespace,
     FakeLLMProvider,
-    OpenAICompatibleProvider,
+    build_llm_provider,
     LLMProviderConfig,
     *,
     interactive_setup: bool = False,
@@ -405,9 +405,9 @@ def _runtime_provider_from_args(
             if not config.model:
                 missing.append("KAGENT_LLM_MODEL")
             if not missing:
-                return OpenAICompatibleProvider(config)
+                return build_llm_provider(config)
         raise RuntimeProviderConfigError(_runtime_provider_config_message(missing))
-    return OpenAICompatibleProvider(config)
+    return build_llm_provider(config)
 
 
 def _runtime_provider_config_message(missing: list[str]) -> str:
@@ -415,10 +415,15 @@ def _runtime_provider_config_message(missing: list[str]) -> str:
     return (
         "Kagent runtime provider is not configured.\n"
         f"Missing: {missing_list}\n\n"
-        "Set the provider in your shell, then run kagent again:\n"
+        "Fastest setup:\n"
+        "  kagent --configure\n\n"
+        "Or set the provider in your shell, then run kagent again:\n"
+        "  export KAGENT_LLM_PROVIDER='openai_compatible'\n"
         "  export KAGENT_LLM_BASE_URL='https://your-openai-compatible-endpoint/v1'\n"
         "  export KAGENT_LLM_MODEL='qwen3.5-122b-a10b'\n"
         "  export KAGENT_LLM_API_KEY='your-api-key'\n\n"
+        "Provider can be openai_compatible, deepseek, qwen, or ollama; "
+        "Kagent can usually infer it from Base URL and model.\n\n"
         "For a local LLM-free smoke test, run:\n"
         "  kagent --deterministic 'calculate 2 + 3'"
     )
@@ -433,14 +438,31 @@ def _configure_runtime_provider_interactively(
     input_fn=input,
     secret_input_fn=getpass.getpass,
 ) -> object:
+    from kagent.providers.llm import (
+        detect_provider_kind,
+        normalize_provider_kind,
+        provider_display_name,
+    )
+
     prompt_stream = sys.__stderr__ or sys.stderr
     config_path = default_config_path()
     print("Kagent first-time setup", file=prompt_stream)
     print(f"Provider config will be saved to: {config_path}", file=prompt_stream)
     base_url = input_fn("Base URL: ").strip()
     model = input_fn(f"Model [{default_model}]: ").strip() or default_model
+    inferred_provider = detect_provider_kind(base_url, model)
+    provider_hint = (
+        f"{provider_display_name(inferred_provider)} / {inferred_provider.value}"
+    )
+    provider_value = input_fn(f"Provider [{provider_hint}]: ").strip()
+    provider = (
+        normalize_provider_kind(provider_value)
+        if provider_value
+        else inferred_provider
+    )
     api_key = secret_input_fn("API key: ").strip()
     config = LLMProviderConfig(
+        provider=provider,
         base_url=base_url,
         api_key=api_key,
         model=model,

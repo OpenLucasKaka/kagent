@@ -136,7 +136,11 @@ The service reads these environment variables:
 - `KAGENT_SERVICE_REQUEST_TIMEOUT_SECONDS`: maximum time to read a
   complete HTTP request before returning a structured slow-client timeout,
   default `10`.
-- `KAGENT_LLM_BASE_URL`: OpenAI-compatible provider base URL.
+- `KAGENT_LLM_PROVIDER`: optional provider hint. Supported values are
+  `openai_compatible`, `deepseek`, `qwen`, and `ollama`. When omitted,
+  Kagent infers the provider from the Base URL and model when possible.
+- `KAGENT_LLM_BASE_URL`: provider base URL. For current production adapters,
+  use an OpenAI-compatible `/v1` endpoint.
 - `KAGENT_LLM_API_KEY`: provider bearer token.
 - `KAGENT_LLM_MODEL`: chat-completions model name.
 - `KAGENT_LLM_TIMEOUT_SECONDS`: provider request timeout, default

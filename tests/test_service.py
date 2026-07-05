@@ -150,6 +150,7 @@ def test_service_config_endpoint_reports_redacted_runtime_config():
         "trace_file_permissions": "0600",
         "trace_probe_file_permissions": "0600",
         "llm_provider": "unconfigured",
+        "llm_provider_display_name": "Unconfigured",
         "llm_base_url": "",
         "llm_model": "",
         "llm_api_key_configured": "false",
@@ -1101,6 +1102,7 @@ def test_service_prometheus_metrics_endpoint_reports_text_exposition(monkeypatch
     )
     assert 'security_response_headers="enabled"' in payload
     assert 'llm_provider="openai_compatible"' in payload
+    assert 'llm_provider_display_name="OpenAI-compatible"' in payload
     assert 'llm_base_url="https://llm.example.test/v1"' in payload
     assert 'llm_model="agent-runtime-model"' in payload
     assert 'llm_api_key_configured="true"' in payload

@@ -12,9 +12,11 @@ __all__ = [
     "AgentStatus",
     "FakeLLMProvider",
     "LLMProviderConfig",
+    "ProviderKind",
     "__version__",
     "agent_topology",
     "build_agent_graph",
+    "detect_provider_kind",
     "evaluate_agent",
     "preview_plan",
     "registered_evaluation_cases",
@@ -42,7 +44,12 @@ def __getattr__(name):
         from kagent.eval import evaluator
 
         return getattr(evaluator, name)
-    if name in {"FakeLLMProvider", "LLMProviderConfig"}:
+    if name in {
+        "FakeLLMProvider",
+        "LLMProviderConfig",
+        "ProviderKind",
+        "detect_provider_kind",
+    }:
         from kagent.providers import llm_provider
 
         return getattr(llm_provider, name)

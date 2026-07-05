@@ -534,10 +534,11 @@ hardening without inspecting the filesystem on every pod. The OpenAPI
 `ConfigResponse` and `MetricsResponse` schemas also declare those fields for
 generated clients and gateway contract checks.
 They also expose redacted LLM provider state through `llm_provider`,
-`llm_base_url`, `llm_model`, `llm_api_key_configured`, and
-`llm_timeout_seconds`, plus retry audit fields `llm_max_retries` and
-`llm_retry_backoff_seconds`. The raw API key is never exposed; operators
-should use `llm_api_key_configured` only to confirm whether a key is present.
+`llm_provider_display_name`, `llm_base_url`, `llm_model`,
+`llm_api_key_configured`, and `llm_timeout_seconds`, plus retry audit fields
+`llm_max_retries` and `llm_retry_backoff_seconds`. Operational rule:
+raw API key is never exposed. Operators should use
+`llm_api_key_configured` only to confirm whether a key is present.
 Probe and integration endpoints such as `HEAD /health`, `HEAD /ready`,
 `OPTIONS /run`, and `GET /metrics.prom` also declare response headers and
 content types in the OpenAPI document.

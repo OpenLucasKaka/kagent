@@ -62,6 +62,7 @@ def test_service_status_reports_readiness_and_redacted_config(tmp_path):
         "trace_file_permissions": "0600",
         "trace_probe_file_permissions": "0600",
         "llm_provider": "unconfigured",
+        "llm_provider_display_name": "Unconfigured",
         "llm_base_url": "",
         "llm_model": "",
         "llm_api_key_configured": "false",

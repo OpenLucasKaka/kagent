@@ -651,9 +651,9 @@ def test_cli_missing_runtime_provider_config_for_goal_avoids_argparse_usage(tmp_
 
 def test_cli_provider_setup_collects_values_and_saves_config(tmp_path):
     from kagent.cli.main import _configure_runtime_provider_interactively
-    from kagent.providers.llm import LLMProviderConfig
+    from kagent.providers.llm import LLMProviderConfig, ProviderKind
 
-    answers = iter(["https://llm.example/v1", ""])
+    answers = iter(["https://dashscope.aliyuncs.com/compatible-mode/v1", "", ""])
     saved_configs = []
 
     def save_config(config):
@@ -669,7 +669,8 @@ def test_cli_provider_setup_collects_values_and_saves_config(tmp_path):
         secret_input_fn=lambda _prompt: "secret-key",
     )
 
-    assert config.base_url == "https://llm.example/v1"
+    assert config.provider == ProviderKind.QWEN_OPENAI_COMPATIBLE
+    assert config.base_url == "https://dashscope.aliyuncs.com/compatible-mode/v1"
     assert config.model == "default-model"
     assert config.api_key == "secret-key"
     assert saved_configs == [config]
