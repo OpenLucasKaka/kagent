@@ -653,7 +653,40 @@ def test_cli_provider_setup_collects_values_and_saves_config(tmp_path):
     from kagent.cli.main import _configure_runtime_provider_interactively
     from kagent.providers.llm import LLMProviderConfig, ProviderKind
 
-    answers = iter(["https://dashscope.aliyuncs.com/compatible-mode/v1", "", ""])
+    prompts = []
+    answers = iter(["2", "", ""])
+    saved_configs = []
+
+    def input_answer(prompt):
+        prompts.append(prompt)
+        return next(answers)
+
+    def save_config(config):
+        saved_configs.append(config)
+        return str(tmp_path / "provider.json")
+
+    config = _configure_runtime_provider_interactively(
+        LLMProviderConfig,
+        default_model="default-model",
+        default_config_path=lambda: str(tmp_path / "provider.json"),
+        save_config=save_config,
+        input_fn=input_answer,
+        secret_input_fn=lambda _prompt: "secret-key",
+    )
+
+    assert prompts[0].startswith("Provider")
+    assert config.provider == ProviderKind.DEEPSEEK
+    assert config.base_url == "https://api.deepseek.com/v1"
+    assert config.model == "deepseek-chat"
+    assert config.api_key == "secret-key"
+    assert saved_configs == [config]
+
+
+def test_cli_provider_setup_allows_custom_openai_compatible_values(tmp_path):
+    from kagent.cli.main import _configure_runtime_provider_interactively
+    from kagent.providers.llm import LLMProviderConfig, ProviderKind
+
+    answers = iter(["4", "https://gateway.example/v1", "gateway-model"])
     saved_configs = []
 
     def save_config(config):
@@ -669,9 +702,9 @@ def test_cli_provider_setup_collects_values_and_saves_config(tmp_path):
         secret_input_fn=lambda _prompt: "secret-key",
     )
 
-    assert config.provider == ProviderKind.QWEN_OPENAI_COMPATIBLE
-    assert config.base_url == "https://dashscope.aliyuncs.com/compatible-mode/v1"
-    assert config.model == "default-model"
+    assert config.provider == ProviderKind.OPENAI_COMPATIBLE
+    assert config.base_url == "https://gateway.example/v1"
+    assert config.model == "gateway-model"
     assert config.api_key == "secret-key"
     assert saved_configs == [config]
 

@@ -24,12 +24,11 @@ kagent
 
 The first `kagent` run prepares a private Python runtime under your user cache,
 installs Kagent there, and then opens the terminal agent. If no provider is
-configured yet, Kagent starts a first-time setup flow and asks for your
-OpenAI-compatible base URL, model, and API key. The local provider config is
-stored at `${XDG_CONFIG_HOME:-~/.config}/kagent/provider.json` with owner-only
-permissions.
-Provider is inferred from the Base URL and model when possible; you can also
-choose `openai_compatible`, `deepseek`, `qwen`, or `ollama` during setup.
+configured yet, Kagent starts a first-time setup flow. The setup first asks you
+to choose Qwen, DeepSeek, Ollama, or OpenAI-compatible/custom from a provider
+menu, then asks for that provider's Base URL, model, and API key. The local
+provider config is stored at `${XDG_CONFIG_HOME:-~/.config}/kagent/provider.json`
+with owner-only permissions.
 
 To reconfigure later:
 

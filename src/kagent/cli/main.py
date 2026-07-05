@@ -438,27 +438,25 @@ def _configure_runtime_provider_interactively(
     input_fn=input,
     secret_input_fn=getpass.getpass,
 ) -> object:
-    from kagent.providers.llm import (
-        detect_provider_kind,
-        normalize_provider_kind,
-        provider_display_name,
-    )
-
     prompt_stream = sys.__stderr__ or sys.stderr
     config_path = default_config_path()
     print("Kagent first-time setup", file=prompt_stream)
     print(f"Provider config will be saved to: {config_path}", file=prompt_stream)
-    base_url = input_fn("Base URL: ").strip()
-    model = input_fn(f"Model [{default_model}]: ").strip() or default_model
-    inferred_provider = detect_provider_kind(base_url, model)
-    provider_hint = (
-        f"{provider_display_name(inferred_provider)} / {inferred_provider.value}"
+    provider_option = _select_provider_for_setup(
+        default_model=default_model,
+        input_fn=input_fn,
+        prompt_stream=prompt_stream,
     )
-    provider_value = input_fn(f"Provider [{provider_hint}]: ").strip()
-    provider = (
-        normalize_provider_kind(provider_value)
-        if provider_value
-        else inferred_provider
+    provider = provider_option["provider"]
+    default_base_url = str(provider_option["base_url"])
+    default_provider_model = str(provider_option["model"])
+    base_url_prompt = (
+        f"Base URL [{default_base_url}]: " if default_base_url else "Base URL: "
+    )
+    base_url = input_fn(base_url_prompt).strip() or default_base_url
+    model = (
+        input_fn(f"Model [{default_provider_model}]: ").strip()
+        or default_provider_model
     )
     api_key = secret_input_fn("API key: ").strip()
     config = LLMProviderConfig(
@@ -470,6 +468,128 @@ def _configure_runtime_provider_interactively(
     saved_path = save_config(config)
     print(f"Kagent provider config saved to {saved_path}", file=prompt_stream)
     return config
+
+
+def _select_provider_for_setup(
+    *,
+    default_model: str,
+    input_fn,
+    prompt_stream,
+) -> dict[str, object]:
+    options = _provider_setup_options(default_model)
+    if _can_use_arrow_provider_menu(input_fn, prompt_stream):
+        return _select_provider_with_arrow_keys(options, prompt_stream)
+    print("Select provider:", file=prompt_stream)
+    for index, option in enumerate(options, start=1):
+        print(
+            f"  {index}. {option['label']} ({option['provider'].value})",
+            file=prompt_stream,
+        )
+    answer = input_fn("Provider [1]: ").strip()
+    if not answer:
+        return options[0]
+    try:
+        selected_index = int(answer)
+    except ValueError as exc:
+        raise ValueError("provider selection must be a number") from exc
+    if selected_index < 1 or selected_index > len(options):
+        raise ValueError("provider selection is out of range")
+    return options[selected_index - 1]
+
+
+def _provider_setup_options(default_model: str) -> list[dict[str, object]]:
+    from kagent.providers.llm import ProviderKind
+
+    return [
+        {
+            "provider": ProviderKind.QWEN_OPENAI_COMPATIBLE,
+            "label": "Qwen / DashScope",
+            "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+            "model": default_model,
+        },
+        {
+            "provider": ProviderKind.DEEPSEEK,
+            "label": "DeepSeek",
+            "base_url": "https://api.deepseek.com/v1",
+            "model": "deepseek-chat",
+        },
+        {
+            "provider": ProviderKind.OLLAMA_OPENAI_COMPATIBLE,
+            "label": "Ollama local",
+            "base_url": "http://localhost:11434/v1",
+            "model": "llama3",
+        },
+        {
+            "provider": ProviderKind.OPENAI_COMPATIBLE,
+            "label": "OpenAI-compatible / custom",
+            "base_url": "",
+            "model": default_model,
+        },
+    ]
+
+
+def _can_use_arrow_provider_menu(input_fn, prompt_stream) -> bool:
+    return (
+        input_fn is input
+        and sys.stdin.isatty()
+        and hasattr(prompt_stream, "isatty")
+        and prompt_stream.isatty()
+    )
+
+
+def _select_provider_with_arrow_keys(
+    options: list[dict[str, object]],
+    prompt_stream,
+) -> dict[str, object]:
+    import termios
+    import tty
+
+    input_stream = sys.stdin
+    fd = input_stream.fileno()
+    old_settings = termios.tcgetattr(fd)
+    selected = 0
+    print("Select provider with Up/Down, Enter to confirm:", file=prompt_stream)
+
+    def render() -> None:
+        print(f"\x1b[{len(options)}A", end="", file=prompt_stream)
+        for index, option in enumerate(options):
+            marker = ">" if index == selected else " "
+            print(
+                f"\x1b[2K\r  {marker} {option['label']} ({option['provider'].value})",
+                file=prompt_stream,
+            )
+        prompt_stream.flush()
+
+    try:
+        tty.setcbreak(fd)
+        print("\x1b[?25l", end="", file=prompt_stream)
+        for index, option in enumerate(options):
+            marker = ">" if index == selected else " "
+            print(
+                f"  {marker} {option['label']} ({option['provider'].value})",
+                file=prompt_stream,
+            )
+        prompt_stream.flush()
+        while True:
+            char = input_stream.read(1)
+            if char in {"\r", "\n"}:
+                break
+            if char == "\x03":
+                raise KeyboardInterrupt
+            if char != "\x1b":
+                continue
+            sequence = input_stream.read(2)
+            if sequence == "[A":
+                selected = (selected - 1) % len(options)
+                render()
+            elif sequence == "[B":
+                selected = (selected + 1) % len(options)
+                render()
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+        print("\x1b[?25h", end="", file=prompt_stream)
+        print(file=prompt_stream)
+    return options[selected]
 
 
 def _exit_runtime_provider_config_error(message: str) -> None:
