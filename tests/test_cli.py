@@ -1544,11 +1544,19 @@ def test_cli_interactive_runtime_tty_prints_live_progress(monkeypatch, capsys):
         event_sink({"type": "planner_started", "iteration": "1"})
         event_sink(
             {
+                "type": "planner_failed",
+                "duration_seconds": "30.0833",
+            }
+        )
+        event_sink({"type": "planner_started", "iteration": "2"})
+        event_sink(
+            {
                 "type": "planner_completed",
                 "action_count": "1",
                 "duration_seconds": "0.2000",
             }
         )
+        event_sink({"type": "approval_required", "tool": "open_url"})
         event_sink({"type": "tool_started", "tool": "apply_patch"})
         event_sink(
             {
@@ -1597,6 +1605,8 @@ def test_cli_interactive_runtime_tty_prints_live_progress(monkeypatch, capsys):
     assert "Planned 1 action · 0.2000s" in captured.out
     assert "Running apply_patch" in captured.out
     assert "Thinking · iter" not in captured.out
+    assert "Planner failed" not in captured.out
+    assert "Approval required ·" not in captured.out
     assert "✓ apply_patch · 0.0100s" in captured.out
     assert "\n\nDone" in captured.out
     assert "\n\nAnswer\n  文件已创建。" in captured.out
@@ -2998,11 +3008,32 @@ def test_cli_interactive_runtime_can_approve_pending_tool(monkeypatch, capsys):
         if len(calls) == 1:
             return {
                 "status": "requires_approval",
+                "duration_seconds": "38.3972",
+                "iteration_count": "2",
+                "max_iterations": "3",
                 "pending_approval": {
                     "id": "step-2",
                     "tool": "http_request",
                     "input": {"url": "https://github.com"},
+                    "reason": "open requested site",
                 },
+                "observations": [
+                    {
+                        "tool": "planner",
+                        "status": "failed",
+                        "duration_seconds": "30.0833",
+                        "error_code": "invalid_plan",
+                        "error": "The read operation timed out",
+                    },
+                    {
+                        "action_id": "step-2",
+                        "tool": "http_request",
+                        "status": "requires_approval",
+                        "duration_seconds": "0.0000",
+                        "error_code": "tool_not_allowed",
+                        "error": "tool execution requires approval",
+                    },
+                ],
             }
         return {
             "status": "done",
@@ -3023,13 +3054,17 @@ def test_cli_interactive_runtime_can_approve_pending_tool(monkeypatch, capsys):
     assert len(calls) == 2
     assert calls[1]["goal"] == "打开 github"
     assert calls[1]["approved_action_ids"] == {"step-2"}
-    assert "Approval required" in captured.out
-    assert "action  http_request" in captured.out
+    assert "Approval needed" in captured.out
+    assert "action  Fetch URL" in captured.out
     assert "target  https://github.com" in captured.out
-    assert "http_request" in captured.out
+    assert "reason  open requested site" in captured.out
     assert "Approve this action? [y/N/d]" in captured.out
-    assert "Approval ·" in captured.out
     assert "Done" in captured.out
+    assert "Approval ·" not in captured.out
+    assert "Actions" not in captured.out
+    assert "planner · 30.0833s" not in captured.out
+    assert "invalid_plan" not in captured.out
+    assert "tool_not_allowed" not in captured.out
     assert "step-2 http_request" not in captured.out
 
 
@@ -3126,8 +3161,8 @@ def test_cli_interactive_runtime_reports_declined_approval(monkeypatch, capsys):
 
     captured = capsys.readouterr()
     assert len(calls) == 1
-    assert "Approval required" in captured.out
-    assert "action  open_url" in captured.out
+    assert "Approval needed" in captured.out
+    assert "action  Open URL" in captured.out
     assert "target  https://github.com" in captured.out
     assert "Approval skipped\n  action not approved" in captured.out
 

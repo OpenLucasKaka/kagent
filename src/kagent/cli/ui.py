@@ -239,6 +239,10 @@ def format_runtime_interactive_summary(payload: Any, *, color: bool = False) -> 
         return str(payload)
 
     status = str(payload.get("status", "")).strip()
+    pending = payload.get("pending_approval")
+    if status == "requires_approval" and isinstance(pending, dict):
+        return _format_runtime_approval_summary(pending, color=color)
+
     lines = [_format_run_status(payload, status, color=color)]
 
     answer = str(payload.get("answer", "")).strip()
@@ -253,12 +257,6 @@ def format_runtime_interactive_summary(payload: Any, *, color: bool = False) -> 
         lines.append("")
         lines.append(_color("Error", "red", enabled=color))
         lines.extend(_indented_lines(join_non_empty([error_code, error], " "), prefix="  "))
-
-    pending = payload.get("pending_approval")
-    if isinstance(pending, dict):
-        lines.append("")
-        lines.append(_color("Approval required", "yellow", enabled=color))
-        lines.extend(_indented_lines(_format_pending_approval(pending), prefix="  "))
 
     visible_observations = visible_runtime_observations(payload.get("observations"))
     if visible_observations:
@@ -301,12 +299,9 @@ def format_runtime_progress_event(event: Any, *, color: bool = False) -> str:
         icon = _status_icon(status, color=color)
         return join_non_empty([f"{icon} {tool}", _progress_duration(event)], " · ")
     if event_type == "approval_required":
-        tool = str(event.get("tool", "")).strip() or "tool"
-        return _color(f"Approval required · {tool}", "yellow", enabled=color)
+        return ""
     if event_type == "planner_failed":
-        duration = _progress_duration(event)
-        suffix = f" · {duration}" if duration else ""
-        return _color(f"Planner failed{suffix}", "red", enabled=color)
+        return ""
     return ""
 
 
@@ -408,19 +403,36 @@ def _format_run_status(payload: dict, status: str, *, color: bool) -> str:
     return " · ".join(parts)
 
 
+def _format_runtime_approval_summary(pending: dict, *, color: bool) -> str:
+    lines = [_color("Approval needed", "yellow", enabled=color)]
+    lines.extend(_indented_lines(_format_pending_approval(pending), prefix="  "))
+    return "\n".join(lines)
+
+
 def _format_pending_approval(pending: dict) -> str:
     tool = str(pending.get("tool", "")).strip()
     lines = []
     if tool:
-        lines.append(f"action  {tool}")
-    reason = str(pending.get("reason", "")).strip()
-    if reason:
-        lines.append(f"reason  {reason}")
+        lines.append(f"action  {_approval_action_label(tool)}")
     action_input = pending.get("input")
     input_summary = _summarize_pending_input(action_input, tool=tool)
     if input_summary:
         lines.append(f"target  {input_summary}")
+    reason = str(pending.get("reason", "")).strip()
+    if reason:
+        lines.append(f"reason  {reason}")
     return "\n".join(lines)
+
+
+def _approval_action_label(tool: str) -> str:
+    labels = {
+        "apply_patch": "Edit files",
+        "http_request": "Fetch URL",
+        "open_app": "Open app",
+        "open_url": "Open URL",
+        "shell_command": "Run command",
+    }
+    return labels.get(tool.strip(), tool.strip() or "Run action")
 
 
 def _summarize_pending_input(action_input: Any, *, tool: str) -> str:
