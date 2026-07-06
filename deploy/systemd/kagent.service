@@ -1,5 +1,5 @@
 [Unit]
-Description=Kagent Service
+Description=kagent Service
 After=network.target
 
 [Service]

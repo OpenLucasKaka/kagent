@@ -1,16 +1,16 @@
 groups:
   - name: kagent.rules
     rules:
-      - alert: KagentServiceDown
+      - alert: kagentServiceDown
         expr: up{job="kagent"} == 0
         for: 2m
         labels:
           severity: critical
         annotations:
-          summary: Kagent service is not being scraped
+          summary: kagent service is not being scraped
           description: Prometheus has not scraped a healthy service target for 2 minutes.
 
-      - alert: KagentHighErrorRate
+      - alert: kagentHighErrorRate
         expr: |
           sum(rate(kagent_responses_total{status=~"5.."}[5m]))
             /
@@ -19,10 +19,10 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: Kagent HTTP 5xx rate is elevated
+          summary: kagent HTTP 5xx rate is elevated
           description: More than 5 percent of HTTP responses are 5xx over 10 minutes.
 
-      - alert: KagentHighRequestLatency
+      - alert: kagentHighRequestLatency
         expr: |
           histogram_quantile(
             0.95,
@@ -32,10 +32,10 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: Kagent HTTP request latency is elevated
+          summary: kagent HTTP request latency is elevated
           description: 95th percentile HTTP request latency has exceeded 2 seconds for 10 minutes.
 
-      - alert: KagentSlowAgentRuns
+      - alert: kagentSlowAgentRuns
         expr: |
           histogram_quantile(
             0.95,
@@ -45,10 +45,10 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: Kagent run latency is elevated
+          summary: kagent run latency is elevated
           description: 95th percentile internal agent run latency has exceeded 2 seconds for 10 minutes.
 
-      - alert: KagentSlowRuntimeRuns
+      - alert: kagentSlowRuntimeRuns
         expr: |
           histogram_quantile(
             0.95,
@@ -61,25 +61,25 @@ groups:
           summary: Codex-style runtime run latency is elevated
           description: 95th percentile Codex-style runtime latency has exceeded 5 seconds for 10 minutes.
 
-      - alert: KagentRunTimeouts
+      - alert: kagentRunTimeouts
         expr: sum(rate(kagent_run_status_total{status="timeout"}[5m])) > 0
         for: 5m
         labels:
           severity: warning
         annotations:
-          summary: Kagent runs are timing out
+          summary: kagent runs are timing out
           description: At least one /run request has exceeded the configured run timeout.
 
-      - alert: KagentRunFailures
+      - alert: kagentRunFailures
         expr: sum(rate(kagent_run_status_total{status="failed"}[5m])) > 0
         for: 10m
         labels:
           severity: warning
         annotations:
-          summary: Kagent runs are failing
+          summary: kagent runs are failing
           description: Agent execution failures have been observed in the last 10 minutes.
 
-      - alert: KagentRuntimeRunFailures
+      - alert: kagentRuntimeRunFailures
         expr: sum(rate(kagent_runtime_run_status_total{status="failed"}[5m])) > 0
         for: 10m
         labels:
@@ -88,7 +88,7 @@ groups:
           summary: Codex-style runtime runs are failing
           description: Runtime executions are ending in failed status; inspect latest_failed_* run summaries.
 
-      - alert: KagentRuntimeSubjectRunFailures
+      - alert: kagentRuntimeSubjectRunFailures
         expr: |
           sum by (auth_subject) (
             rate(
@@ -104,7 +104,7 @@ groups:
           summary: Codex-style runtime runs are failing for an internal subject
           description: A named internal auth subject has runtime executions ending in failed status.
 
-      - alert: KagentRuntimeApprovalsPending
+      - alert: kagentRuntimeApprovalsPending
         expr: sum(rate(kagent_runtime_approval_required_total[5m])) > 0
         for: 10m
         labels:
@@ -113,7 +113,7 @@ groups:
           summary: Codex-style runtime runs require human approval
           description: Runtime policy gates are producing approval-required observations.
 
-      - alert: KagentRuntimeSubjectApprovalsPending
+      - alert: kagentRuntimeSubjectApprovalsPending
         expr: |
           sum by (auth_subject) (
             rate(
@@ -129,7 +129,7 @@ groups:
           summary: Codex-style runtime runs require approval for an internal subject
           description: A named internal auth subject is producing approval-required runtime runs.
 
-      - alert: KagentRuntimeStalePendingApprovals
+      - alert: kagentRuntimeStalePendingApprovals
         expr: sum(kagent_runtime_stale_pending_approvals_current) > 0
         for: 15m
         labels:
@@ -138,7 +138,7 @@ groups:
           summary: Codex-style runtime approvals are stale
           description: Pending approvals have exceeded the configured stale approval threshold.
 
-      - alert: KagentRuntimeSubjectResumes
+      - alert: kagentRuntimeSubjectResumes
         expr: |
           sum by (auth_subject) (
             rate(kagent_runtime_resumes_by_auth_subject_total[5m])
@@ -150,7 +150,7 @@ groups:
           summary: Codex-style runtime runs are being resumed by an internal subject
           description: A named internal auth subject is resuming pending runtime runs; inspect resumed_by_auth_subject audit fields.
 
-      - alert: KagentRuntimeBudgetExhausted
+      - alert: kagentRuntimeBudgetExhausted
         expr: sum(rate(kagent_runtime_failed_budget_exhaustions_total[5m])) > 0
         for: 10m
         labels:
@@ -159,7 +159,7 @@ groups:
           summary: Codex-style runtime runs are exhausting iteration budgets
           description: Failed runtime executions spent all allowed planner iterations.
 
-      - alert: KagentRuntimeProgressSinkFailures
+      - alert: kagentRuntimeProgressSinkFailures
         expr: sum(rate(kagent_runtime_progress_event_sink_failures_total[5m])) > 0
         for: 5m
         labels:
@@ -168,7 +168,7 @@ groups:
           summary: Codex-style runtime progress event sinks are failing
           description: Runtime progress events could not be delivered to an operator UI, webhook, or streaming sink.
 
-      - alert: KagentRuntimeToolExecutionTimeouts
+      - alert: kagentRuntimeToolExecutionTimeouts
         expr: |
           sum(rate(
             kagent_runtime_observation_errors_total{
@@ -182,7 +182,7 @@ groups:
           summary: Codex-style runtime tools are timing out
           description: Runtime tool handlers are exceeding their declared timeout_seconds budgets.
 
-      - alert: KagentTracePersistenceFailures
+      - alert: kagentTracePersistenceFailures
         expr: |
           sum(rate(
             kagent_error_responses_total{error_code="trace_persistence_failed"}[5m]
@@ -191,10 +191,10 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: Kagent trace persistence is failing
+          summary: kagent trace persistence is failing
           description: Completed runs could not persist trace files; check trace storage and mounts.
 
-      - alert: KagentConcurrencySaturated
+      - alert: kagentConcurrencySaturated
         expr: |
           sum(rate(
             kagent_error_responses_total{error_code="too_many_concurrent_runs"}[5m]
@@ -203,10 +203,10 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: Kagent run concurrency is saturated
+          summary: kagent run concurrency is saturated
           description: /run requests are being rejected because all run slots are occupied.
 
-      - alert: KagentRateLimited
+      - alert: kagentRateLimited
         expr: |
           sum(rate(
             kagent_error_responses_total{error_code="rate_limit_exceeded"}[5m]
@@ -215,10 +215,10 @@ groups:
         labels:
           severity: info
         annotations:
-          summary: Kagent clients are being rate limited
+          summary: kagent clients are being rate limited
           description: One or more clients are hitting the configured /run rate limit.
 
-      - alert: KagentIdempotencyConflicts
+      - alert: kagentIdempotencyConflicts
         expr: |
           sum(rate(
             kagent_error_responses_total{error_code="idempotency_key_conflict"}[5m]
@@ -227,20 +227,20 @@ groups:
         labels:
           severity: info
         annotations:
-          summary: Kagent clients are misusing idempotency keys
+          summary: kagent clients are misusing idempotency keys
           description: One or more clients reused an Idempotency-Key with a different /run body.
 
-      - alert: KagentIdempotencyCacheEvictions
+      - alert: kagentIdempotencyCacheEvictions
         expr: |
           sum(increase(kagent_idempotency_cache_evictions[10m])) > 0
         for: 10m
         labels:
           severity: info
         annotations:
-          summary: Kagent idempotency cache is evicting entries
+          summary: kagent idempotency cache is evicting entries
           description: Idempotency cache entries are being evicted during the retry window.
 
-      - alert: KagentRequestBodyTimeouts
+      - alert: kagentRequestBodyTimeouts
         expr: |
           sum(rate(
             kagent_error_responses_total{error_code="request_body_timeout"}[5m]
@@ -249,10 +249,10 @@ groups:
         labels:
           severity: info
         annotations:
-          summary: Kagent clients are timing out while sending bodies
+          summary: kagent clients are timing out while sending bodies
           description: One or more clients or gateways stalled before completing request bodies.
 
-      - alert: KagentMalformedRunRequests
+      - alert: kagentMalformedRunRequests
         expr: |
           sum(rate(
             kagent_error_responses_total{
@@ -263,10 +263,10 @@ groups:
         labels:
           severity: info
         annotations:
-          summary: Kagent is rejecting malformed /run requests
+          summary: kagent is rejecting malformed /run requests
           description: Clients are sending invalid lengths, incomplete bodies, or non-JSON media types.
 
-      - alert: KagentOversizedRunRequests
+      - alert: kagentOversizedRunRequests
         expr: |
           sum(rate(
             kagent_error_responses_total{
@@ -277,10 +277,10 @@ groups:
         labels:
           severity: info
         annotations:
-          summary: Kagent is rejecting oversized /run requests
+          summary: kagent is rejecting oversized /run requests
           description: Request bodies or goals are exceeding configured /run size limits.
 
-      - alert: KagentSuspiciousHttpFraming
+      - alert: kagentSuspiciousHttpFraming
         expr: |
           sum(rate(
             kagent_error_responses_total{
@@ -291,10 +291,10 @@ groups:
         labels:
           severity: info
         annotations:
-          summary: Kagent received unsupported HTTP framing headers
+          summary: kagent received unsupported HTTP framing headers
           description: Transfer-Encoding or Expect headers reached /run; check gateways and clients.
 
-      - alert: KagentUnknownMethodTraffic
+      - alert: kagentUnknownMethodTraffic
         expr: |
           sum(rate(
             kagent_requests_by_method_total{method="__unknown__"}[5m]
@@ -303,10 +303,10 @@ groups:
         labels:
           severity: info
         annotations:
-          summary: Kagent is receiving unknown HTTP methods
+          summary: kagent is receiving unknown HTTP methods
           description: Unknown HTTP methods are being requested; check access logs for raw methods.
 
-      - alert: KagentUnknownRouteTraffic
+      - alert: kagentUnknownRouteTraffic
         expr: |
           sum(rate(
             kagent_requests_by_path_total{path="__unknown__"}[5m]
@@ -319,5 +319,5 @@ groups:
         labels:
           severity: info
         annotations:
-          summary: Kagent is receiving unknown route traffic
+          summary: kagent is receiving unknown route traffic
           description: Unknown HTTP paths are being requested; check access logs for raw paths.

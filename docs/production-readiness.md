@@ -1,6 +1,6 @@
 # Production Readiness
 
-This checklist captures the current release posture for the Kagent
+This checklist captures the current release posture for the kagent
 LangGraph agent service.
 
 ## Release Gates

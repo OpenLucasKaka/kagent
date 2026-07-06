@@ -187,7 +187,7 @@ class RuntimeClient:
 def main(argv: Optional[list[str]] = None) -> int:
     parser = argparse.ArgumentParser(
         description=(
-            "Internal client example for the Kagent runtime. "
+            "Internal client example for the kagent runtime. "
             "Set KAGENT_CLIENT_BASE_URL and KAGENT_CLIENT_TOKEN "
             "or pass --base-url and --token."
         )

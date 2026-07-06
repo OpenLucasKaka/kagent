@@ -140,7 +140,7 @@ The service reads these environment variables:
   Supported values are `openai_compatible`, `deepseek`, `qwen`, and `ollama`.
   Interactive setup asks the operator to choose this provider from a menu before
   collecting Base URL, model, and API key. When omitted in environment-only
-  setups, Kagent infers the provider from the Base URL and model when possible.
+  setups, kagent infers the provider from the Base URL and model when possible.
 - `KAGENT_LLM_BASE_URL`: provider base URL. For current production adapters,
   use an OpenAI-compatible `/v1` endpoint.
 - `KAGENT_LLM_API_KEY`: provider bearer token.
@@ -269,14 +269,14 @@ ClusterIP Service through a `ServiceMonitor`; clusters without the
 the base Kubernetes manifest. Load the rules into your Prometheus or Prometheus
 Operator rule pipeline after adjusting the `job` selector to match your scrape
 configuration. The baseline rules include service availability, HTTP 5xx rate,
-`KagentHighRequestLatency`, `KagentSlowAgentRuns`,
-`KagentSlowRuntimeRuns`,
+`kagentHighRequestLatency`, `kagentSlowAgentRuns`,
+`kagentSlowRuntimeRuns`,
 run timeout, failed-run, Codex-style runtime failed-run, runtime approval
 pressure, runtime budget exhaustion, rate-limit, idempotency conflict,
 per-subject runtime resume alerting, runtime tool execution timeout,
 idempotency cache eviction, request body timeout,
-`KagentMalformedRunRequests`,
-`KagentOversizedRunRequests`, and unknown route or method alerts.
+`kagentMalformedRunRequests`,
+`kagentOversizedRunRequests`, and unknown route or method alerts.
 Grafana dashboard JSON for the same runtime signals lives in
 `deploy/grafana/kagent-dashboard.json`; import it after the
 Prometheus datasource is available to get baseline service health, HTTP error,

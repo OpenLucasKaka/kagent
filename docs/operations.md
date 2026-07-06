@@ -308,10 +308,10 @@ planning with:
 Provider config snapshots expose only whether an API key is configured; the key
 value is never returned in snapshots, traces, logs, metrics, or docs examples.
 Keep the runtime identity boundary clear during operator testing: the product
-identity is `Kagent`, an automation agent running in the current CLI or service
+identity is `kagent`, an automation agent running in the current CLI or service
 process. Provider details stay behind the configuration boundary unless the
 user explicitly asks about provider setup. Identity and deployment questions
-should describe Kagent and its local/service process boundary, not the
+should describe kagent and its local/service process boundary, not the
 provider's model brand or hosting location. If the runtime corrects a
 provider-branded identity
 or deployment answer, responses include `final_answer_guardrail` with a
@@ -488,9 +488,9 @@ curl -s -X POST http://127.0.0.1:8000/runtime/resume \
 
 The CLI defaults to the Codex-style runtime for both one-shot goals and TTY
 sessions: run `kagent "goal"` for a single turn, or run `kagent` or
-`.venv/bin/python -m kagent.cli` with no goal to start the Kagent terminal agent. Use
+`.venv/bin/python -m kagent.cli` with no goal to start the kagent terminal agent. Use
 `--deterministic` only for the legacy LangGraph regression path. Sessions start with
-a `Kagent` banner, the `[K]` terminal companion mark, and `/help` guidance.
+a `kagent` banner, the `[K]` terminal companion mark, and `/help` guidance.
 They print live progress while the planner and tools run, and then use a
 compact operator transcript by default: status first, answer second, and only
 real external tool observations under `Actions`.
@@ -983,27 +983,27 @@ runner starts. `full_trace` must be a JSON boolean; strings such as `"true"`
 return `400 invalid_request_body` before the agent runner starts. `goal` is
 capped by `KAGENT_SERVICE_MAX_GOAL_CHARS` and oversized goals return
 `413 goal_too_large` before the agent runner starts.
-The `KagentHighRequestLatency` alert fires when the 95th
+The `kagentHighRequestLatency` alert fires when the 95th
 percentile HTTP request latency from
 `kagent_request_duration_seconds_bucket` stays above 2 seconds.
 Check downstream run duration, trace storage latency, concurrency saturation,
 and gateway retries before raising timeout or concurrency limits.
-The `KagentSlowAgentRuns` alert fires when the 95th percentile
+The `kagentSlowAgentRuns` alert fires when the 95th percentile
 internal agent execution latency from
 `kagent_agent_run_duration_seconds_bucket` stays above 2
-seconds. If this fires without `KagentHighRequestLatency`, focus on
+seconds. If this fires without `kagentHighRequestLatency`, focus on
 planner, tool, verifier, and retry behavior rather than HTTP transport.
-The `KagentSlowRuntimeRuns` alert fires when the 95th percentile
+The `kagentSlowRuntimeRuns` alert fires when the 95th percentile
 Codex-style runtime run latency from
 `kagent_runtime_run_duration_seconds_bucket` stays above 5
-seconds. If this fires without `KagentSlowAgentRuns`, focus on
+seconds. If this fires without `kagentSlowAgentRuns`, focus on
 runtime planning depth, approval gates, external tool latency, and iteration
 budget pressure rather than the deterministic `/run` path.
-The `KagentMalformedRunRequests` alert fires when malformed
+The `kagentMalformedRunRequests` alert fires when malformed
 `/run` requests persist, including invalid `Content-Length`, incomplete bodies,
 or missing/duplicated/non-JSON `Content-Type`. Check gateway normalization,
 client HTTP libraries, and whether probes or scanners are reaching `/run`.
-The `KagentOversizedRunRequests` alert fires when
+The `kagentOversizedRunRequests` alert fires when
 `request_too_large` or `goal_too_large` responses persist. Check whether a
 client is sending unbounded prompts, whether a gateway body limit is higher
 than the service limit, or whether `KAGENT_SERVICE_MAX_REQUEST_BYTES`

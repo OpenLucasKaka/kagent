@@ -35,7 +35,7 @@ class RuntimeProviderConfigError(ValueError):
 def main() -> None:
     warnings.filterwarnings("ignore")
 
-    parser = argparse.ArgumentParser(description="Run the Kagent.")
+    parser = argparse.ArgumentParser(description="Run the kagent.")
     parser.add_argument(
         "goal",
         nargs="?",
@@ -57,7 +57,7 @@ def main() -> None:
     parser.add_argument(
         "--interactive",
         action="store_true",
-        help="Start the Kagent terminal agent that reads goals from stdin.",
+        help="Start the kagent terminal agent that reads goals from stdin.",
     )
     parser.add_argument(
         "--interactive-json",
@@ -414,7 +414,7 @@ def _runtime_provider_from_args(
 def _runtime_provider_config_message(missing: list[str]) -> str:
     missing_list = ", ".join(missing)
     return (
-        "Kagent runtime provider is not configured.\n"
+        "kagent runtime provider is not configured.\n"
         f"Missing: {missing_list}\n\n"
         "Fastest setup:\n"
         "  kagent --configure\n\n"
@@ -424,7 +424,7 @@ def _runtime_provider_config_message(missing: list[str]) -> str:
         "  export KAGENT_LLM_MODEL='qwen3.5-122b-a10b'\n"
         "  export KAGENT_LLM_API_KEY='your-api-key'\n\n"
         "Provider can be openai_compatible, deepseek, qwen, or ollama; "
-        "Kagent can usually infer it from Base URL and model.\n\n"
+        "kagent can usually infer it from Base URL and model.\n\n"
         "For a local LLM-free smoke test, run:\n"
         "  kagent --deterministic 'calculate 2 + 3'"
     )
@@ -472,7 +472,7 @@ def _configure_runtime_provider_interactively(
         model=model,
     )
     saved_path = save_config(config)
-    print(f"Kagent provider config saved to {saved_path}", file=prompt_stream)
+    print(f"kagent provider config saved to {saved_path}", file=prompt_stream)
     return config
 
 

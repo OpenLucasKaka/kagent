@@ -615,7 +615,7 @@ def test_cli_missing_runtime_provider_config_prints_actionable_error_without_usa
 
     assert completed.returncode == 2
     assert completed.stdout == ""
-    assert "Kagent runtime provider is not configured." in completed.stderr
+    assert "kagent runtime provider is not configured." in completed.stderr
     assert "KAGENT_LLM_BASE_URL" in completed.stderr
     assert "KAGENT_LLM_MODEL" in completed.stderr
     assert "kagent --deterministic 'calculate 2 + 3'" in completed.stderr
@@ -644,7 +644,7 @@ def test_cli_missing_runtime_provider_config_for_goal_avoids_argparse_usage(tmp_
 
     assert completed.returncode == 2
     assert completed.stdout == ""
-    assert "Kagent runtime provider is not configured." in completed.stderr
+    assert "kagent runtime provider is not configured." in completed.stderr
     assert "usage:" not in completed.stderr
     assert "Traceback" not in completed.stderr
 
@@ -1061,7 +1061,7 @@ def test_cli_interactive_runtime_prints_prompt_to_real_stderr(monkeypatch, capsy
 
     captured = capsys.readouterr()
     assert "› " in captured.out
-    assert "Kagent" in captured.err
+    assert "kagent" in captured.err
     assert "[K]" in captured.err
     assert "ready for work" in captured.err
     assert "/help" in captured.err
@@ -1081,7 +1081,7 @@ def test_cli_runtime_ready_message_feels_like_kagent_product_shell():
 
     message = runtime_ready_message(color=False)
 
-    assert message.splitlines()[0] == "Kagent"
+    assert message.splitlines()[0] == "kagent"
     assert "Codex-style agent runtime" in message
     assert "[K]" in message
     assert "agentic work shell" in message
@@ -1103,7 +1103,7 @@ def test_cli_runtime_setup_message_keeps_brand_presence():
         color=False,
     )
 
-    assert message.splitlines()[0] == "Kagent setup"
+    assert message.splitlines()[0] == "kagent setup"
     assert "[K]" in message
     assert "Configure your provider once." in message
     assert "K-bot" not in message
@@ -1116,7 +1116,7 @@ def test_cli_runtime_help_reads_like_a_command_palette():
 
     message = runtime_interactive_help()
 
-    assert message.splitlines()[0] == "Kagent command palette"
+    assert message.splitlines()[0] == "kagent command palette"
     assert "Session" in message
     assert "Provider" in message
     assert "Output" in message
@@ -1238,7 +1238,7 @@ def test_cli_runtime_status_formats_empty_shell_state():
 
     assert message == "\n".join(
         [
-            "Kagent session",
+            "kagent session",
             "  cwd      /workspace",
             "  output   compact",
             "  memory   0 turns",
@@ -1269,7 +1269,7 @@ def test_cli_runtime_doctor_redacts_provider_location_and_secret():
         line_editor="prompt_toolkit",
     )
 
-    assert "Kagent doctor" in message
+    assert "kagent doctor" in message
     assert "provider     Qwen" in message
     assert "model        qwen3.5-122b-a10b" in message
     assert "base_url     configured" in message
@@ -1308,7 +1308,7 @@ def test_cli_runtime_tools_formats_compact_action_list():
 
     assert message == "\n".join(
         [
-            "Kagent actions",
+            "kagent actions",
             "  apply_patch  allowed   Create, update, delete, or move files.",
             "  open_url     approval  Open a URL in the local desktop browser.",
         ]
@@ -1334,7 +1334,7 @@ def test_cli_runtime_provider_config_redacts_secret_values():
 
     message = format_runtime_provider_config(FakeProvider())
 
-    assert "Kagent provider" in message
+    assert "kagent provider" in message
     assert "provider   Qwen" in message
     assert "base_url   https://llm.example.test/v1" in message
     assert "model      qwen3.5-122b-a10b" in message
@@ -1952,7 +1952,7 @@ def test_cli_interactive_runtime_can_show_session_status(
     )
 
     captured = capsys.readouterr()
-    assert "Kagent session" in captured.out
+    assert "kagent session" in captured.out
     assert f"cwd      {tmp_path}" in captured.out
     assert "output   full JSON" in captured.out
     assert "memory   1 turn" in captured.out
@@ -2004,7 +2004,7 @@ def test_cli_interactive_runtime_can_show_local_doctor(
     )
 
     captured = capsys.readouterr()
-    assert "Kagent doctor" in captured.out
+    assert "kagent doctor" in captured.out
     assert f"cwd          {tmp_path}" in captured.out
     assert "provider     OpenAI-compatible" in captured.out
     assert "model        gateway-model" in captured.out
@@ -2048,7 +2048,7 @@ def test_cli_interactive_runtime_can_show_registered_tools(monkeypatch, capsys):
 
     captured = capsys.readouterr()
     assert calls == []
-    assert "Kagent actions" in captured.out
+    assert "kagent actions" in captured.out
     assert "apply_patch" in captured.out
     assert "allowed" in captured.out
     assert "open_url" in captured.out
@@ -2093,7 +2093,7 @@ def test_cli_interactive_runtime_can_show_provider_config_without_model_call(
 
     captured = capsys.readouterr()
     assert calls == []
-    assert "Kagent provider" in captured.out
+    assert "kagent provider" in captured.out
     assert "qwen3.5-122b-a10b" in captured.out
     assert "sk-secret-value" not in captured.out
 

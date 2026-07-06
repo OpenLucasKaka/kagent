@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "kagent"
 version = "0.1.0"
-description = "A bounded Kagent built with LangGraph."
+description = "A bounded kagent built with LangGraph."
 readme = "README.md"
 requires-python = ">=3.9"
 dependencies = [

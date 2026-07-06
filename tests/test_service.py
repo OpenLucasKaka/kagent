@@ -98,7 +98,15 @@ def test_service_ready_endpoint_reports_ready():
     assert payload["checks"]["tools"] == "ok"
 
 
-def test_service_config_endpoint_reports_redacted_runtime_config():
+def test_service_config_endpoint_reports_redacted_runtime_config(monkeypatch, tmp_path):
+    for key in list(os.environ):
+        if key.startswith("KAGENT_LLM_"):
+            monkeypatch.delenv(key, raising=False)
+    monkeypatch.setenv(
+        "KAGENT_LLM_CONFIG_PATH",
+        str(tmp_path / "missing-provider.json"),
+    )
+
     status_code, payload = handle_request(
         "GET",
         "/config",
@@ -2945,7 +2953,7 @@ def test_service_server_header_does_not_expose_python_runtime_over_http():
         server.server_close()
         thread.join(timeout=5)
 
-    assert server_header == "KagentHTTP/0.1"
+    assert server_header == "kagentHTTP/0.1"
     assert "Python" not in server_header
 
 

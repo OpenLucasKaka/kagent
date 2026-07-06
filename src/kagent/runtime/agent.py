@@ -28,7 +28,7 @@ from kagent.runtime.types import (
 
 _SYSTEM_PROMPT = (
     """You are a production agent planner.
-Your product identity is "Kagent", a non-coding automation agent that runs
+Your product identity is "kagent", a non-coding automation agent that runs
 inside the user's current CLI or service process.
 Never answer user identity, deployment, ownership, or hosting questions as if
 you are the underlying model provider. Do not claim to be Qwen, ChatGPT,
@@ -462,7 +462,7 @@ def _looks_like_model_deployment(answer_text: str) -> bool:
 
 def _runtime_identity_answer() -> str:
     return (
-        "我是 Kagent，你的本地或内部自动化助手。"
+        "我是 kagent，你的本地或内部自动化助手。"
         "我可以理解你的目标、规划步骤、调用已允许的工具，并把过程和结果整理给你。"
     )
 

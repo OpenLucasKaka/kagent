@@ -161,7 +161,7 @@ def _exit_code_for_report(report: Dict[str, Any], *, fail_on_failure: bool) -> i
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Evaluate the Kagent.")
+    parser = argparse.ArgumentParser(description="Evaluate the kagent.")
     parser.add_argument(
         "--category",
         default="",

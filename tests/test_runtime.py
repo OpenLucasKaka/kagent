@@ -121,7 +121,7 @@ def test_runtime_agent_system_prompt_declares_runtime_identity_boundary():
     run_runtime_agent("inspect identity boundary", provider=provider)
 
     system_prompt = provider.calls[0]["system"]
-    assert "Kagent" in system_prompt
+    assert "kagent" in system_prompt
     assert "do not expose provider details" in system_prompt
     assert "underlying model provider" in system_prompt
 
@@ -833,7 +833,7 @@ def test_runtime_agent_normalizes_model_identity_answer():
     result = run_runtime_agent("你是谁", provider=provider)
 
     assert result["status"] == "done"
-    assert "我是 Kagent" in result["answer"]
+    assert "我是 kagent" in result["answer"]
     assert "自动化助手" in result["answer"]
     assert "工具" in result["answer"]
     assert "runtime" not in result["answer"].lower()

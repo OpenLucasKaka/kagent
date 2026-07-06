@@ -25,7 +25,7 @@ def test_operations_runbook_documents_continuous_iteration_and_failure_triage():
     assert "evidence_secret_findings" in runbook
     assert "kagent-trace-prune" in runbook
     assert "kagent-trace-replay" in runbook
-    assert "a `Kagent` banner" in runbook
+    assert "a `kagent` banner" in runbook
     assert "the `[K]` terminal companion mark" in runbook
     assert "live progress" in runbook
     assert "compact operator" in runbook
@@ -143,11 +143,11 @@ def test_operations_runbook_documents_continuous_iteration_and_failure_triage():
     assert "Error Code Catalog" in runbook
     assert "agent_run_timeout" in runbook
     assert "goal_too_large" in runbook
-    assert "KagentMalformedRunRequests" in runbook
-    assert "KagentOversizedRunRequests" in runbook
-    assert "KagentHighRequestLatency" in runbook
-    assert "KagentSlowAgentRuns" in runbook
-    assert "KagentSlowRuntimeRuns" in runbook
+    assert "kagentMalformedRunRequests" in runbook
+    assert "kagentOversizedRunRequests" in runbook
+    assert "kagentHighRequestLatency" in runbook
+    assert "kagentSlowAgentRuns" in runbook
+    assert "kagentSlowRuntimeRuns" in runbook
     assert "runtime run latency" in runbook
     assert "full_trace_disabled" in runbook
     assert "incomplete_request_body" in runbook
@@ -310,7 +310,7 @@ def test_operations_runbook_documents_continuous_iteration_and_failure_triage():
     assert "llm_api_key_required" in runbook
     assert "runtime_iterations_too_low" in runbook
     assert "runtime identity boundary" in runbook
-    assert "identity is `Kagent`" in runbook
+    assert "identity is `kagent`" in runbook
     assert "Provider details stay behind the configuration boundary" in runbook
     assert "final_answer_guardrail" in runbook
     assert "raw API key is never exposed" in runbook

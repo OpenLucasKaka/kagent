@@ -218,7 +218,7 @@ def test_run_checks_starts_real_service_smoke():
     assert "duplicate_auth_response" in smoke
     assert "WWW-Authenticate" in smoke
     assert "Retry-After" in smoke
-    assert "KagentHTTP/0.1" in smoke
+    assert "kagentHTTP/0.1" in smoke
     assert '"Python" not in response.headers["Server"]' in smoke
     assert "/health" in smoke
     assert "/ready" in smoke
@@ -336,7 +336,7 @@ def test_production_readiness_audit_reports_required_artifacts():
     assert "scripts/production_readiness_audit.py" in readme
     assert "scripts/production_readiness_audit.py" in rollout
     assert "kagent_runtime_progress_event_sink_failures_total" in script_text
-    assert "KagentRuntimeProgressSinkFailures" in script_text
+    assert "kagentRuntimeProgressSinkFailures" in script_text
 
     completed = subprocess.run(
         [".venv/bin/python", str(script_path)],
@@ -362,7 +362,7 @@ def test_production_readiness_audit_reports_required_artifacts():
     assert len(payload["configuration"]["env_example"]["sha256"]) == 64
     assert payload["observability"]["grafana_dashboard"]["status"] == "passed"
     assert payload["observability"]["grafana_dashboard"]["title"] == (
-        "Kagent Runtime"
+        "kagent Runtime"
     )
     assert int(payload["observability"]["grafana_dashboard"]["panel_count"]) >= 8
     assert payload["observability"]["grafana_dashboard"][

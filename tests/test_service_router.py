@@ -2583,7 +2583,7 @@ def test_service_router_runtime_status_reports_final_answer_guardrail(tmp_path):
             "run_id": "identity-guardrail",
             "status": "done",
             "goal": "你是谁",
-            "answer": "我是 Kagent runtime。",
+            "answer": "我是 kagent runtime。",
             "final_answer_guardrail": {
                 "applied": "true",
                 "reason": "runtime_identity_boundary",

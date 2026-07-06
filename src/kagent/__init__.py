@@ -1,4 +1,4 @@
-"""Kagent LangGraph agent package."""
+"""kagent LangGraph agent package."""
 
 from importlib.metadata import PackageNotFoundError, version
 

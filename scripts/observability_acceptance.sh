@@ -131,10 +131,10 @@ def prometheus_rules_status():
         return "missing", ""
     text = path.read_text(encoding="utf-8")
     required_alerts = [
-        "KagentServiceDown",
-        "KagentHighErrorRate",
-        "KagentSlowRuntimeRuns",
-        "KagentRuntimeSubjectRunFailures",
+        "kagentServiceDown",
+        "kagentHighErrorRate",
+        "kagentSlowRuntimeRuns",
+        "kagentRuntimeSubjectRunFailures",
     ]
     if any(alert not in text for alert in required_alerts):
         return "missing_required_alerts", file_sha256(path)

@@ -120,7 +120,7 @@ def create_server(
 
 
 def main(argv: Optional[List[str]] = None) -> int:
-    parser = argparse.ArgumentParser(description="Serve the Kagent API.")
+    parser = argparse.ArgumentParser(description="Serve the kagent API.")
     try:
         defaults = ServiceConfig.from_env()
     except ValueError as exc:
@@ -281,7 +281,7 @@ def _subject_tools_map(value: str) -> dict[str, tuple[str, ...]]:
 
 
 class _AgentRequestHandler(BaseHTTPRequestHandler):
-    server_version = "KagentHTTP/0.1"
+    server_version = "kagentHTTP/0.1"
 
     def version_string(self) -> str:
         return self.server_version

@@ -69,7 +69,7 @@ def doctor_payload(
 
 def main(argv: Optional[List[str]] = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Run deployment self-checks for the Kagent."
+        description="Run deployment self-checks for the kagent."
     )
     try:
         defaults = ServiceConfig.from_env()

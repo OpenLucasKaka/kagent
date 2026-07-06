@@ -24,7 +24,7 @@ def runtime_ready_message(*, color: bool = False) -> str:
     product_line = "agentic work shell"
     return "\n".join(
         [
-            _color("Kagent", "bold", enabled=color),
+            _color("kagent", "bold", enabled=color),
             _dim(subtitle, enabled=color),
             "",
             f"  {_color('[K]', 'cyan', enabled=color)} {product_line}",
@@ -43,9 +43,9 @@ def runtime_prompt(*, color: bool = False) -> str:
 def runtime_setup_message(*, config_path: str, color: bool = False) -> str:
     return "\n".join(
         [
-            _color("Kagent setup", "bold", enabled=color),
+            _color("kagent setup", "bold", enabled=color),
             f"  {_color('[K]', 'cyan', enabled=color)} Configure your provider once.",
-            _dim("Choose a provider once, then Kagent opens directly next time.", enabled=color),
+            _dim("Choose a provider once, then kagent opens directly next time.", enabled=color),
             "",
             f"Config  {config_path}",
         ]
@@ -55,7 +55,7 @@ def runtime_setup_message(*, config_path: str, color: bool = False) -> str:
 def runtime_interactive_help() -> str:
     commands = runtime_interactive_commands()
     command_width = max(len(command.primary) for command in commands)
-    lines = ["Kagent command palette"]
+    lines = ["kagent command palette"]
     for section in ("Session", "Provider", "Output", "Debug"):
         section_commands = [
             command for command in commands if command.section == section
@@ -74,7 +74,7 @@ def runtime_interactive_help() -> str:
 def format_runtime_provider_config(provider: Any) -> str:
     snapshot = _provider_redacted_snapshot(provider)
     if not snapshot:
-        return "Kagent provider\n  provider   inline/test\n  api_key    not configured"
+        return "kagent provider\n  provider   inline/test\n  api_key    not configured"
     provider_name = str(
         snapshot.get("llm_provider_display_name")
         or snapshot.get("llm_provider")
@@ -92,7 +92,7 @@ def format_runtime_provider_config(provider: Any) -> str:
     backoff = str(snapshot.get("llm_retry_backoff_seconds", "")).strip()
     return "\n".join(
         [
-            "Kagent provider",
+            "kagent provider",
             f"  provider   {provider_name}",
             f"  base_url   {base_url}",
             f"  model      {model}",
@@ -126,10 +126,10 @@ def format_runtime_interactive_tools(tools: list[dict[str, Any]]) -> str:
         description = _one_line_text(str(tool.get("description", "")).strip())
         rows.append((name, access, description))
     if not rows:
-        return "Kagent actions\n  no external actions registered"
+        return "kagent actions\n  no external actions registered"
     name_width = max(len(name) for name, _access, _description in rows)
     return "\n".join(
-        ["Kagent actions"]
+        ["kagent actions"]
         + [
             f"  {name.ljust(name_width)}  {access.ljust(8)}  {description}".rstrip()
             for name, access, description in rows
@@ -152,7 +152,7 @@ def format_runtime_interactive_status(
         last_status = str(last_payload.get("status", "")).strip() or "-"
     return "\n".join(
         [
-            "Kagent session",
+            "kagent session",
             f"  cwd      {cwd}",
             f"  output   {'full JSON' if full_json_mode else 'compact'}",
             f"  memory   {memory_count} {memory_label}",
@@ -190,7 +190,7 @@ def format_runtime_interactive_doctor(
     )
     return "\n".join(
         [
-            "Kagent doctor",
+            "kagent doctor",
             f"  cwd          {cwd}",
             f"  provider     {provider_name}",
             f"  model        {model}",

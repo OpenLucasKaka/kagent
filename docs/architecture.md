@@ -130,13 +130,13 @@ service execution paths. It normalizes `metadata` string maps and `tags` arrays,
 rejects secret-like metadata keys, and keeps run labels small enough for trace
 filtering and low-cardinality dashboards.
 The runtime also enforces a runtime identity boundary: the user-facing product
-identity is `Kagent`, an automation agent running in the user's current CLI or
+identity is `kagent`, an automation agent running in the user's current CLI or
 service process. Provider details stay behind the configuration boundary unless
 the user explicitly asks about provider setup. The system prompt tells providers
 not to answer identity, deployment, ownership, or hosting questions as Qwen,
 ChatGPT, Claude, or any other model brand. If a provider still returns a
 model-branded answer for identity or deployment prompts, `runtime/agent.py`
-normalizes the final answer back to the Kagent product identity before clients
+normalizes the final answer back to the kagent product identity before clients
 see it.
 Those corrections add `final_answer_guardrail` with a machine-readable reason
 such as `runtime_identity_boundary` or `runtime_deployment_boundary`; the

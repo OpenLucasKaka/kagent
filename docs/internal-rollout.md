@@ -318,7 +318,7 @@ Add Grafana panels for:
   `kagent_runtime_approval_required_total`.
 - Stale pending approval queue depth from
   `kagent_runtime_stale_pending_approvals_current`; alert
-  `KagentRuntimeStalePendingApprovals` should notify owners when
+  `kagentRuntimeStalePendingApprovals` should notify owners when
   pending approvals exceed the configured age threshold.
 - Tool failures from
   `kagent_runtime_observation_errors_total`.

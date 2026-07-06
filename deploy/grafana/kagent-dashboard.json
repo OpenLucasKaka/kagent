@@ -325,7 +325,7 @@
   "refresh": "30s",
   "schemaVersion": 39,
   "tags": [
-    "Kagent",
+    "kagent",
     "LangGraph",
     "Runtime"
   ],
@@ -355,7 +355,7 @@
     "to": "now"
   },
   "timezone": "",
-  "title": "Kagent Runtime",
+  "title": "kagent Runtime",
   "uid": "kagent-runtime",
   "version": 1,
   "weekStart": ""

@@ -210,7 +210,7 @@ def prune_runtime_traces(
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Prune persisted Kagent trace JSON files."
+        description="Prune persisted kagent trace JSON files."
     )
     parser.add_argument("trace_dir", help="Trace directory to scan.")
     parser.add_argument(

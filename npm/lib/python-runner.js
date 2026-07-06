@@ -43,7 +43,7 @@ function findPython() {
       return command;
     }
   }
-  throw new Error("Kagent requires Python 3.9+. Install python3 or set KAGENT_PYTHON.");
+  throw new Error("kagent requires Python 3.9+. Install python3 or set KAGENT_PYTHON.");
 }
 
 function runChecked(command, args, options) {
@@ -158,11 +158,11 @@ function ensureVenv(root, version) {
   fs.chmodSync(venvDir, 0o700);
   if (!fs.existsSync(pythonPath)) {
     const python = findPython();
-    process.stderr.write(`Kagent: preparing Python runtime in ${venvDir}\n`);
+    process.stderr.write(`kagent: preparing Python runtime in ${venvDir}\n`);
     runChecked(python, ["-m", "venv", venvDir], { cwd: root });
   }
 
-  process.stderr.write("Kagent: installing Python runtime package\n");
+  process.stderr.write("kagent: installing Python runtime package\n");
   runChecked(pythonPath, ["-m", "pip", "install", root], { cwd: root });
   writeMarker(venvDir, expectedMarker);
   return venvDir;
@@ -187,7 +187,7 @@ function runPythonEntrypoint(commandName, args) {
     const venvDir = ensureVenv(root, version);
     spawnEntrypoint(venvDir, commandName, args);
   } catch (error) {
-    process.stderr.write(`Kagent failed to start: ${error.message}\n`);
+    process.stderr.write(`kagent failed to start: ${error.message}\n`);
     process.exit(1);
   }
 }

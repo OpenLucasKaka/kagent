@@ -125,7 +125,7 @@ def test_architecture_document_names_runtime_and_operational_boundaries():
     assert "unreadable trace files" in architecture
     assert "trace_read_failed" in architecture
     assert "runtime identity boundary" in architecture
-    assert "identity is `Kagent`" in architecture
+    assert "identity is `kagent`" in architecture
     assert "Provider details stay behind the configuration boundary" in architecture
     assert "preventing duplicate side effects" in architecture
     assert "previous_path" in architecture

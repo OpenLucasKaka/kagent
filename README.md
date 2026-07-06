@@ -1,4 +1,4 @@
-# Kagent
+# kagent
 
 Production-shaped LangGraph agent runtime for internal, non-coding workflows.
 
@@ -18,13 +18,13 @@ operator output, and redacted production evidence.
 Codex-style npm install:
 
 ```sh
-npm install -g github:OpenLucasKaka/Kagent
+npm install -g github:OpenLucasKaka/kagent
 kagent
 ```
 
 The first `kagent` run prepares a private Python runtime under your user cache,
-installs Kagent there, and then opens the terminal agent. If no provider is
-configured yet, Kagent starts a first-time setup flow. The setup first asks you
+installs kagent there, and then opens the terminal agent. If no provider is
+configured yet, kagent starts a first-time setup flow. The setup first asks you
 to choose Qwen, DeepSeek, Ollama, or OpenAI-compatible/custom from a provider
 menu, then asks for that provider's Base URL, model, and API key. The local
 provider config is stored at `${XDG_CONFIG_HOME:-~/.config}/kagent/provider.json`
