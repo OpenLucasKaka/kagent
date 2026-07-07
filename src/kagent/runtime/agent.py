@@ -93,17 +93,28 @@ def build_runtime_graph():
             from langgraph.graph import END, StateGraph
 
     graph = StateGraph(RuntimeGraphState)
-    graph.add_node("runtime", _runtime_graph_node)
-    graph.set_entry_point("runtime")
-    graph.add_edge("runtime", END)
+    graph.add_node("prepare", _runtime_prepare_graph_node)
+    graph.add_node("runtime_loop", _runtime_loop_graph_node)
+    graph.add_node("finalize", _runtime_finalize_graph_node)
+    graph.set_entry_point("prepare")
+    graph.add_edge("prepare", "runtime_loop")
+    graph.add_edge("runtime_loop", "finalize")
+    graph.add_edge("finalize", END)
     return graph.compile(name="kagent-runtime")
 
 
 def runtime_topology() -> Dict[str, List[str] | str]:
     return {
         "runtime_engine": "langgraph",
-        "nodes": ["runtime"],
-        "edges": ["runtime -> END"],
+        "entry_point": "prepare",
+        "terminal": "END",
+        "nodes": ["prepare", "runtime_loop", "finalize"],
+        "edges": [
+            "prepare -> runtime_loop",
+            "runtime_loop -> finalize",
+            "finalize -> END",
+        ],
+        "loop": "runtime_loop handles bounded planner-policy-executor iterations",
     }
 
 
@@ -146,9 +157,13 @@ def run_runtime_agent(
     return result
 
 
-def _runtime_graph_node(state: RuntimeGraphState) -> RuntimeGraphState:
+def _runtime_prepare_graph_node(state: RuntimeGraphState) -> RuntimeGraphState:
     if "provider" not in state:
         raise ValueError("provider is required")
+    return state
+
+
+def _runtime_loop_graph_node(state: RuntimeGraphState) -> RuntimeGraphState:
     result = _run_runtime_agent_loop(
         str(state.get("goal", "")),
         provider=state["provider"],
@@ -161,6 +176,13 @@ def _runtime_graph_node(state: RuntimeGraphState) -> RuntimeGraphState:
         event_sink=state.get("event_sink"),
         stream_answers=state.get("stream_answers", False),
     )
+    return {"result": result}
+
+
+def _runtime_finalize_graph_node(state: RuntimeGraphState) -> RuntimeGraphState:
+    result = state.get("result")
+    if not isinstance(result, dict):
+        raise RuntimeError("runtime loop did not return a result")
     result["runtime_engine"] = "langgraph"
     return {"result": result}
 

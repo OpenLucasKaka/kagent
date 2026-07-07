@@ -5,7 +5,7 @@ import sys
 import pytest
 
 from kagent.providers.llm import FakeLLMProvider
-from kagent.runtime import build_runtime_graph, run_runtime_agent
+from kagent.runtime import build_runtime_graph, run_runtime_agent, runtime_topology
 from kagent.runtime import tools as runtime_tools
 from kagent.runtime.policy import RuntimePolicy
 from kagent.runtime.tools import (
@@ -49,6 +49,21 @@ def test_runtime_graph_runs_codex_style_runtime_through_langgraph():
     assert final_state["result"]["status"] == "done"
     assert final_state["result"]["runtime_engine"] == "langgraph"
     assert final_state["result"]["observations"][0]["output"] == {"text": "hello"}
+
+
+def test_runtime_topology_exposes_production_graph_phases():
+    assert runtime_topology() == {
+        "runtime_engine": "langgraph",
+        "entry_point": "prepare",
+        "terminal": "END",
+        "nodes": ["prepare", "runtime_loop", "finalize"],
+        "edges": [
+            "prepare -> runtime_loop",
+            "runtime_loop -> finalize",
+            "finalize -> END",
+        ],
+        "loop": "runtime_loop handles bounded planner-policy-executor iterations",
+    }
 
 
 def test_runtime_agent_runs_fake_llm_plan_through_policy_and_tools():

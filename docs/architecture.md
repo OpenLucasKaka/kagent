@@ -119,13 +119,13 @@ can give different teams different direct-execution tool boundaries while
 unmatched subjects fall back to the global or default policy.
 
 `runtime/agent.py` exposes the default Codex-style runtime through a compiled
-LangGraph `StateGraph` via `build_runtime_graph()`. The first production slice
-uses one runtime node around the existing bounded loop: prompt the provider,
-parse the plan, authorize actions, execute allowed tools, and return events,
-plan, and observations. This keeps the public runtime on LangGraph while
-preserving the current behavior, and leaves a controlled path for splitting
-planner, policy, executor, and completion into separate runtime graph nodes
-later. Every runtime trace carries `trace_type: "codex_runtime"` and
+LangGraph `StateGraph` via `build_runtime_graph()`. The runtime graph has a
+small production shell: `prepare -> runtime_loop -> finalize -> END`. The
+`runtime_loop` node owns the bounded planner-policy-executor iteration: prompt
+the provider, parse the plan, authorize actions, execute allowed tools, feed
+observations back into replanning, and return events, plan, and observations.
+This keeps the public runtime on explicit LangGraph phases while preserving the
+current loop semantics. Every runtime trace carries `trace_type: "codex_runtime"` and
 `runtime_engine: "langgraph"` so persisted status, listing, and resume flows can
 distinguish Codex-style runtime traces from deterministic legacy `/run` traces
 stored in the same directory.

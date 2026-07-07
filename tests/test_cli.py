@@ -406,8 +406,15 @@ def test_cli_can_print_runtime_graph_topology_without_goal():
     assert completed.stderr == ""
     assert payload == {
         "runtime_engine": "langgraph",
-        "nodes": ["runtime"],
-        "edges": ["runtime -> END"],
+        "entry_point": "prepare",
+        "terminal": "END",
+        "nodes": ["prepare", "runtime_loop", "finalize"],
+        "edges": [
+            "prepare -> runtime_loop",
+            "runtime_loop -> finalize",
+            "finalize -> END",
+        ],
+        "loop": "runtime_loop handles bounded planner-policy-executor iterations",
     }
 
 

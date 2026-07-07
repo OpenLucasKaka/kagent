@@ -30,8 +30,15 @@ def test_public_api_exports_agent_topology():
 def test_public_api_exports_runtime_topology():
     assert runtime_topology() == {
         "runtime_engine": "langgraph",
-        "nodes": ["runtime"],
-        "edges": ["runtime -> END"],
+        "entry_point": "prepare",
+        "terminal": "END",
+        "nodes": ["prepare", "runtime_loop", "finalize"],
+        "edges": [
+            "prepare -> runtime_loop",
+            "runtime_loop -> finalize",
+            "finalize -> END",
+        ],
+        "loop": "runtime_loop handles bounded planner-policy-executor iterations",
     }
 
 
