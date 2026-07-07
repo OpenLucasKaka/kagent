@@ -42,6 +42,7 @@ from kagent.cli.ui import (
     join_non_empty,
     runtime_interactive_help,
     runtime_prompt,
+    runtime_prompt_reset,
     runtime_ready_message,
     runtime_ui_color_enabled,
     summarize_runtime_output,
@@ -184,7 +185,13 @@ class _RuntimeLineReader:
 
 class _InputLineReader(_RuntimeLineReader):
     def read(self, *, color: bool) -> str:
-        return input(runtime_prompt(color=color))
+        try:
+            return input(runtime_prompt(color=color))
+        finally:
+            reset = runtime_prompt_reset(color=color)
+            if reset:
+                sys.stdout.write(reset)
+                sys.stdout.flush()
 
     def line_editor_name(self) -> str:
         return "readline/input"
@@ -195,7 +202,7 @@ class _PromptToolkitLineReader(_RuntimeLineReader):
         self._session = session
 
     def read(self, *, color: bool) -> str:
-        message: Any = [("class:prompt", "› ")] if color else "› "
+        message: Any = [("class:input-bar.prompt", "› ")] if color else "› "
         return self._session.prompt(
             message,
             wrap_lines=True,
@@ -243,7 +250,13 @@ def _prompt_toolkit_session_for_tty(prompt_stream: Any) -> Any:
         completer=completer,
         enable_history_search=True,
         history=runtime_prompt_history(default_runtime_history_path()),
-        style=Style.from_dict({"prompt": "ansicyan"}),
+        style=Style.from_dict(
+            {
+                "": "bg:#303030 #ffffff",
+                "input-bar": "bg:#303030 #ffffff",
+                "input-bar.prompt": "bg:#303030 ansicyan bold",
+            }
+        ),
     )
 
 

@@ -35,7 +35,17 @@ def runtime_ready_message(*, color: bool = False) -> str:
 
 
 def runtime_prompt(*, color: bool = False) -> str:
-    return _prompt_color("› ", "cyan", enabled=color)
+    if not color:
+        return "› "
+    return (
+        "\001\033[48;5;236m\033[36m\002"
+        "› "
+        "\001\033[97m\002"
+    )
+
+
+def runtime_prompt_reset(*, color: bool = False) -> str:
+    return "\033[0m" if color else ""
 
 
 def runtime_setup_message(*, config_path: str, color: bool = False) -> str:
@@ -877,15 +887,3 @@ def _color(text: str, style: str, *, enabled: bool) -> str:
     if not code:
         return text
     return f"\033[{code}m{text}\033[0m"
-
-
-def _prompt_color(text: str, style: str, *, enabled: bool) -> str:
-    if not enabled:
-        return text
-    codes = {
-        "cyan": "36",
-    }
-    code = codes.get(style)
-    if not code:
-        return text
-    return f"\001\033[{code}m\002{text}\001\033[0m\002"

@@ -1099,12 +1099,16 @@ def test_cli_interactive_runtime_reuses_prompt_line_after_empty_enter(monkeypatc
 
 
 def test_cli_colored_runtime_prompt_marks_ansi_as_readline_invisible():
-    from kagent.cli.ui import runtime_prompt
+    from kagent.cli.ui import runtime_prompt, runtime_prompt_reset
 
     prompt = runtime_prompt(color=True)
 
-    assert prompt == "\001\033[36m\002› \001\033[0m\002"
+    assert "\001\033[48;5;236m" in prompt
+    assert "\033[36m\002› " in prompt
+    assert "\033[0m" not in prompt
+    assert runtime_prompt_reset(color=True) == "\033[0m"
     assert runtime_prompt(color=False) == "› "
+    assert runtime_prompt_reset(color=False) == ""
 
 
 def test_cli_runtime_ready_message_feels_like_kagent_product_shell():
@@ -1392,7 +1396,7 @@ def test_cli_prompt_toolkit_reader_wraps_long_lines():
     assert reader.read(color=True) == "帮我制定一个很长很长的周末旅行攻略"
     assert session.calls == [
         {
-            "message": [("class:prompt", "› ")],
+            "message": [("class:input-bar.prompt", "› ")],
             "wrap_lines": True,
             "multiline": False,
         }
@@ -1483,6 +1487,10 @@ def test_cli_prompt_toolkit_session_uses_persistent_history(
     assert created_sessions[0]["history"] is not None
     assert created_sessions[0]["complete_while_typing"] is True
     assert created_sessions[0]["completer"] is not None
+    assert created_sessions[0]["style"] is not None
+    assert "('', 'bg:#303030 #ffffff')" in str(created_sessions[0]["style"].style_rules)
+    assert "input-bar.prompt" in str(created_sessions[0]["style"].style_rules)
+    assert "#303030" in str(created_sessions[0]["style"].style_rules)
     assert set(created_sessions[0]["completer"].words) == set(
         runtime_interactive_completion_words()
     )
