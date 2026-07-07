@@ -23,6 +23,7 @@ def test_architecture_document_names_runtime_and_operational_boundaries():
     assert "approved_action_count" in architecture
     assert "consumed approval audit" in architecture
     assert "actually bypassed policy" in architecture
+    assert "approved_tool_counts" in architecture
     assert "pending_approval_action_id" in architecture
     assert "pending_approval_tool" in architecture
     assert "lists omit full `pending_approval` payloads" in architecture

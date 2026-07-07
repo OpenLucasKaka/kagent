@@ -2560,6 +2560,7 @@ def test_service_router_runtime_status_reports_persisted_run_summary(tmp_path):
     assert payload["duration_seconds"] == run_payload["duration_seconds"]
     assert payload["approved_action_count"] == "0"
     assert payload["approved_action_ids"] == []
+    assert payload["approved_tool_counts"] == {}
     assert payload["iteration_count"] == "1"
     assert payload["max_iterations"] == "1"
     assert payload["iteration_budget_remaining"] == "0"
@@ -3014,6 +3015,7 @@ def test_service_router_runtime_runs_list_reports_persisted_summaries(tmp_path):
     assert all("pending_approval_tool" in run for run in payload["runs"])
     assert all("approved_action_count" in run for run in payload["runs"])
     assert all("approved_action_ids" in run for run in payload["runs"])
+    assert all("approved_tool_counts" in run for run in payload["runs"])
     assert all("error_code_counts" in run for run in payload["runs"])
     assert all("dependency_edge_count" in run for run in payload["runs"])
     assert all("tool_names" in run for run in payload["runs"])
@@ -3047,6 +3049,13 @@ def test_service_router_runtime_runs_summary_aggregates_visible_traces(tmp_path)
                 {"node": "runtime_loop", "status": "ok"},
             ],
             "progress_event_sink_failure_count": "3",
+            "events": [
+                {
+                    "node": "policy",
+                    "tool": "http_request",
+                    "status": "approved",
+                }
+            ],
             "observations": [
                 {
                     "action_id": "fetch-site",
@@ -3126,6 +3135,7 @@ def test_service_router_runtime_runs_summary_aggregates_visible_traces(tmp_path)
         },
         "progress_event_sink_failure_count": "5",
         "approval_required_count": "1",
+        "approved_tool_counts": {"http_request": "1"},
         "pending_approval_count": "1",
         "final_answer_guardrail_applied_count": "1",
         "final_answer_guardrail_reason_counts": {

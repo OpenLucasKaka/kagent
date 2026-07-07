@@ -619,6 +619,7 @@ def service_openapi() -> Dict[str, Any]:
                         "graph_phase_node_counts",
                         "progress_event_sink_failure_count",
                         "approval_required_count",
+                        "approved_tool_counts",
                         "pending_approval_count",
                         "final_answer_guardrail_applied_count",
                         "final_answer_guardrail_reason_counts",
@@ -661,6 +662,10 @@ def service_openapi() -> Dict[str, Any]:
                         },
                         "progress_event_sink_failure_count": {"type": "string"},
                         "approval_required_count": {"type": "string"},
+                        "approved_tool_counts": {
+                            "type": "object",
+                            "additionalProperties": {"type": "string"},
+                        },
                         "pending_approval_count": {"type": "string"},
                         "final_answer_guardrail_applied_count": {"type": "string"},
                         "final_answer_guardrail_reason_counts": {
@@ -2030,6 +2035,10 @@ def _runtime_run_status_properties(
         "approved_action_ids": {
             "type": "array",
             "items": {"type": "string"},
+        },
+        "approved_tool_counts": {
+            "type": "object",
+            "additionalProperties": {"type": "string"},
         },
         "error_code_counts": {
             "type": "object",

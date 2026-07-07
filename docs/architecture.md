@@ -366,6 +366,8 @@ The service intentionally keeps a narrow API:
   surrounding whitespace. Runtime responses and compact summaries include
   `approved_action_count` and `approved_action_ids` as consumed approval audit
   metadata, reporting only approval IDs that actually bypassed policy.
+  They also include `approved_tool_counts` so operators can see which
+  policy-gated tools consumed approvals.
 - `POST /runtime/resume` loads a persisted `requires_approval` runtime trace by
   `run_id`, applies reviewed `approved_action_ids`, and writes a new resumed
   trace linked by `resumed_from_run_id`; resume accepts only the pending approval action

@@ -397,6 +397,8 @@ without changing the default tool policy. Approved IDs must be unique, non-empty
 Runtime responses and compact persisted summaries include `approved_action_count`
 and `approved_action_ids` as consumed approval audit metadata, reporting only
 approval IDs that actually bypassed policy.
+They also include `approved_tool_counts` so dashboards can separate approval
+consumption by policy-gated tool.
 If trace persistence is enabled, `POST /runtime/resume` can resume from a
 persisted pending run by `run_id` and `approved_action_ids`; resume accepts
 only the pending approval action from that trace and does not replay earlier

@@ -475,6 +475,7 @@ def runtime_status_summary(
         ),
         "approved_action_count": str(len(approved_action_ids)),
         "approved_action_ids": approved_action_ids,
+        "approved_tool_counts": _approved_tool_counts(trace.get("events")),
         "error_code_counts": _observation_error_code_counts(observations),
         "latest_plan_action_count": str(_latest_plan_action_count(trace.get("plan"))),
         "latest_plan_action_ids": _latest_plan_action_ids(trace.get("plan")),
@@ -609,6 +610,7 @@ def _empty_runtime_summary_aggregate() -> Dict[str, Any]:
         "graph_phase_node_counts": {},
         "progress_event_sink_failure_count": "0",
         "approval_required_count": "0",
+        "approved_tool_counts": {},
         "pending_approval_count": "0",
         "final_answer_guardrail_applied_count": "0",
         "final_answer_guardrail_reason_counts": {},
@@ -667,6 +669,14 @@ def _add_runtime_summary_to_aggregate(
         int(aggregate["approval_required_count"])
         + _parse_non_negative_int(summary.get("approval_required_count"))
     )
+    approved_tool_counts = summary.get("approved_tool_counts")
+    if isinstance(approved_tool_counts, dict):
+        for tool_name, count in approved_tool_counts.items():
+            _increment_count(
+                aggregate["approved_tool_counts"],
+                str(tool_name),
+                _parse_non_negative_int(count),
+            )
     if str(summary.get("pending_approval_action_id", "")).strip() or str(
         summary.get("pending_approval_tool", "")
     ).strip():
@@ -772,6 +782,21 @@ def _trace_approved_action_ids(trace: Dict[str, Any]) -> list[str]:
             if isinstance(action_id, str) and action_id.strip()
         }
     )
+
+
+def _approved_tool_counts(value: Any) -> Dict[str, str]:
+    if not isinstance(value, list):
+        return {}
+    counts: Dict[str, str] = {}
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        if _runtime_scalar(item.get("node")) != "policy":
+            continue
+        if _runtime_scalar(item.get("status")) != "approved":
+            continue
+        _increment_count(counts, _runtime_scalar(item.get("tool")))
+    return dict(sorted(counts.items()))
 
 
 def _trace_metadata(trace: Dict[str, Any]) -> Dict[str, str]:

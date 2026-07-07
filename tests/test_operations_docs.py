@@ -257,6 +257,7 @@ def test_operations_runbook_documents_continuous_iteration_and_failure_triage():
     assert "approved_action_count" in runbook
     assert "consumed approval audit" in runbook
     assert "actually bypassed policy" in runbook
+    assert "approved_tool_counts" in runbook
     assert "pending_approval_action_id" in runbook
     assert "pending_approval_tool" in runbook
     assert "lists omit full `pending_approval` payloads" in runbook

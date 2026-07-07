@@ -821,6 +821,10 @@ def test_service_contract_documents_named_success_schemas():
         "type": "array",
         "items": {"type": "string"},
     }
+    assert schemas["RuntimeRunStatusResponse"]["properties"]["approved_tool_counts"] == {
+        "type": "object",
+        "additionalProperties": {"type": "string"},
+    }
     assert schemas["RuntimeRunStatusResponse"]["properties"]["metadata"] == {
         "type": "object",
         "additionalProperties": {"type": "string"},
@@ -951,6 +955,7 @@ def test_service_contract_documents_named_success_schemas():
         "graph_phase_node_counts",
         "progress_event_sink_failure_count",
         "approval_required_count",
+        "approved_tool_counts",
         "pending_approval_count",
         "final_answer_guardrail_applied_count",
         "final_answer_guardrail_reason_counts",
@@ -986,6 +991,10 @@ def test_service_contract_documents_named_success_schemas():
         "additionalProperties": {"type": "string"},
     }
     assert schemas["RuntimeRunSummaryResponse"]["properties"]["tool_counts"] == {
+        "type": "object",
+        "additionalProperties": {"type": "string"},
+    }
+    assert schemas["RuntimeRunSummaryResponse"]["properties"]["approved_tool_counts"] == {
         "type": "object",
         "additionalProperties": {"type": "string"},
     }
