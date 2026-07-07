@@ -1469,9 +1469,25 @@ def test_cli_prompt_toolkit_reader_wraps_long_lines():
             ],
             "wrap_lines": True,
             "multiline": False,
+            "bottom_toolbar": reader._bottom_toolbar,
+            "refresh_interval": 0.12,
         }
     ]
     assert reader.should_erase_empty_line() is False
+
+
+def test_cli_prompt_status_renders_dynamic_thinking_frames():
+    from kagent.cli.interactive import _RuntimePromptStatus
+
+    status = _RuntimePromptStatus()
+    status.set("Thinking")
+
+    first = status.render()
+    second = status.render()
+
+    assert "Thinking" in first[0][1]
+    assert "Thinking" in second[0][1]
+    assert first != second
 
 
 def test_cli_defaults_history_to_xdg_state(monkeypatch, tmp_path):
@@ -1562,6 +1578,7 @@ def test_cli_prompt_toolkit_session_uses_persistent_history(
     assert "('', 'bg:#303030 #ffffff')" in str(created_sessions[0]["style"].style_rules)
     assert "input-bar.blank" in str(created_sessions[0]["style"].style_rules)
     assert "input-bar.prompt" in str(created_sessions[0]["style"].style_rules)
+    assert "input-bar.progress" in str(created_sessions[0]["style"].style_rules)
     assert "#303030" in str(created_sessions[0]["style"].style_rules)
     assert set(created_sessions[0]["completer"].words) == set(
         runtime_interactive_completion_words()
