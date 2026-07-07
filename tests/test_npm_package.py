@@ -97,6 +97,9 @@ if (!_internals.hasSelfUpdate({version: "0.1.1", headSha: "new"}, "0.1.1", {remo
 if (_internals.hasSelfUpdate({version: "0.1.1", headSha: "same"}, "0.1.1", {remoteHeadSha: "same"})) {
   throw new Error("same GitHub head should not prompt");
 }
+if (_internals.hasSelfUpdate({version: "0.1.1", headSha: "latest"}, "0.1.1", {})) {
+  throw new Error("same version without prior state should not prompt");
+}
 if (!_internals.hasSelfUpdate({version: "0.1.2", headSha: "same"}, "0.1.1", {remoteHeadSha: "same"})) {
   throw new Error("newer package version should prompt");
 }

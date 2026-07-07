@@ -205,7 +205,7 @@ function hasSelfUpdate(latest, currentVersion, state) {
   if (isNewerVersion(latest.version, currentVersion)) {
     return true;
   }
-  if (latest.headSha && latest.headSha !== state.remoteHeadSha) {
+  if (latest.headSha && state.remoteHeadSha && latest.headSha !== state.remoteHeadSha) {
     return true;
   }
   return false;
