@@ -8,6 +8,7 @@ from typing import Any, Dict, Tuple
 from urllib.parse import parse_qs
 
 from kagent.runtime import RUNTIME_TRACE_TYPE
+from kagent.runtime.steps import derive_runtime_steps
 from kagent.service import errors as service_errors
 from kagent.service.errors import failure_payload
 from kagent.service.runtime import ServiceConfig
@@ -355,14 +356,17 @@ def execute_runtime_timeline_request(
     events = _runtime_timeline_events(trace.get("events"))
     observations = _runtime_timeline_observations(trace.get("observations"))
     progress_events = _runtime_timeline_progress_events(trace.get("progress_events"))
+    steps = _runtime_compact_steps(trace)
     return 200, json_ready(
         {
             "trace_type": RUNTIME_TRACE_TYPE,
             "run_id": run_id,
             "trace_path": _runtime_trace_path(trace, service_config.trace_dir, run_id),
             "event_count": str(len(events)),
+            "step_count": str(len(steps)),
             "progress_event_count": str(len(progress_events)),
             "observation_count": str(len(observations)),
+            "steps": steps,
             "events": events,
             "progress_events": progress_events,
             "observations": observations,
@@ -401,6 +405,7 @@ def runtime_status_summary(
 ) -> Dict[str, Any]:
     run_id = _runtime_string(trace.get("run_id")) or requested_run_id
     observations = trace.get("observations")
+    steps = _runtime_compact_steps(trace)
     artifact_ids = _observation_artifact_ids(observations)
     approved_action_ids = _trace_approved_action_ids(trace)
     pending_approval = trace.get("pending_approval")
@@ -419,6 +424,8 @@ def runtime_status_summary(
         "max_iterations": _runtime_scalar(trace.get("max_iterations")),
         "iteration_budget_remaining": _runtime_iteration_budget_remaining(trace),
         "plan_count": str(_list_count(trace.get("plans"))),
+        "step_count": str(len(steps)),
+        "steps": steps,
         "observation_count": str(_list_count(observations)),
         "event_count": str(_list_count(trace.get("events"))),
         "progress_event_count": str(_list_count(trace.get("progress_events"))),
@@ -1223,6 +1230,41 @@ def _runtime_timeline_progress_events(value: Any) -> list[Dict[str, str]]:
         if event:
             progress_events.append(event)
     return progress_events
+
+
+def _runtime_compact_steps(trace: Dict[str, Any]) -> list[Dict[str, str]]:
+    raw_steps = trace.get("steps")
+    if isinstance(raw_steps, list):
+        steps = _runtime_sanitized_steps(raw_steps)
+        if steps:
+            return steps
+    return _runtime_sanitized_steps(derive_runtime_steps(trace))
+
+
+def _runtime_sanitized_steps(value: Any) -> list[Dict[str, str]]:
+    if not isinstance(value, list):
+        return []
+    steps = []
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        index = _runtime_timeline_scalar(item.get("index"))
+        state = _runtime_timeline_scalar(item.get("state"))
+        title = _runtime_timeline_scalar(item.get("title"))
+        if state not in {"done", "failed", "pending", "waiting_approval"}:
+            continue
+        if not index or not title:
+            continue
+        step = {
+            "index": index,
+            "state": state,
+            "title": title,
+        }
+        detail = _runtime_timeline_scalar(item.get("detail"))
+        if detail:
+            step["detail"] = detail
+        steps.append(step)
+    return steps
 
 
 def _runtime_trace_path(

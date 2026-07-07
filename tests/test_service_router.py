@@ -636,8 +636,16 @@ def test_service_router_runtime_timeline_returns_compact_run_timeline(tmp_path):
     assert payload["run_id"] == run_payload["run_id"]
     assert payload["trace_path"] == run_payload["trace_path"]
     assert payload["event_count"] == "3"
+    assert payload["step_count"] == "1"
     assert payload["progress_event_count"] == "6"
     assert payload["observation_count"] == "1"
+    assert payload["steps"] == [
+        {
+            "index": "1",
+            "state": "done",
+            "title": "Created Launch plan",
+        }
+    ]
     assert [event["node"] for event in payload["events"]] == [
         "planner",
         "policy",
@@ -743,6 +751,19 @@ def test_service_router_runtime_timeline_filters_non_scalar_metadata(tmp_path):
                     "duration_seconds": {"secret": "progress-duration"},
                 }
             ],
+            "steps": [
+                {
+                    "index": "1",
+                    "state": "done",
+                    "title": {"secret": "step-title"},
+                    "detail": {"secret": "step-detail"},
+                },
+                {
+                    "index": "2",
+                    "state": "invalid",
+                    "title": "unsafe",
+                },
+            ],
         },
         str(tmp_path),
     )
@@ -780,6 +801,8 @@ def test_service_router_runtime_timeline_filters_non_scalar_metadata(tmp_path):
             "iteration": "1",
         }
     ]
+    assert payload["step_count"] == "0"
+    assert payload["steps"] == []
     assert "secret" not in json.dumps(payload)
 
 
@@ -2446,6 +2469,15 @@ def test_service_router_runtime_status_reports_persisted_run_summary(tmp_path):
     assert payload["max_iterations"] == "1"
     assert payload["iteration_budget_remaining"] == "0"
     assert payload["plan_count"] == "1"
+    assert payload["step_count"] == "1"
+    assert payload["steps"] == [
+        {
+            "index": "1",
+            "state": "waiting_approval",
+            "title": "Fetch https://example.com",
+            "detail": "fetch",
+        }
+    ]
     assert payload["observation_count"] == "1"
     assert payload["event_count"] == "2"
     assert payload["failed_observation_count"] == "0"
@@ -5894,7 +5926,21 @@ def test_service_router_rejects_unsafe_idempotency_key_before_running_agent():
     assert calls == []
 
 
-def test_service_router_metrics_snapshot_includes_redacted_runtime_info():
+def test_service_router_metrics_snapshot_includes_redacted_runtime_info(
+    monkeypatch,
+    tmp_path,
+):
+    monkeypatch.setenv("KAGENT_LLM_CONFIG_PATH", str(tmp_path / "missing-provider.json"))
+    for key in [
+        "KAGENT_LLM_PROVIDER",
+        "KAGENT_LLM_BASE_URL",
+        "KAGENT_LLM_API_KEY",
+        "KAGENT_LLM_MODEL",
+        "KAGENT_LLM_TIMEOUT_SECONDS",
+        "KAGENT_LLM_MAX_RETRIES",
+        "KAGENT_LLM_RETRY_BACKOFF_SECONDS",
+    ]:
+        monkeypatch.delenv(key, raising=False)
     config = ServiceConfig(
         host="0.0.0.0",
         port=9001,

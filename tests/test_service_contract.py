@@ -719,6 +719,13 @@ def test_service_contract_documents_named_success_schemas():
     assert schemas["RuntimeRunStatusResponse"]["properties"]["latest_plan_action_count"] == {
         "type": "string"
     }
+    assert schemas["RuntimeRunStatusResponse"]["properties"]["step_count"] == {
+        "type": "string"
+    }
+    assert schemas["RuntimeRunStatusResponse"]["properties"]["steps"] == {
+        "type": "array",
+        "items": {"$ref": "#/components/schemas/RuntimeStep"},
+    }
     assert schemas["RuntimeRunStatusResponse"]["properties"]["latest_plan_action_ids"] == {
         "type": "array",
         "items": {"type": "string"},
@@ -1116,12 +1123,21 @@ def test_service_contract_documents_named_success_schemas():
         "run_id",
         "trace_path",
         "event_count",
+        "step_count",
         "progress_event_count",
         "observation_count",
+        "steps",
         "events",
         "progress_events",
         "observations",
     ]
+    assert schemas["RuntimeTimelineResponse"]["properties"]["step_count"] == {
+        "type": "string"
+    }
+    assert schemas["RuntimeTimelineResponse"]["properties"]["steps"] == {
+        "type": "array",
+        "items": {"$ref": "#/components/schemas/RuntimeStep"},
+    }
     assert schemas["RuntimeTimelineResponse"]["properties"]["events"] == {
         "type": "array",
         "items": {"type": "object"},
