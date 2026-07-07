@@ -1170,7 +1170,11 @@ def test_cli_runtime_user_message_block_is_wide_and_not_arrow_prefixed():
         .replace("\033[97m", "")
         .replace("\033[0m", "")
     )
-    assert visible == "测试        "
+    assert visible.splitlines() == [
+        "            ",
+        "测试        ",
+        "            ",
+    ]
     assert runtime_user_message_block("测试", color=False, width=12) == "测试"
 
 

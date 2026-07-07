@@ -59,7 +59,15 @@ def runtime_user_message_block(
         return text
     terminal_width = max(1, width or _ui_width())
     padding = max(0, terminal_width - _display_width(text))
-    return f"\033[48;5;236m\033[97m{text}{' ' * padding}\033[0m"
+    blank_line = " " * terminal_width
+    message_line = f"{text}{' ' * padding}"
+    return "\n".join(
+        [
+            f"\033[48;5;236m{blank_line}\033[0m",
+            f"\033[48;5;236m\033[97m{message_line}\033[0m",
+            f"\033[48;5;236m{blank_line}\033[0m",
+        ]
+    )
 
 
 def runtime_setup_message(*, config_path: str, color: bool = False) -> str:

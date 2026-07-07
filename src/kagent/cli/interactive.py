@@ -442,7 +442,7 @@ def _replace_runtime_prompt_with_user_message(goal: str) -> None:
             color=True,
         )
     )
-    sys.stdout.write("\n")
+    sys.stdout.write("\n\n")
     sys.stdout.flush()
 
 
