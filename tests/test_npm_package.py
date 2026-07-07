@@ -95,19 +95,35 @@ def test_npm_runner_detects_same_version_github_commit_updates():
 
     script = """
 const { _internals } = require("./npm/lib/python-runner");
-if (!_internals.hasSelfUpdate({version: "0.1.1", headSha: "new"}, "0.1.1", {remoteHeadSha: "old", remoteVersion: "0.1.1"})) {
+if (!_internals.hasSelfUpdate(
+  {version: "0.1.1", headSha: "new"},
+  "0.1.1",
+  {remoteHeadSha: "old", remoteVersion: "0.1.1"}
+)) {
   throw new Error("new GitHub head should prompt even when version is unchanged");
 }
-if (_internals.hasSelfUpdate({version: "0.1.1", headSha: "same"}, "0.1.1", {remoteHeadSha: "same"})) {
+if (_internals.hasSelfUpdate(
+  {version: "0.1.1", headSha: "same"},
+  "0.1.1",
+  {remoteHeadSha: "same"}
+)) {
   throw new Error("same GitHub head should not prompt");
 }
 if (_internals.hasSelfUpdate({version: "0.1.1", headSha: "latest"}, "0.1.1", {})) {
   throw new Error("same version without prior state should not prompt");
 }
-if (!_internals.hasSelfUpdate({version: "0.1.2", headSha: "same"}, "0.1.1", {remoteHeadSha: "same"})) {
+if (!_internals.hasSelfUpdate(
+  {version: "0.1.2", headSha: "same"},
+  "0.1.1",
+  {remoteHeadSha: "same"}
+)) {
   throw new Error("newer package version should prompt");
 }
-if (_internals.hasSelfUpdate({version: "0.1.2", headSha: "new"}, "0.1.2", {remoteHeadSha: "old", remoteVersion: "0.1.1"})) {
+if (_internals.hasSelfUpdate(
+  {version: "0.1.2", headSha: "new"},
+  "0.1.2",
+  {remoteHeadSha: "old", remoteVersion: "0.1.1"}
+)) {
   throw new Error("old version state should not force a same-version prompt after package update");
 }
 """
