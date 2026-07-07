@@ -3,6 +3,7 @@ import json
 import os
 import subprocess
 import sys
+import threading
 from argparse import Namespace
 from pathlib import Path
 
@@ -1096,6 +1097,50 @@ def test_cli_interactive_runtime_reuses_prompt_line_after_empty_enter(monkeypatc
 
     captured = capsys.readouterr()
     assert captured.out.count("\x1b[1A\r\x1b[2K") == 2
+
+
+def test_cli_interactive_runtime_accepts_next_input_while_run_is_active(
+    monkeypatch,
+    capsys,
+):
+    from kagent.cli import _run_runtime_interactive
+
+    second_input_seen = threading.Event()
+    errors = []
+    calls = []
+
+    class FakeTTYInput:
+        def __init__(self):
+            self.lines = ["第一个任务\n", "第二个任务\n", "exit\n"]
+
+        def isatty(self):
+            return True
+
+        def readline(self):
+            line = self.lines.pop(0) if self.lines else ""
+            if line == "第二个任务\n":
+                second_input_seen.set()
+            return line
+
+    def fake_run_runtime_agent(goal, **_kwargs):
+        calls.append(goal)
+        if len(calls) == 1 and not second_input_seen.wait(timeout=0.2):
+            errors.append("second input was not accepted while first run was active")
+        return {"status": "done", "answer": f"done {len(calls)}"}
+
+    monkeypatch.setattr(sys, "stdin", FakeTTYInput())
+    monkeypatch.setattr(sys, "__stderr__", sys.stderr)
+
+    _run_runtime_interactive(
+        provider=object(),
+        run_runtime_agent=fake_run_runtime_agent,
+        max_iterations=1,
+        fail_on_agent_failure=False,
+    )
+
+    assert errors == []
+    assert calls[0] == "第一个任务"
+    assert calls[1].endswith("Current user message:\n第二个任务")
 
 
 def test_cli_colored_runtime_prompt_marks_ansi_as_readline_invisible():

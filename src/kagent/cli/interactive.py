@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import queue
 import shlex
 import sys
 import threading
@@ -79,48 +80,24 @@ def run_runtime_interactive(
     )
     last_payload: Any = None
     line_reader: Any = None
+    state_lock = threading.RLock()
     if interactive_tty:
         line_reader = _runtime_interactive_line_reader(prompt_stream)
         print(runtime_ready_message(color=runtime_ui_color_enabled()), file=prompt_stream)
-    while True:
-        try:
-            line = (
-                line_reader.read(color=runtime_ui_color_enabled())
-                if interactive_tty and line_reader is not None
-                else sys.stdin.readline()
+
+    def run_goal_once(
+        goal: str,
+        approval_reader: Any = None,
+        full_json_override: bool | None = None,
+    ) -> None:
+        nonlocal last_payload
+        with state_lock:
+            runtime_goal = _runtime_interactive_goal_with_memory(goal, session_memory)
+            run_full_json_mode = (
+                full_json_mode if full_json_override is None else full_json_override
             )
-        except EOFError:
-            return
-        if not interactive_tty and line == "":
-            return
-        goal = line.strip()
-        if not goal:
-            if interactive_tty:
-                _erase_empty_runtime_prompt_line()
-            continue
-        if goal.lower() in {"exit", "quit", ":q"}:
-            return
-        if interactive_tty and goal.startswith("/"):
-            if not is_runtime_interactive_command(goal):
-                _print_unknown_runtime_interactive_command(goal)
-                continue
-            handled, full_json_mode = _handle_runtime_interactive_command(
-                goal,
-                full_json_mode,
-                session_memory,
-                last_payload,
-                session_memory_path=session_memory_path,
-                trace_dir=trace_dir,
-                provider=provider,
-                line_reader=line_reader,
-            )
-            if handled:
-                continue
-            _print_invalid_runtime_interactive_command(goal)
-            continue
-        runtime_goal = _runtime_interactive_goal_with_memory(goal, session_memory)
         progress_sink = _runtime_interactive_progress_sink(
-            enabled=interactive_tty and not full_json_mode
+            enabled=interactive_tty and not run_full_json_mode
         )
         try:
             payload = json_ready(
@@ -131,7 +108,7 @@ def run_runtime_interactive(
                     metadata=metadata,
                     tags=tags,
                     event_sink=progress_sink,
-                    stream_answers=interactive_tty and not full_json_mode,
+                    stream_answers=interactive_tty and not run_full_json_mode,
                 )
             )
         finally:
@@ -140,7 +117,7 @@ def run_runtime_interactive(
             persist_runtime_cli_trace_or_raise(payload, trace_dir, persist_trace)
         _print_runtime_interactive_payload(
             payload,
-            full_json=full_json_mode or not interactive_tty,
+            full_json=run_full_json_mode or not interactive_tty,
         )
         if payload.get("status") == "requires_approval" and interactive_tty:
             payload = _maybe_run_approved_runtime_action(
@@ -149,20 +126,114 @@ def run_runtime_interactive(
                 run_runtime_agent=run_runtime_agent,
                 metadata=metadata,
                 tags=tags,
-                progress_enabled=not full_json_mode,
+                progress_enabled=not run_full_json_mode,
+                response_reader=approval_reader,
             )
             if payload is not None:
                 if trace_dir and persist_trace is not None:
                     persist_runtime_cli_trace_or_raise(payload, trace_dir, persist_trace)
                 _print_runtime_interactive_payload(
                     payload,
-                    full_json=full_json_mode,
+                    full_json=run_full_json_mode,
                 )
-        last_payload = payload
-        _remember_runtime_interactive_turn(session_memory, goal, payload)
-        save_runtime_session_memory(session_memory_path, session_memory)
-        if fail_on_agent_failure and payload.get("status") == "failed":
+        with state_lock:
+            last_payload = payload
+            _remember_runtime_interactive_turn(session_memory, goal, payload)
+            save_runtime_session_memory(session_memory_path, session_memory)
+        if (
+            fail_on_agent_failure
+            and isinstance(payload, dict)
+            and payload.get("status") == "failed"
+        ):
             raise SystemExit(1)
+
+    if interactive_tty:
+        work_queue: queue.Queue[tuple[str, bool] | None] = queue.Queue()
+        approval_broker = _RuntimeInteractiveApprovalBroker()
+        worker_errors: list[BaseException] = []
+
+        def worker() -> None:
+            while True:
+                queued_item = work_queue.get()
+                try:
+                    if queued_item is None:
+                        return
+                    queued_goal, queued_full_json_mode = queued_item
+                    run_goal_once(
+                        queued_goal,
+                        approval_reader=approval_broker.read,
+                        full_json_override=queued_full_json_mode,
+                    )
+                except BaseException as exc:
+                    worker_errors.append(exc)
+                finally:
+                    work_queue.task_done()
+
+        worker_thread = threading.Thread(target=worker, daemon=True)
+        worker_thread.start()
+
+        def shutdown_worker() -> None:
+            work_queue.join()
+            work_queue.put(None)
+            worker_thread.join()
+            if worker_errors:
+                raise worker_errors[0]
+
+        while True:
+            try:
+                line = line_reader.read(color=runtime_ui_color_enabled())
+            except EOFError:
+                shutdown_worker()
+                return
+            goal = line.strip()
+            if not goal:
+                _erase_empty_runtime_prompt_line()
+                continue
+            if approval_broker.submit_if_waiting(goal):
+                continue
+            if _is_runtime_approval_reply(goal):
+                if approval_broker.submit_when_waiting(goal, timeout=0.15):
+                    continue
+            if goal.lower() in {"exit", "quit", ":q"}:
+                shutdown_worker()
+                return
+            if goal.startswith("/"):
+                work_queue.join()
+                if not is_runtime_interactive_command(goal):
+                    _print_unknown_runtime_interactive_command(goal)
+                    continue
+                with state_lock:
+                    handled, full_json_mode = _handle_runtime_interactive_command(
+                        goal,
+                        full_json_mode,
+                        session_memory,
+                        last_payload,
+                        session_memory_path=session_memory_path,
+                        trace_dir=trace_dir,
+                        provider=provider,
+                        line_reader=line_reader,
+                    )
+                if handled:
+                    continue
+                _print_invalid_runtime_interactive_command(goal)
+                continue
+            with state_lock:
+                queued_full_json_mode = full_json_mode
+            work_queue.put((goal, queued_full_json_mode))
+
+    while True:
+        try:
+            line = sys.stdin.readline()
+        except EOFError:
+            return
+        if line == "":
+            return
+        goal = line.strip()
+        if not goal:
+            continue
+        if goal.lower() in {"exit", "quit", ":q"}:
+            return
+        run_goal_once(goal)
 
 
 def _enable_interactive_line_editing() -> None:
@@ -203,11 +274,20 @@ class _PromptToolkitLineReader(_RuntimeLineReader):
 
     def read(self, *, color: bool) -> str:
         message: Any = [("class:input-bar.prompt", "› ")] if color else "› "
-        return self._session.prompt(
-            message,
-            wrap_lines=True,
-            multiline=False,
-        )
+        try:
+            from prompt_toolkit.patch_stdout import patch_stdout
+        except ImportError:
+            return self._session.prompt(
+                message,
+                wrap_lines=True,
+                multiline=False,
+            )
+        with patch_stdout(raw=True):
+            return self._session.prompt(
+                message,
+                wrap_lines=True,
+                multiline=False,
+            )
 
     def clear_history(self) -> None:
         history = getattr(self._session, "history", None)
@@ -291,6 +371,58 @@ def _close_runtime_progress_sink(progress_sink: Any) -> None:
     close = getattr(progress_sink, "close", None)
     if callable(close):
         close()
+
+
+class _RuntimeInteractiveApprovalBroker:
+    def __init__(self) -> None:
+        self._condition = threading.Condition()
+        self._responses: queue.Queue[str] = queue.Queue()
+        self._waiting = False
+
+    def read(self, prompt: str) -> str:
+        with self._condition:
+            self._waiting = True
+            self._condition.notify_all()
+        try:
+            sys.stdout.write(prompt)
+            sys.stdout.flush()
+            return self._responses.get()
+        finally:
+            with self._condition:
+                self._waiting = False
+                self._condition.notify_all()
+
+    def submit_if_waiting(self, line: str) -> bool:
+        with self._condition:
+            if not self._waiting:
+                return False
+            self._responses.put(line)
+            return True
+
+    def submit_when_waiting(self, line: str, *, timeout: float) -> bool:
+        deadline = time.monotonic() + timeout
+        with self._condition:
+            while not self._waiting:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    return False
+                self._condition.wait(timeout=remaining)
+            self._responses.put(line)
+            return True
+
+
+def _is_runtime_approval_reply(goal: str) -> bool:
+    return goal.strip().lower() in {
+        "y",
+        "yes",
+        "approve",
+        "n",
+        "no",
+        "d",
+        "detail",
+        "details",
+        "view",
+    }
 
 
 def _erase_empty_runtime_prompt_line() -> None:
@@ -712,6 +844,7 @@ def _maybe_run_approved_runtime_action(
     metadata: dict[str, str] | None = None,
     tags: list[str] | None = None,
     progress_enabled: bool = True,
+    response_reader: Any = None,
 ) -> Any:
     pending = payload.get("pending_approval") if isinstance(payload, dict) else None
     if not isinstance(pending, dict):
@@ -721,9 +854,11 @@ def _maybe_run_approved_runtime_action(
     if not action_id or not tool:
         return None
     while True:
-        answer = input(
-            approval_prompt(action_id, tool, color=runtime_ui_color_enabled())
-        ).strip().lower()
+        prompt = approval_prompt(action_id, tool, color=runtime_ui_color_enabled())
+        if response_reader is None:
+            answer = input(prompt).strip().lower()
+        else:
+            answer = str(response_reader(prompt)).strip().lower()
         if answer in {"d", "detail", "details", "view"}:
             print(format_runtime_pending_approval_detail(pending))
             continue
