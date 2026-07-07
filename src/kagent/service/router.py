@@ -96,6 +96,10 @@ def handle_request(
         from kagent.core.tools import registered_tool_metadata
 
         return 200, {"tools": registered_tool_metadata()}
+    if method.upper() == "GET" and route == "/runtime/graph":
+        from kagent.runtime import runtime_topology
+
+        return 200, runtime_topology()
     if method.upper() == "GET" and route == "/runtime/tools":
         from kagent.runtime.tools import (
             registered_runtime_tool_metadata,
@@ -432,6 +436,7 @@ _PROTECTED_DIAGNOSTIC_ROUTES = frozenset(
     {
         "/config",
         "/tools",
+        "/runtime/graph",
         "/runtime/tools",
         "/metrics",
         "/metrics.prom",

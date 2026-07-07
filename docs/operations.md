@@ -572,7 +572,9 @@ Every OpenAPI operation also has a stable `operationId`, such as `postRun`,
 for generated clients and gateway contract checks.
 Use those schema names for generated clients, contract review, and downstream
 smoke tests.
-Use `GET /runtime/tools` to inspect Codex-style runtime tool names,
+Use `GET /runtime/graph` to inspect the deployed LangGraph runtime topology and
+confirm the service is running the expected `prepare -> runtime_loop -> finalize`
+graph shell. Use `GET /runtime/tools` to inspect Codex-style runtime tool names,
 descriptions, `input_schema`, `output_schema`, and `timeout_seconds` values
 before generating or validating plans.
 Set `KAGENT_SERVICE_RUNTIME_ALLOWED_TOOLS` to a comma-separated

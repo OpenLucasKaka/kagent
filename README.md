@@ -166,7 +166,7 @@ kagent-serve --host 127.0.0.1 --port 8000
 Useful endpoints include:
 
 - `GET /health`, `HEAD /health`, `GET /ready`, `HEAD /ready`
-- `GET /config`, `GET /version`, `GET /tools`, `GET /runtime/tools`
+- `GET /config`, `GET /version`, `GET /tools`, `GET /runtime/graph`, `GET /runtime/tools`
 - `POST /run`, `POST /runtime/run`, `POST /runtime/resume`
 - `GET /runtime/runs`, `GET /runtime/runs/summary`
 - `GET /runtime/approvals`, `GET /runtime/approvals/summary`

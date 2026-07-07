@@ -306,6 +306,7 @@ def test_service_openapi_endpoint_reports_api_contract():
         "/run",
         "/runtime/approvals",
         "/runtime/approvals/summary",
+        "/runtime/graph",
         "/runtime/policy",
         "/runtime/resume",
         "/runtime/run",
@@ -338,6 +339,20 @@ def test_service_openapi_endpoint_reports_api_contract():
         "500",
         "503",
         "504",
+    ]
+
+
+def test_service_runtime_graph_endpoint_reports_topology():
+    status_code, payload = handle_request("GET", "/runtime/graph", b"")
+
+    assert status_code == 200
+    assert payload["runtime_engine"] == "langgraph"
+    assert payload["entry_point"] == "prepare"
+    assert payload["nodes"] == ["prepare", "runtime_loop", "finalize"]
+    assert payload["edges"] == [
+        "prepare -> runtime_loop",
+        "runtime_loop -> finalize",
+        "finalize -> END",
     ]
 
 

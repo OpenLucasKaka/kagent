@@ -69,6 +69,7 @@ _KNOWN_METRICS_PATHS = frozenset(
         "/runtime/resume",
         "/runtime/approvals",
         "/runtime/approvals/summary",
+        "/runtime/graph",
         "/runtime/policy",
         "/runtime/runs",
         "/runtime/runs/summary",

@@ -194,6 +194,8 @@ The service intentionally keeps a narrow API:
 - `GET /config` returns redacted runtime configuration.
 - `GET /version` returns the package version.
 - `GET /tools` returns registered deterministic tool metadata.
+- `GET /runtime/graph` returns Codex-style runtime graph topology, including
+  `runtime_engine`, entry point, terminal, nodes, edges, and loop ownership.
 - `GET /runtime/tools` returns Codex-style runtime tool metadata, including
   machine-readable `input_schema` and `output_schema` contracts for planner and
   client validation.

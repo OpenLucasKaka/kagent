@@ -82,6 +82,7 @@ openapi_status, openapi = request_json("/openapi.json")
 assert_status(openapi_status, 200, openapi, "openapi")
 for path in [
     "/runtime/run",
+    "/runtime/graph",
     "/runtime/policy",
     "/runtime/runs",
     "/runtime/runs/summary",
@@ -93,6 +94,11 @@ tools_status, tools = request_json("/runtime/tools")
 assert_status(tools_status, 200, tools, "runtime tools")
 tool_names = [tool["name"] for tool in tools["tools"]]
 assert "note" in tool_names, tools
+
+graph_status, graph = request_json("/runtime/graph")
+assert_status(graph_status, 200, graph, "runtime graph")
+assert graph["runtime_engine"] == "langgraph", graph
+assert graph["nodes"] == ["prepare", "runtime_loop", "finalize"], graph
 
 policy_status, policy = request_json("/runtime/policy")
 assert_status(policy_status, 200, policy, "runtime policy")

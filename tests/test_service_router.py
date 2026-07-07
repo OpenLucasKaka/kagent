@@ -111,6 +111,7 @@ def test_service_router_can_protect_diagnostic_endpoints_with_bearer_auth(tmp_pa
     protected_routes = [
         "/config",
         "/tools",
+        "/runtime/graph",
         "/runtime/tools",
         "/runtime/policy",
         "/metrics",
@@ -141,6 +142,24 @@ def test_service_router_can_protect_diagnostic_endpoints_with_bearer_auth(tmp_pa
 
         assert status_code == 200
         assert payload
+
+
+def test_service_router_can_report_runtime_graph_topology():
+    status_code, payload = service_router.handle_request("GET", "/runtime/graph", b"")
+
+    assert status_code == 200
+    assert payload == {
+        "runtime_engine": "langgraph",
+        "entry_point": "prepare",
+        "terminal": "END",
+        "nodes": ["prepare", "runtime_loop", "finalize"],
+        "edges": [
+            "prepare -> runtime_loop",
+            "runtime_loop -> finalize",
+            "finalize -> END",
+        ],
+        "loop": "runtime_loop handles bounded planner-policy-executor iterations",
+    }
 
 
 def test_service_router_runtime_policy_reports_admin_audit_view_without_tokens():

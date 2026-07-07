@@ -97,6 +97,26 @@ def service_openapi() -> Dict[str, Any]:
                         },
                     },
                 },
+                "RuntimeGraphResponse": {
+                    "type": "object",
+                    "required": [
+                        "runtime_engine",
+                        "entry_point",
+                        "terminal",
+                        "nodes",
+                        "edges",
+                        "loop",
+                    ],
+                    "properties": {
+                        "runtime_engine": {"type": "string", "enum": ["langgraph"]},
+                        "entry_point": {"type": "string"},
+                        "terminal": {"type": "string"},
+                        "nodes": {"type": "array", "items": {"type": "string"}},
+                        "edges": {"type": "array", "items": {"type": "string"}},
+                        "loop": {"type": "string"},
+                    },
+                    "additionalProperties": False,
+                },
                 "RuntimeToolsResponse": {
                     "type": "object",
                     "required": ["tools"],
@@ -808,6 +828,20 @@ def service_openapi() -> Dict[str, Any]:
                     "security": _diagnostic_security(),
                     "operationId": "getTools",
                     "responses": {"200": _json_response("Tool metadata", "ToolsResponse")},
+                }
+            },
+            "/runtime/graph": {
+                "get": {
+                    "summary": "Report Codex-style runtime graph topology",
+                    "description": _diagnostic_description(),
+                    "security": _diagnostic_security(),
+                    "operationId": "getRuntimeGraph",
+                    "responses": {
+                        "200": _json_response(
+                            "Runtime graph topology",
+                            "RuntimeGraphResponse",
+                        )
+                    },
                 }
             },
             "/runtime/tools": {

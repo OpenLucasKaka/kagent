@@ -80,6 +80,7 @@ def test_service_contract_documents_named_success_schemas():
         "ConfigResponse",
         "VersionResponse",
         "ToolsResponse",
+        "RuntimeGraphResponse",
         "MetricsResponse",
         "RunRequest",
         "RunResponse",
@@ -110,6 +111,9 @@ def test_service_contract_documents_named_success_schemas():
     }
     assert payload["paths"]["/runtime/run"]["post"]["responses"]["200"]["content"] == {
         "application/json": {"schema": {"$ref": "#/components/schemas/RuntimeRunResponse"}}
+    }
+    assert payload["paths"]["/runtime/graph"]["get"]["responses"]["200"]["content"] == {
+        "application/json": {"schema": {"$ref": "#/components/schemas/RuntimeGraphResponse"}}
     }
     assert payload["paths"]["/runtime/resume"]["post"]["responses"]["200"]["content"] == {
         "application/json": {"schema": {"$ref": "#/components/schemas/RuntimeRunResponse"}}
@@ -1336,6 +1340,7 @@ def test_service_contract_documents_stable_operation_ids():
     assert payload["paths"]["/config"]["get"]["operationId"] == "getConfig"
     assert payload["paths"]["/version"]["get"]["operationId"] == "getVersion"
     assert payload["paths"]["/tools"]["get"]["operationId"] == "getTools"
+    assert payload["paths"]["/runtime/graph"]["get"]["operationId"] == "getRuntimeGraph"
     assert payload["paths"]["/runtime/tools"]["get"]["operationId"] == "getRuntimeTools"
     assert payload["paths"]["/metrics"]["get"]["operationId"] == "getMetrics"
     assert payload["paths"]["/metrics.prom"]["get"]["operationId"] == "getPrometheusMetrics"
@@ -1376,6 +1381,7 @@ def test_service_contract_documents_optionally_protected_diagnostic_endpoints():
     for route in [
         "/config",
         "/tools",
+        "/runtime/graph",
         "/runtime/tools",
         "/runtime/policy",
         "/runtime/approvals",
