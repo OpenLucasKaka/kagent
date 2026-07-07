@@ -57,6 +57,8 @@ def test_npm_runner_checks_github_for_interactive_self_update():
     assert "KAGENT_NO_SELF_UPDATE" in runner
     assert "process.stdin.isTTY" in runner
     assert "Update now? [Y/n]" in runner
+    assert "readline.createInterface" in runner
+    assert "fs.readSync(0" not in runner
     assert '"npm", ["install", "-g", "github:OpenLucasKaka/kagent"]' in runner
     assert "selfUpdateStatePath" in runner
     assert "latest.headSha !== state.remoteHeadSha" in runner

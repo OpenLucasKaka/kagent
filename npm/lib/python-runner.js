@@ -6,6 +6,7 @@ const fs = require("fs");
 const https = require("https");
 const os = require("os");
 const path = require("path");
+const readline = require("readline");
 
 const GITHUB_PACKAGE_JSON_URL = "https://raw.githubusercontent.com/OpenLucasKaka/Kagent/main/package.json";
 const GITHUB_HEAD_URL = "https://api.github.com/repos/OpenLucasKaka/Kagent/commits/main";
@@ -212,14 +213,20 @@ function hasSelfUpdate(latest, currentVersion, state) {
 
 function promptForSelfUpdate(currentVersion, latest) {
   const shortSha = latest.headSha ? ` (${latest.headSha.slice(0, 7)})` : "";
-  process.stderr.write(
+  const prompt =
     `kagent ${latest.version}${shortSha} is available. Current version: ${currentVersion}.\n` +
-      "Update now? [Y/n] "
-  );
-  const buffer = Buffer.alloc(1024);
-  const bytesRead = fs.readSync(0, buffer, 0, buffer.length, null);
-  const answer = buffer.subarray(0, bytesRead).toString("utf8").trim().toLowerCase();
-  return answer === "" || answer === "y" || answer === "yes";
+    "Update now? [Y/n] ";
+  return new Promise((resolve) => {
+    const rl = readline.createInterface({
+      input: process.stdin,
+      output: process.stderr
+    });
+    rl.question(prompt, (answer) => {
+      rl.close();
+      const normalized = String(answer || "").trim().toLowerCase();
+      resolve(normalized === "" || normalized === "y" || normalized === "yes");
+    });
+  });
 }
 
 function restartEntrypoint(commandName, args) {
@@ -258,7 +265,7 @@ async function maybeSelfUpdate(root, currentVersion, commandName, args) {
     return false;
   }
 
-  if (!promptForSelfUpdate(currentVersion, latest)) {
+  if (!(await promptForSelfUpdate(currentVersion, latest))) {
     writeSelfUpdateState({
       remoteHeadSha: latest.headSha,
       remoteVersion: latest.version,
