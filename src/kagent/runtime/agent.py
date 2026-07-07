@@ -13,6 +13,7 @@ from kagent.runtime.metadata import (
 )
 from kagent.runtime.policy import RuntimePolicy
 from kagent.runtime.redaction import redact_runtime_payload
+from kagent.runtime.steps import derive_runtime_steps
 from kagent.runtime.tools import (
     RuntimeToolSpec,
     default_runtime_tools,
@@ -355,6 +356,7 @@ def run_runtime_agent(
         "plans": plans,
         "observations": [observation.to_dict() for observation in observations],
     }
+    result["steps"] = derive_runtime_steps(result)
     if answer:
         result["answer"] = answer
     if answer_streamed and answer:

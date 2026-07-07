@@ -310,6 +310,13 @@ def format_runtime_interactive_summary(payload: Any, *, color: bool = False) -> 
         lines.append(_color("Error", "red", enabled=color))
         lines.extend(_indented_lines(join_non_empty([error_code, error], " "), prefix="  "))
 
+    visible_steps = visible_runtime_steps(payload.get("steps"))
+    if visible_steps:
+        lines.append("")
+        lines.append(_dim("Steps", enabled=color))
+        for step in visible_steps:
+            lines.extend(format_runtime_step_lines(step, color=color))
+
     visible_observations = visible_runtime_observations(
         payload.get("observations"),
         successful_only=bool(answer),
@@ -325,6 +332,27 @@ def format_runtime_interactive_summary(payload: Any, *, color: bool = False) -> 
             )
 
     return "\n".join(lines)
+
+
+def visible_runtime_steps(steps: Any) -> list[dict]:
+    if not isinstance(steps, list):
+        return []
+    visible = []
+    for step in steps:
+        if isinstance(step, dict):
+            visible.append(step)
+    return visible
+
+
+def format_runtime_step_lines(step: dict, *, color: bool = False) -> list[str]:
+    state = str(step.get("state", "")).strip()
+    title = str(step.get("title", "")).strip()
+    detail = str(step.get("detail", "")).strip()
+    headline = join_non_empty([_status_icon(state, color=color), title], " ")
+    lines = _wrapped_block_lines(headline or _status_icon(state, color=color), prefix="  ")
+    if detail:
+        lines.extend(_indented_lines(detail, prefix="    "))
+    return lines
 
 
 def format_runtime_progress_event(event: Any, *, color: bool = False) -> str:

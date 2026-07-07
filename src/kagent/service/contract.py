@@ -314,6 +314,10 @@ def service_openapi() -> Dict[str, Any]:
                         },
                         "plan": {"type": "object"},
                         "plans": {"type": "array", "items": {"type": "object"}},
+                        "steps": {
+                            "type": "array",
+                            "items": {"$ref": "#/components/schemas/RuntimeStep"},
+                        },
                         "observations": {
                             "type": "array",
                             "items": {"$ref": "#/components/schemas/RuntimeObservation"},
@@ -331,6 +335,25 @@ def service_openapi() -> Dict[str, Any]:
                         "error": {"type": "string"},
                     },
                     "additionalProperties": True,
+                },
+                "RuntimeStep": {
+                    "type": "object",
+                    "required": ["index", "state", "title"],
+                    "properties": {
+                        "index": {"type": "string"},
+                        "state": {
+                            "type": "string",
+                            "enum": [
+                                "done",
+                                "failed",
+                                "pending",
+                                "waiting_approval",
+                            ],
+                        },
+                        "title": {"type": "string"},
+                        "detail": {"type": "string"},
+                    },
+                    "additionalProperties": False,
                 },
                 "RuntimeObservation": {
                     "type": "object",

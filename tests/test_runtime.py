@@ -40,6 +40,11 @@ def test_runtime_agent_runs_fake_llm_plan_through_policy_and_tools():
     assert result["plan"]["actions"][0]["tool"] == "note"
     assert result["observations"][0]["status"] == "ok"
     assert result["observations"][0]["output"] == {"text": "hello"}
+    assert result["steps"][0] == {
+        "index": "1",
+        "state": "done",
+        "title": "capture",
+    }
     assert result["events"][0]["node"] == "planner"
     assert result["events"][1]["node"] == "policy"
     assert result["events"][2]["node"] == "executor"

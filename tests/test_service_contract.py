@@ -629,6 +629,10 @@ def test_service_contract_documents_named_success_schemas():
         "failed",
         "requires_approval",
     ]
+    assert schemas["RuntimeRunResponse"]["properties"]["steps"] == {
+        "type": "array",
+        "items": {"$ref": "#/components/schemas/RuntimeStep"},
+    }
     assert schemas["RuntimeRunResponse"]["properties"]["observations"] == {
         "type": "array",
         "items": {"$ref": "#/components/schemas/RuntimeObservation"},
@@ -644,6 +648,20 @@ def test_service_contract_documents_named_success_schemas():
     assert schemas["RuntimeRunResponse"]["properties"][
         "progress_event_sink_failure_count"
     ] == {"type": "string"}
+    assert schemas["RuntimeStep"] == {
+        "type": "object",
+        "required": ["index", "state", "title"],
+        "properties": {
+            "index": {"type": "string"},
+            "state": {
+                "type": "string",
+                "enum": ["done", "failed", "pending", "waiting_approval"],
+            },
+            "title": {"type": "string"},
+            "detail": {"type": "string"},
+        },
+        "additionalProperties": False,
+    }
     assert schemas["RuntimeToolsResponse"]["properties"]["tools"] == {
         "type": "array",
         "items": {"$ref": "#/components/schemas/RuntimeToolMetadata"},

@@ -1715,6 +1715,28 @@ def test_cli_compact_summary_hides_failed_observations_when_answer_is_done():
     assert "The read operation timed out" not in message
 
 
+def test_cli_compact_summary_renders_runtime_steps_for_done_runs():
+    from kagent.cli.ui import format_runtime_interactive_summary
+
+    message = format_runtime_interactive_summary(
+        {
+            "status": "done",
+            "duration_seconds": "0.1200",
+            "steps": [
+                {
+                    "index": "1",
+                    "state": "done",
+                    "title": "Updated files hello.md",
+                }
+            ],
+        },
+        color=False,
+    )
+
+    assert "\n\nSteps\n  ✓ Updated files hello.md" in message
+    assert "step-1" not in message
+
+
 def test_cli_interactive_runtime_tty_prints_live_progress(monkeypatch, capsys):
     from kagent.cli import _run_runtime_interactive
 
