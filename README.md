@@ -91,6 +91,12 @@ LLM-free checks:
 .venv/bin/python -m kagent.cli --deterministic "calculate 2 + 3"
 ```
 
+Inspect the default Codex-style runtime LangGraph topology:
+
+```sh
+kagent --runtime --graph
+```
+
 After package installation, the console entrypoint is the same daily-use
 interface:
 

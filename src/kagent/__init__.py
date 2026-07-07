@@ -22,6 +22,7 @@ __all__ = [
     "registered_evaluation_cases",
     "registered_tool_metadata",
     "registered_tool_names",
+    "runtime_topology",
     "run_agent",
     "run_runtime_agent",
     "summarize_run",
@@ -57,6 +58,10 @@ def __getattr__(name):
         from kagent.runtime import run_runtime_agent
 
         return run_runtime_agent
+    if name == "runtime_topology":
+        from kagent.runtime import runtime_topology
+
+        return runtime_topology
     if name == "summarize_run":
         from kagent.core.summary import summarize_run
 

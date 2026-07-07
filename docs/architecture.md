@@ -129,6 +129,9 @@ later. Every runtime trace carries `trace_type: "codex_runtime"` and
 `runtime_engine: "langgraph"` so persisted status, listing, and resume flows can
 distinguish Codex-style runtime traces from deterministic legacy `/run` traces
 stored in the same directory.
+`runtime_topology()` exposes the same runtime graph shape for clients and
+operators, and `kagent --runtime --graph` prints that topology without requiring
+provider configuration or executing a user goal.
 `runtime/metadata.py` owns bounded non-secret run labels shared by CLI and
 service execution paths. It normalizes `metadata` string maps and `tags` arrays,
 rejects secret-like metadata keys, and keeps run labels small enough for trace

@@ -9,6 +9,7 @@ from kagent import (
     registered_evaluation_cases,
     registered_tool_metadata,
     run_runtime_agent,
+    runtime_topology,
     summarize_run,
 )
 
@@ -24,6 +25,14 @@ def test_public_api_exports_agent_topology():
         "verifier",
         "reflector",
     ]
+
+
+def test_public_api_exports_runtime_topology():
+    assert runtime_topology() == {
+        "runtime_engine": "langgraph",
+        "nodes": ["runtime"],
+        "edges": ["runtime -> END"],
+    }
 
 
 def test_public_api_exports_evaluator_entrypoint():

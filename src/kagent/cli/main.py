@@ -237,7 +237,7 @@ def main() -> None:
             default_provider_config_path,
             save_provider_config,
         )
-        from kagent.runtime import run_runtime_agent
+        from kagent.runtime import run_runtime_agent, runtime_topology
         from kagent.runtime.tools import (
             registered_runtime_tool_metadata,
         )
@@ -261,7 +261,8 @@ def main() -> None:
             return
 
         if args.graph:
-            _emit_json_payload(agent_topology(), args.output, parser)
+            topology = runtime_topology() if args.runtime else agent_topology()
+            _emit_json_payload(topology, args.output, parser)
             return
 
         if args.version:

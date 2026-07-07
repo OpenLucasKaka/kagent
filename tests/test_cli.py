@@ -387,6 +387,30 @@ def test_cli_can_print_graph_topology_without_goal():
     }
 
 
+def test_cli_can_print_runtime_graph_topology_without_goal():
+    completed = subprocess.run(
+        [
+            ".venv/bin/python",
+            "-m",
+            "kagent.cli",
+            "--runtime",
+            "--graph",
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    payload = json.loads(completed.stdout)
+
+    assert completed.stderr == ""
+    assert payload == {
+        "runtime_engine": "langgraph",
+        "nodes": ["runtime"],
+        "edges": ["runtime -> END"],
+    }
+
+
 def test_cli_can_print_package_version_without_goal():
     completed = subprocess.run(
         [

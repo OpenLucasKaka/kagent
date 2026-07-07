@@ -99,6 +99,14 @@ def build_runtime_graph():
     return graph.compile(name="kagent-runtime")
 
 
+def runtime_topology() -> Dict[str, List[str] | str]:
+    return {
+        "runtime_engine": "langgraph",
+        "nodes": ["runtime"],
+        "edges": ["runtime -> END"],
+    }
+
+
 def run_runtime_agent(
     goal: str,
     *,
