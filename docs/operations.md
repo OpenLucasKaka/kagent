@@ -395,7 +395,8 @@ When a runtime action is blocked by policy, the response status is
 with `approved_action_ids` containing only the reviewed action IDs to continue
 without changing the default tool policy. Approved IDs must be unique, non-empty action IDs without surrounding whitespace.
 Runtime responses and compact persisted summaries include `approved_action_count`
-and `approved_action_ids` as approval audit metadata.
+and `approved_action_ids` as consumed approval audit metadata, reporting only
+approval IDs that actually bypassed policy.
 If trace persistence is enabled, `POST /runtime/resume` can resume from a
 persisted pending run by `run_id` and `approved_action_ids`; resume accepts
 only the pending approval action from that trace and does not replay earlier

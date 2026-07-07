@@ -21,7 +21,8 @@ def test_architecture_document_names_runtime_and_operational_boundaries():
     assert "must reference action ids" in architecture
     assert "approvals must resume" in architecture
     assert "approved_action_count" in architecture
-    assert "approval audit" in architecture
+    assert "consumed approval audit" in architecture
+    assert "actually bypassed policy" in architecture
     assert "pending_approval_action_id" in architecture
     assert "pending_approval_tool" in architecture
     assert "lists omit full `pending_approval` payloads" in architecture

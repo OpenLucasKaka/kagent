@@ -364,7 +364,8 @@ The service intentionally keeps a narrow API:
   `approved_action_ids` to approve specific action IDs without broadening the
   default tool policy. Approved IDs must be unique, non-empty action IDs without
   surrounding whitespace. Runtime responses and compact summaries include
-  `approved_action_count` and `approved_action_ids` as approval audit metadata.
+  `approved_action_count` and `approved_action_ids` as consumed approval audit
+  metadata, reporting only approval IDs that actually bypassed policy.
 - `POST /runtime/resume` loads a persisted `requires_approval` runtime trace by
   `run_id`, applies reviewed `approved_action_ids`, and writes a new resumed
   trace linked by `resumed_from_run_id`; resume accepts only the pending approval action

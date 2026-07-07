@@ -261,7 +261,7 @@ def _run_runtime_agent_loop(
     active_policy = policy or RuntimePolicy()
     active_tools = tools or default_runtime_tools()
     active_approvals = set(approved_action_ids or set())
-    approved_action_id_list = sorted(active_approvals)
+    consumed_approved_action_ids: Set[str] = set()
     status = "done"
     observations: List[AgentObservation] = []
     plans: List[Dict[str, Any]] = []
@@ -392,9 +392,12 @@ def _run_runtime_agent_loop(
             policy_started_at = _utc_timestamp()
             policy_timer = time.perf_counter()
             decision = active_policy.authorize(action.tool, action.input)
+            approved_by_id = decision.status != "allowed" and action.id in active_approvals
+            if approved_by_id:
+                consumed_approved_action_ids.add(action.id)
             policy_status = (
                 "approved"
-                if decision.status != "allowed" and action.id in active_approvals
+                if approved_by_id
                 else decision.status
             )
             dependency_metadata = _action_dependency_event_metadata(
@@ -523,8 +526,8 @@ def _run_runtime_agent_loop(
         "max_iterations": str(max_iterations),
         "iteration_budget_remaining": str(max(0, max_iterations - iteration_count)),
         "prompt_observation_compaction": _prompt_observation_compaction(),
-        "approved_action_count": str(len(approved_action_id_list)),
-        "approved_action_ids": approved_action_id_list,
+        "approved_action_count": str(len(consumed_approved_action_ids)),
+        "approved_action_ids": sorted(consumed_approved_action_ids),
         "events": events,
         "progress_events": progress_events,
         "plan": latest_plan,

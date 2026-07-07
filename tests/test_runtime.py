@@ -393,6 +393,24 @@ def test_runtime_agent_can_execute_action_after_explicit_approval():
     assert result["events"][1]["status"] == "approved"
 
 
+def test_runtime_agent_reports_only_consumed_approved_action_ids():
+    provider = FakeLLMProvider(
+        '{"actions":[{"id":"step-1","tool":"note",'
+        '"input":{"text":"hello"},"reason":"capture"}]}'
+    )
+
+    result = run_runtime_agent(
+        "capture hello",
+        provider=provider,
+        approved_action_ids={"missing-step"},
+    )
+
+    assert result["status"] == "done"
+    assert result["approved_action_ids"] == []
+    assert result["approved_action_count"] == "0"
+    assert result["events"][1]["status"] == "allowed"
+
+
 def test_runtime_agent_executes_http_request_after_explicit_approval(monkeypatch):
     class FakeHeaders:
         def get(self, name, default=""):
