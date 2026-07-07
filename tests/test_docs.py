@@ -17,6 +17,8 @@ def test_architecture_document_names_runtime_and_operational_boundaries():
     assert "iteration_count" in architecture
     assert "iteration_budget_remaining" in architecture
     assert "approved_action_ids" in architecture
+    assert "explicit `plan` or `plan_sequence`" in architecture
+    assert "live provider approvals" in architecture
     assert "approved_action_count" in architecture
     assert "approval audit" in architecture
     assert "pending_approval_action_id" in architecture

@@ -343,6 +343,11 @@ Tool input or execution failures are kept as observations and can drive another
 planner iteration while `max_iterations` budget remains. For deterministic
 replay of these correction loops over HTTP, send `plan_sequence` as an ordered
 array of strict plans; it is mutually exclusive with `plan`.
+`approved_action_ids` is accepted only with deterministic `plan` or
+`plan_sequence` payloads. Live provider actions must first return
+`requires_approval`; approve them through `POST /runtime/resume` so the service
+executes the persisted pending action rather than pre-approving a future model
+choice.
 If the latest observation is still failed, the runtime rejects an empty-action
 `final_answer` and keeps the run failed, which prevents a provider from
 claiming success after an unresolved tool or planner failure.

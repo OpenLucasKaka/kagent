@@ -1552,6 +1552,18 @@ def test_service_router_runtime_run_accepts_approved_action_ids(monkeypatch):
     assert payload["observations"][0]["output"]["body_text"] == "approved fetch"
 
 
+def test_service_router_runtime_run_rejects_live_provider_preapproved_action_ids():
+    status_code, payload = service_router.handle_request(
+        "POST",
+        "/runtime/run",
+        b'{"goal":"fetch site","approved_action_ids":["step-1"]}',
+    )
+
+    assert status_code == 400
+    assert payload["error_code"] == "invalid_request_body"
+    assert "approved_action_ids require plan or plan_sequence" in payload["error"]
+
+
 def test_service_router_runtime_run_rejects_invalid_approved_action_ids():
     status_code, payload = service_router.handle_request(
         "POST",

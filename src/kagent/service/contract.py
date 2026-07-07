@@ -251,6 +251,11 @@ def service_openapi() -> Dict[str, Any]:
                             "type": "array",
                             "uniqueItems": True,
                             "items": {"type": "string", "minLength": 1},
+                            "description": (
+                                "Only valid with deterministic plan or plan_sequence "
+                                "payloads; approve live provider actions through "
+                                "/runtime/resume."
+                            ),
                         },
                         "metadata": {
                             "type": "object",

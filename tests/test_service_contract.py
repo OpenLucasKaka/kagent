@@ -532,6 +532,10 @@ def test_service_contract_documents_named_success_schemas():
         "type": "array",
         "uniqueItems": True,
         "items": {"type": "string", "minLength": 1},
+        "description": (
+            "Only valid with deterministic plan or plan_sequence payloads; approve "
+            "live provider actions through /runtime/resume."
+        ),
     }
     assert schemas["RuntimeRunRequest"]["properties"]["metadata"] == {
         "type": "object",

@@ -327,8 +327,10 @@ The service intentionally keeps a narrow API:
   for compatibility, include `plans` for the full sequence of planner
   outputs, and expose `iteration_count`, `max_iterations`, and
   `iteration_budget_remaining` for budget observability. Tool failures become
-  observations for the next planner iteration
-  while budget remains. Planner parse failures and invalid plan shapes also
+  observations for the next planner iteration while budget remains.
+  `approved_action_ids` is limited to explicit `plan` or `plan_sequence`
+  replay; live provider approvals must resume a persisted `pending_approval`
+  through `POST /runtime/resume`. Planner parse failures and invalid plan shapes also
   become `invalid_plan` observations, allowing the next planner call to correct
   its own output while budget remains. A converged planner may return
   `final_answer`, which the runtime exposes as the top-level response `answer`.

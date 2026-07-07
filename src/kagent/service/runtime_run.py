@@ -92,6 +92,12 @@ def execute_runtime_run_request(
             service_errors.INVALID_REQUEST_BODY,
             "plan and plan_sequence are mutually exclusive",
         )
+    if approved_action_ids and plan_payload is None and plan_sequence_payload is None:
+        return 400, failure_payload(
+            service_errors.INVALID_REQUEST_BODY,
+            "approved_action_ids require plan or plan_sequence; use /runtime/resume "
+            "to approve live provider actions",
+        )
     if plan_payload is not None:
         if not isinstance(plan_payload, dict):
             return 400, failure_payload(

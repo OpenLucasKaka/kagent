@@ -251,6 +251,8 @@ def test_operations_runbook_documents_continuous_iteration_and_failure_triage():
     assert "iteration_count" in runbook
     assert "iteration_budget_remaining" in runbook
     assert "approved_action_ids" in runbook
+    assert "deterministic `plan` or" in runbook
+    assert "pre-approving a future model" in runbook
     assert "approved_action_count" in runbook
     assert "approval audit" in runbook
     assert "pending_approval_action_id" in runbook
