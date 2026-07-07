@@ -188,7 +188,8 @@ def run_runtime_interactive(
                 return
             goal = line.strip()
             if not goal:
-                _erase_empty_runtime_prompt_line()
+                if line_reader.should_erase_empty_line():
+                    _erase_empty_runtime_prompt_line()
                 continue
             if approval_broker.submit_if_waiting(goal):
                 continue
@@ -249,6 +250,9 @@ class _RuntimeLineReader:
     def read(self, *, color: bool) -> str:
         raise NotImplementedError
 
+    def should_erase_empty_line(self) -> bool:
+        return True
+
     def clear_history(self) -> None:
         return
 
@@ -275,7 +279,14 @@ class _PromptToolkitLineReader(_RuntimeLineReader):
         self._session = session
 
     def read(self, *, color: bool) -> str:
-        message: Any = [("class:input-bar.prompt", "› ")] if color else "› "
+        message: Any = (
+            [
+                ("class:input-bar.blank", " \n"),
+                ("class:input-bar.prompt", "› "),
+            ]
+            if color
+            else "› "
+        )
         try:
             from prompt_toolkit.patch_stdout import patch_stdout
         except ImportError:
@@ -296,6 +307,9 @@ class _PromptToolkitLineReader(_RuntimeLineReader):
         loaded_strings = getattr(history, "_loaded_strings", None)
         if isinstance(loaded_strings, list):
             loaded_strings.clear()
+
+    def should_erase_empty_line(self) -> bool:
+        return False
 
     def line_editor_name(self) -> str:
         return "prompt_toolkit"
@@ -336,6 +350,7 @@ def _prompt_toolkit_session_for_tty(prompt_stream: Any) -> Any:
             {
                 "": "bg:#303030 #ffffff",
                 "input-bar": "bg:#303030 #ffffff",
+                "input-bar.blank": "bg:#303030 #ffffff",
                 "input-bar.prompt": "bg:#303030 ansicyan bold",
             }
         ),
