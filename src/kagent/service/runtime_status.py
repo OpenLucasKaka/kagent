@@ -510,6 +510,7 @@ def runtime_status_summary(
 def _runtime_list_summary(summary: Dict[str, Any]) -> Dict[str, Any]:
     list_summary = dict(summary)
     list_summary.pop("pending_approval", None)
+    list_summary.pop("steps", None)
     return list_summary
 
 

@@ -519,7 +519,8 @@ def service_openapi() -> Dict[str, Any]:
                         "progress_event_count",
                     ],
                     "properties": _runtime_run_status_properties(
-                        include_pending_approval=False
+                        include_pending_approval=False,
+                        include_steps=False,
                     ),
                     "additionalProperties": False,
                 },
@@ -1884,7 +1885,11 @@ def _empty_response(description: str) -> Dict[str, Any]:
     }
 
 
-def _runtime_run_status_properties(*, include_pending_approval: bool) -> Dict[str, Any]:
+def _runtime_run_status_properties(
+    *,
+    include_pending_approval: bool,
+    include_steps: bool = True,
+) -> Dict[str, Any]:
     properties = {
         "trace_type": {
             "type": "string",
@@ -1918,10 +1923,6 @@ def _runtime_run_status_properties(*, include_pending_approval: bool) -> Dict[st
         "iteration_budget_remaining": {"type": "string"},
         "plan_count": {"type": "string"},
         "step_count": {"type": "string"},
-        "steps": {
-            "type": "array",
-            "items": {"$ref": "#/components/schemas/RuntimeStep"},
-        },
         "observation_count": {"type": "string"},
         "event_count": {"type": "string"},
         "progress_event_count": {"type": "string"},
@@ -1991,6 +1992,11 @@ def _runtime_run_status_properties(*, include_pending_approval: bool) -> Dict[st
     }
     if include_pending_approval:
         properties["pending_approval"] = _pending_approval_schema()
+    if include_steps:
+        properties["steps"] = {
+            "type": "array",
+            "items": {"$ref": "#/components/schemas/RuntimeStep"},
+        }
     return properties
 
 

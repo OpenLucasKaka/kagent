@@ -726,6 +726,10 @@ def test_service_contract_documents_named_success_schemas():
         "type": "array",
         "items": {"$ref": "#/components/schemas/RuntimeStep"},
     }
+    assert schemas["RuntimeRunListItemResponse"]["properties"]["step_count"] == {
+        "type": "string"
+    }
+    assert "steps" not in schemas["RuntimeRunListItemResponse"]["properties"]
     assert schemas["RuntimeRunStatusResponse"]["properties"]["latest_plan_action_ids"] == {
         "type": "array",
         "items": {"type": "string"},

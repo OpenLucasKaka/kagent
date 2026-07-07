@@ -2580,7 +2580,11 @@ def test_service_router_runtime_status_filters_non_scalar_summary_metadata(tmp_p
     assert payload["artifact_tags"] == ["release"]
     assert payload["artifact_total_bytes"] == "10"
     assert payload["artifact_bytes_by_kind"] == {"report": "10"}
-    assert list_payload["runs"][0] == payload
+    assert "steps" in payload
+    assert "steps" not in list_payload["runs"][0]
+    assert list_payload["runs"][0] == {
+        key: value for key, value in payload.items() if key != "steps"
+    }
     assert "secret" not in json.dumps(payload)
     assert "secret" not in json.dumps(list_payload)
 
@@ -2901,6 +2905,8 @@ def test_service_router_runtime_runs_list_reports_persisted_summaries(tmp_path):
     assert all("plan_count" in run for run in payload["runs"])
     assert all("latest_plan_action_count" in run for run in payload["runs"])
     assert all("latest_plan_action_ids" in run for run in payload["runs"])
+    assert all("step_count" in run for run in payload["runs"])
+    assert all("steps" not in run for run in payload["runs"])
     assert all("observation_count" in run for run in payload["runs"])
     assert all("event_count" in run for run in payload["runs"])
     assert all("progress_event_sink_failure_count" in run for run in payload["runs"])
