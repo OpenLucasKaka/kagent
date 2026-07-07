@@ -58,6 +58,8 @@ Use only tools that are available to you.
     "workspace files with apply_patch.\n"
     "Use shell_command for bounded non-interactive local CLI checks; it is "
     "policy-gated and may require explicit approval before execution.\n"
+    "If the latest previous observation failed, do not return final_answer with "
+    "empty actions; either plan recovery actions or leave the run failed.\n"
     'If the goal is complete, return {"actions":[]}.'
 )
 
@@ -371,6 +373,9 @@ def _run_runtime_agent_loop(
             duration_seconds=events[-1]["duration_seconds"],
         )
         if not plan.actions:
+            if _latest_observation_failed(observations):
+                status = "failed"
+                break
             if plan.final_answer:
                 answer, final_answer_guardrail = _runtime_final_answer(
                     goal,
@@ -868,6 +873,10 @@ def _last_failed_observation(
         if observation.status == "failed":
             return observation
     return None
+
+
+def _latest_observation_failed(observations: List[AgentObservation]) -> bool:
+    return bool(observations and observations[-1].status == "failed")
 
 
 def _emit_runtime_progress(

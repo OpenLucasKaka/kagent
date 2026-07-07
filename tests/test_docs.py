@@ -28,6 +28,8 @@ def test_architecture_document_names_runtime_and_operational_boundaries():
     assert "unique, non-empty action IDs" in architecture
     assert "only the pending approval action" in architecture
     assert "final_answer" in architecture
+    assert "empty-action `final_answer`" in architecture
+    assert "latest observation is still failed" in architecture
     assert "input_schema" in architecture
     assert "output_schema" in architecture
     assert "timeout_seconds" in architecture

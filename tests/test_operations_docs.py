@@ -296,6 +296,8 @@ def test_operations_runbook_documents_continuous_iteration_and_failure_triage():
     assert "MAX_PLAN_FINAL_ANSWER_CHARS" in runbook
     assert "invalid_plan" in runbook
     assert "Planner parse failures" in runbook
+    assert "empty-action" in runbook
+    assert "latest observation is still failed" in runbook
     assert "content_omitted=true" in runbook
     assert "truncated_chars" in runbook
     assert "prompt_observation_compaction" in runbook

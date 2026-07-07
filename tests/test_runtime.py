@@ -687,7 +687,7 @@ def test_runtime_agent_can_replan_after_tool_output_failure():
     assert result["answer"] == "recovered"
 
 
-def test_runtime_agent_compacts_artifact_observations_in_replanning_prompt():
+def test_runtime_agent_rejects_final_answer_after_unresolved_tool_failure():
     large_content = "launch-secret-detail-" * 200
     provider = SequentialLLMProvider(
         [
@@ -720,7 +720,9 @@ def test_runtime_agent_compacts_artifact_observations_in_replanning_prompt():
     result = run_runtime_agent("write report then recover", provider=provider, max_iterations=2)
 
     replan_prompt = provider.calls[1]["user"]
-    assert result["status"] == "done"
+    assert result["status"] == "failed"
+    assert result["error_code"] == "invalid_tool_input"
+    assert "answer" not in result
     assert "Previous observations" in replan_prompt
     assert "Launch report" in replan_prompt
     assert "artifact_" in replan_prompt
@@ -728,7 +730,7 @@ def test_runtime_agent_compacts_artifact_observations_in_replanning_prompt():
     assert "invalid_tool_input" in replan_prompt
 
 
-def test_runtime_agent_truncates_long_observation_strings_in_replanning_prompt():
+def test_runtime_agent_rejects_final_answer_after_unresolved_truncated_failure():
     long_note = "runtime-context-detail-" * 200
     provider = SequentialLLMProvider(
         [
@@ -761,7 +763,9 @@ def test_runtime_agent_truncates_long_observation_strings_in_replanning_prompt()
     )
 
     replan_prompt = provider.calls[1]["user"]
-    assert result["status"] == "done"
+    assert result["status"] == "failed"
+    assert result["error_code"] == "invalid_tool_input"
+    assert "answer" not in result
     assert result["observations"][0]["output"] == {"text": long_note}
     assert "runtime-context-detail-runtime-context-detail" in replan_prompt
     assert long_note not in replan_prompt
