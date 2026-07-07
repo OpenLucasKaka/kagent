@@ -1,15 +1,20 @@
 from __future__ import annotations
 
+# ruff: noqa: E402, I001
+
 import argparse
 import json
 import signal
 import socket
 import sys
 import time
+import warnings
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any, List, Mapping, Optional
 from urllib.parse import urlparse
 from uuid import uuid4
+
+warnings.filterwarnings("ignore")
 
 from kagent.service import (
     contract as service_contract,
@@ -120,6 +125,7 @@ def create_server(
 
 
 def main(argv: Optional[List[str]] = None) -> int:
+    _suppress_noisy_dependency_warnings()
     parser = argparse.ArgumentParser(description="Serve the kagent API.")
     try:
         defaults = ServiceConfig.from_env()
@@ -243,6 +249,10 @@ def main(argv: Optional[List[str]] = None) -> int:
         signal.signal(signal.SIGTERM, previous_sigterm)
         server.server_close()
     return 0
+
+
+def _suppress_noisy_dependency_warnings() -> None:
+    warnings.filterwarnings("ignore")
 
 
 def _raise_signal_shutdown(signum: int, _frame: Any) -> None:

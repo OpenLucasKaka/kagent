@@ -5332,6 +5332,8 @@ def test_service_router_runtime_run_persists_trace_when_configured(tmp_path):
     assert status_code == 200
     assert trace_path.parent == tmp_path
     assert trace_payload["run_id"] == payload["run_id"]
+    assert payload["runtime_engine"] == "langgraph"
+    assert trace_payload["runtime_engine"] == "langgraph"
     assert trace_payload["goal"] == "capture hello"
     assert trace_payload["events"][0]["node"] == "planner"
     assert trace_payload["observations"][0]["output"] == {"text": "hello"}
@@ -5397,11 +5399,13 @@ def test_service_router_runtime_run_persists_metadata_and_tags_for_audit_filters
     assert trace_payload["metadata"] == payload["metadata"]
     assert trace_payload["tags"] == payload["tags"]
     assert detail_status == 200
+    assert detail_payload["runtime_engine"] == "langgraph"
     assert detail_payload["metadata"] == payload["metadata"]
     assert detail_payload["metadata_keys"] == ["ticket", "workflow"]
     assert detail_payload["tags"] == ["ops", "release"]
     assert tag_list_status == 200
     assert [run["run_id"] for run in tag_list_payload["runs"]] == [payload["run_id"]]
+    assert tag_list_payload["runs"][0]["runtime_engine"] == "langgraph"
     assert metadata_list_status == 200
     assert [run["run_id"] for run in metadata_list_payload["runs"]] == [
         payload["run_id"]

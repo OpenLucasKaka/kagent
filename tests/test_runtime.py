@@ -5,7 +5,7 @@ import sys
 import pytest
 
 from kagent.providers.llm import FakeLLMProvider
-from kagent.runtime import run_runtime_agent
+from kagent.runtime import build_runtime_graph, run_runtime_agent
 from kagent.runtime import tools as runtime_tools
 from kagent.runtime.policy import RuntimePolicy
 from kagent.runtime.tools import (
@@ -21,10 +21,34 @@ from kagent.runtime.types import (
 
 def test_runtime_entrypoint_is_delegated_to_runtime_agent_module():
     from kagent.runtime.agent import (
+        build_runtime_graph as runtime_agent_build_runtime_graph,
+    )
+    from kagent.runtime.agent import (
         run_runtime_agent as runtime_agent_run_runtime_agent,
     )
 
+    assert build_runtime_graph is runtime_agent_build_runtime_graph
     assert run_runtime_agent is runtime_agent_run_runtime_agent
+
+
+def test_runtime_graph_runs_codex_style_runtime_through_langgraph():
+    graph = build_runtime_graph()
+    provider = FakeLLMProvider(
+        '{"actions":[{"id":"step-1","tool":"note","input":{"text":"hello"},"reason":"capture"}]}'
+    )
+
+    final_state = graph.invoke(
+        {
+            "goal": "capture hello",
+            "provider": provider,
+            "max_iterations": 1,
+        }
+    )
+
+    assert callable(getattr(graph, "invoke"))
+    assert final_state["result"]["status"] == "done"
+    assert final_state["result"]["runtime_engine"] == "langgraph"
+    assert final_state["result"]["observations"][0]["output"] == {"text": "hello"}
 
 
 def test_runtime_agent_runs_fake_llm_plan_through_policy_and_tools():
@@ -35,6 +59,7 @@ def test_runtime_agent_runs_fake_llm_plan_through_policy_and_tools():
     result = run_runtime_agent("capture hello", provider=provider)
 
     assert result["status"] == "done"
+    assert result["runtime_engine"] == "langgraph"
     assert result["trace_type"] == "codex_runtime"
     assert result["goal"] == "capture hello"
     assert result["plan"]["actions"][0]["tool"] == "note"

@@ -481,6 +481,9 @@ def runtime_status_summary(
         "artifact_total_bytes": str(_observation_artifact_total_bytes(observations)),
         "artifact_bytes_by_kind": _observation_artifact_bytes_by_kind(observations),
     }
+    runtime_engine = _runtime_scalar(trace.get("runtime_engine"))
+    if runtime_engine:
+        summary["runtime_engine"] = runtime_engine
     for optional_field in [
         "answer",
         "error_code",

@@ -275,6 +275,10 @@ def service_openapi() -> Dict[str, Any]:
                             "type": "string",
                             "const": RUNTIME_TRACE_TYPE,
                         },
+                        "runtime_engine": {
+                            "type": "string",
+                            "enum": ["langgraph"],
+                        },
                         "status": {
                             "type": "string",
                             "enum": [
@@ -1894,6 +1898,10 @@ def _runtime_run_status_properties(
         "trace_type": {
             "type": "string",
             "const": RUNTIME_TRACE_TYPE,
+        },
+        "runtime_engine": {
+            "type": "string",
+            "enum": ["langgraph"],
         },
         "run_id": {"type": "string"},
         "status": {

@@ -3,8 +3,10 @@ from __future__ import annotations
 import json
 import re
 import time
+import warnings
+from contextlib import nullcontext
 from datetime import datetime, timezone
-from typing import Any, Callable, Dict, List, Optional, Set
+from typing import Any, Callable, Dict, List, Optional, Set, TypedDict
 from uuid import uuid4
 
 from kagent.runtime.metadata import (
@@ -64,7 +66,98 @@ MAX_PLANNER_OBSERVATION_STRING_CHARS = 500
 RuntimeEventSink = Callable[[Dict[str, Any]], None]
 
 
+class RuntimeGraphState(TypedDict, total=False):
+    goal: str
+    provider: Any
+    policy: RuntimePolicy
+    tools: Dict[str, RuntimeToolSpec]
+    max_iterations: int
+    approved_action_ids: Set[str]
+    metadata: Dict[str, str]
+    tags: List[str]
+    event_sink: RuntimeEventSink
+    stream_answers: bool
+    result: Dict[str, Any]
+
+
+def build_runtime_graph():
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        try:
+            from langchain_core._api.deprecation import (
+                suppress_langchain_deprecation_warning,
+            )
+        except ImportError:
+            suppress_langchain_deprecation_warning = nullcontext
+        with suppress_langchain_deprecation_warning():
+            from langgraph.graph import END, StateGraph
+
+    graph = StateGraph(RuntimeGraphState)
+    graph.add_node("runtime", _runtime_graph_node)
+    graph.set_entry_point("runtime")
+    graph.add_edge("runtime", END)
+    return graph.compile(name="kagent-runtime")
+
+
 def run_runtime_agent(
+    goal: str,
+    *,
+    provider: Any,
+    policy: Optional[RuntimePolicy] = None,
+    tools: Optional[Dict[str, RuntimeToolSpec]] = None,
+    max_iterations: int = 1,
+    approved_action_ids: Optional[Set[str]] = None,
+    metadata: Optional[Dict[str, str]] = None,
+    tags: Optional[List[str]] = None,
+    event_sink: Optional[RuntimeEventSink] = None,
+    stream_answers: bool = False,
+) -> Dict[str, Any]:
+    graph = build_runtime_graph()
+    state: RuntimeGraphState = {
+        "goal": goal,
+        "provider": provider,
+        "max_iterations": max_iterations,
+        "stream_answers": stream_answers,
+    }
+    if policy is not None:
+        state["policy"] = policy
+    if tools is not None:
+        state["tools"] = tools
+    if approved_action_ids is not None:
+        state["approved_action_ids"] = approved_action_ids
+    if metadata is not None:
+        state["metadata"] = metadata
+    if tags is not None:
+        state["tags"] = tags
+    if event_sink is not None:
+        state["event_sink"] = event_sink
+    final_state = graph.invoke(state)
+    result = final_state.get("result")
+    if not isinstance(result, dict):
+        raise RuntimeError("runtime graph did not return a result")
+    return result
+
+
+def _runtime_graph_node(state: RuntimeGraphState) -> RuntimeGraphState:
+    if "provider" not in state:
+        raise ValueError("provider is required")
+    result = _run_runtime_agent_loop(
+        str(state.get("goal", "")),
+        provider=state["provider"],
+        policy=state.get("policy"),
+        tools=state.get("tools"),
+        max_iterations=state.get("max_iterations", 1),
+        approved_action_ids=state.get("approved_action_ids"),
+        metadata=state.get("metadata"),
+        tags=state.get("tags"),
+        event_sink=state.get("event_sink"),
+        stream_answers=state.get("stream_answers", False),
+    )
+    result["runtime_engine"] = "langgraph"
+    return {"result": result}
+
+
+def _run_runtime_agent_loop(
     goal: str,
     *,
     provider: Any,

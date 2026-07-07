@@ -588,6 +588,10 @@ def test_service_contract_documents_named_success_schemas():
         "type": "string",
         "const": "codex_runtime",
     }
+    assert schemas["RuntimeRunResponse"]["properties"]["runtime_engine"] == {
+        "type": "string",
+        "enum": ["langgraph"],
+    }
     assert schemas["RuntimeRunResponse"]["properties"]["trace_path"] == {"type": "string"}
     assert schemas["RuntimeRunResponse"]["properties"]["resumed_by_auth_subject"] == {
         "type": "string"
@@ -697,6 +701,14 @@ def test_service_contract_documents_named_success_schemas():
     assert schemas["RuntimeRunStatusResponse"]["properties"]["trace_type"] == {
         "type": "string",
         "const": "codex_runtime",
+    }
+    assert schemas["RuntimeRunStatusResponse"]["properties"]["runtime_engine"] == {
+        "type": "string",
+        "enum": ["langgraph"],
+    }
+    assert schemas["RuntimeRunListItemResponse"]["properties"]["runtime_engine"] == {
+        "type": "string",
+        "enum": ["langgraph"],
     }
     assert schemas["RuntimeRunStatusResponse"]["properties"]["status"]["enum"] == [
         "cancelled",

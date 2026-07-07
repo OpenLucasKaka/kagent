@@ -118,13 +118,17 @@ override keyed by authenticated `auth_subject`, so one shared internal service
 can give different teams different direct-execution tool boundaries while
 unmatched subjects fall back to the global or default policy.
 
-`runtime/agent.py` orchestrates the first vertical slice: prompt the
-provider, parse the plan, authorize actions, execute allowed tools, and return
-events, plan, and observations. This layer is intentionally separate from the existing
-deterministic `/run` path while the Codex-style runtime matures. Every runtime
-trace carries `trace_type: "codex_runtime"` so persisted status, listing, and
-resume flows can distinguish Codex-style runtime traces from deterministic
-legacy `/run` traces stored in the same directory.
+`runtime/agent.py` exposes the default Codex-style runtime through a compiled
+LangGraph `StateGraph` via `build_runtime_graph()`. The first production slice
+uses one runtime node around the existing bounded loop: prompt the provider,
+parse the plan, authorize actions, execute allowed tools, and return events,
+plan, and observations. This keeps the public runtime on LangGraph while
+preserving the current behavior, and leaves a controlled path for splitting
+planner, policy, executor, and completion into separate runtime graph nodes
+later. Every runtime trace carries `trace_type: "codex_runtime"` and
+`runtime_engine: "langgraph"` so persisted status, listing, and resume flows can
+distinguish Codex-style runtime traces from deterministic legacy `/run` traces
+stored in the same directory.
 `runtime/metadata.py` owns bounded non-secret run labels shared by CLI and
 service execution paths. It normalizes `metadata` string maps and `tags` arrays,
 rejects secret-like metadata keys, and keeps run labels small enough for trace
