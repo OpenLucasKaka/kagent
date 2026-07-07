@@ -2196,6 +2196,7 @@ def _final_answer_guardrail_schema() -> Dict[str, Any]:
                 "enum": [
                     "runtime_identity_boundary",
                     "runtime_deployment_boundary",
+                    "unresolved_failure_boundary",
                 ],
             },
             "original_answer_omitted": {"type": "string", "enum": ["true"]},

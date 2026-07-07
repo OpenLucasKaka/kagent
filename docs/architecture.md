@@ -151,7 +151,8 @@ model-branded answer for identity or deployment prompts, `runtime/agent.py`
 normalizes the final answer back to the kagent product identity before clients
 see it.
 Those corrections add `final_answer_guardrail` with a machine-readable reason
-such as `runtime_identity_boundary` or `runtime_deployment_boundary`; the
+such as `runtime_identity_boundary`, `runtime_deployment_boundary`, or
+`unresolved_failure_boundary`; the
 provider's original misleading answer is omitted from that guardrail payload so
 clients get an audit signal without replaying the bad identity claim.
 

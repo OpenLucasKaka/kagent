@@ -320,6 +320,7 @@ def test_operations_runbook_documents_continuous_iteration_and_failure_triage():
     assert "identity is `kagent`" in runbook
     assert "Provider details stay behind the configuration boundary" in runbook
     assert "final_answer_guardrail" in runbook
+    assert "unresolved_failure_boundary" in runbook
     assert "raw API key is never exposed" in runbook
     assert "bind_host" in runbook
     assert "bind_port" in runbook

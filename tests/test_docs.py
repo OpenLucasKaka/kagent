@@ -132,6 +132,7 @@ def test_architecture_document_names_runtime_and_operational_boundaries():
     assert "preventing duplicate side effects" in architecture
     assert "previous_path" in architecture
     assert "final_answer_guardrail" in architecture
+    assert "unresolved_failure_boundary" in architecture
     assert "final_answer_guardrail_applied_count" in architecture
     assert "final_answer_guardrail_reason_counts" in architecture
     assert "kagent_runtime_final_answer_guardrails_total" in architecture

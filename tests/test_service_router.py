@@ -807,7 +807,6 @@ def test_service_router_runtime_timeline_filters_non_scalar_metadata(tmp_path):
         },
         str(tmp_path),
     )
-
     status_code, payload = service_router.handle_request(
         "GET",
         "/runtime/runs/malformed-timeline-metadata/timeline",
@@ -2682,7 +2681,6 @@ def test_service_router_runtime_status_reports_final_answer_guardrail(tmp_path):
         },
         str(tmp_path),
     )
-
     status_code, payload = service_router.handle_request(
         "GET",
         "/runtime/runs/identity-guardrail",
@@ -6101,6 +6099,20 @@ def test_service_router_metrics_snapshot_includes_runtime_guardrail_counts(tmp_p
         },
         str(tmp_path),
     )
+    persist_trace(
+        {
+            "trace_type": "codex_runtime",
+            "run_id": "unresolved-failure-guardrail",
+            "status": "failed",
+            "goal": "recover failed action",
+            "final_answer_guardrail": {
+                "applied": "true",
+                "reason": "unresolved_failure_boundary",
+                "original_answer_omitted": "true",
+            },
+        },
+        str(tmp_path),
+    )
 
     status_code, payload = service_router.handle_request(
         "GET",
@@ -6110,7 +6122,8 @@ def test_service_router_metrics_snapshot_includes_runtime_guardrail_counts(tmp_p
     )
 
     assert status_code == 200
-    assert payload["runtime_final_answer_guardrails_total"] == "1"
+    assert payload["runtime_final_answer_guardrails_total"] == "2"
     assert payload["runtime_final_answer_guardrails_by_reason"] == {
-        "runtime_identity_boundary": "1"
+        "runtime_identity_boundary": "1",
+        "unresolved_failure_boundary": "1",
     }

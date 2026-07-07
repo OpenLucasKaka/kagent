@@ -375,6 +375,9 @@ def _run_runtime_agent_loop(
         if not plan.actions:
             if _latest_observation_failed(observations):
                 status = "failed"
+                final_answer_guardrail = _final_answer_guardrail(
+                    "unresolved_failure_boundary"
+                )
                 break
             if plan.final_answer:
                 answer, final_answer_guardrail = _runtime_final_answer(

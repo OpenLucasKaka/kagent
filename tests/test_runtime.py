@@ -723,6 +723,11 @@ def test_runtime_agent_rejects_final_answer_after_unresolved_tool_failure():
     assert result["status"] == "failed"
     assert result["error_code"] == "invalid_tool_input"
     assert "answer" not in result
+    assert result["final_answer_guardrail"] == {
+        "applied": "true",
+        "reason": "unresolved_failure_boundary",
+        "original_answer_omitted": "true",
+    }
     assert "Previous observations" in replan_prompt
     assert "Launch report" in replan_prompt
     assert "artifact_" in replan_prompt
@@ -766,6 +771,11 @@ def test_runtime_agent_rejects_final_answer_after_unresolved_truncated_failure()
     assert result["status"] == "failed"
     assert result["error_code"] == "invalid_tool_input"
     assert "answer" not in result
+    assert result["final_answer_guardrail"] == {
+        "applied": "true",
+        "reason": "unresolved_failure_boundary",
+        "original_answer_omitted": "true",
+    }
     assert result["observations"][0]["output"] == {"text": long_note}
     assert "runtime-context-detail-runtime-context-detail" in replan_prompt
     assert long_note not in replan_prompt

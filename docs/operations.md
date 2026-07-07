@@ -317,6 +317,9 @@ provider-branded identity
 or deployment answer, responses include `final_answer_guardrail` with a
 machine-readable reason and `original_answer_omitted=true`, so operators can
 audit the correction without replaying the misleading provider answer.
+The same guardrail surface records `unresolved_failure_boundary` when a
+provider tries to return `final_answer` after the latest observation still
+failed.
 Use `kagent-doctor --production --require-runtime-provider` to
 turn these settings into a release gate. Missing provider settings report
 `llm_base_url_required`, `llm_model_required`, or `llm_api_key_required`; a
@@ -887,8 +890,9 @@ pressure, and
 failed runtime runs that spent their whole iteration budget.
 Use `kagent_runtime_final_answer_guardrails_total` and
 `kagent_runtime_final_answer_guardrails_by_reason_total` to
-alert on model identity/deployment drift caught by runtime guardrails without
-replaying the provider's original misleading answer.
+alert on final-answer boundary corrections, including model identity/deployment
+drift and unresolved failure claims, without replaying the provider's original
+misleading answer.
 Use `kagent_runtime_pending_approvals_current`,
 `kagent_runtime_stale_pending_approvals_current`,
 `kagent_runtime_max_pending_approval_age_seconds`, and
