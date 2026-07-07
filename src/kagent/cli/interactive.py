@@ -94,6 +94,8 @@ def run_runtime_interactive(
             return
         goal = line.strip()
         if not goal:
+            if interactive_tty:
+                _erase_empty_runtime_prompt_line()
             continue
         if goal.lower() in {"exit", "quit", ":q"}:
             return
@@ -276,6 +278,11 @@ def _close_runtime_progress_sink(progress_sink: Any) -> None:
     close = getattr(progress_sink, "close", None)
     if callable(close):
         close()
+
+
+def _erase_empty_runtime_prompt_line() -> None:
+    sys.stdout.write("\x1b[1A\r\x1b[2K")
+    sys.stdout.flush()
 
 
 class _RuntimeInteractiveProgress:

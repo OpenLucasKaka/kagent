@@ -1071,6 +1071,33 @@ def test_cli_interactive_runtime_prints_prompt_to_real_stderr(monkeypatch, capsy
     assert "/status" not in captured.err
 
 
+def test_cli_interactive_runtime_reuses_prompt_line_after_empty_enter(monkeypatch, capsys):
+    from kagent.cli import _run_runtime_interactive
+
+    class FakeTTYInput:
+        def __init__(self):
+            self.lines = ["\n", "\n", "exit\n"]
+
+        def isatty(self):
+            return True
+
+        def readline(self):
+            return self.lines.pop(0) if self.lines else ""
+
+    monkeypatch.setattr(sys, "stdin", FakeTTYInput())
+    monkeypatch.setattr(sys, "__stderr__", sys.stderr)
+
+    _run_runtime_interactive(
+        provider=object(),
+        run_runtime_agent=lambda *_args, **_kwargs: {"status": "done"},
+        max_iterations=1,
+        fail_on_agent_failure=False,
+    )
+
+    captured = capsys.readouterr()
+    assert captured.out.count("\x1b[1A\r\x1b[2K") == 2
+
+
 def test_cli_colored_runtime_prompt_marks_ansi_as_readline_invisible():
     from kagent.cli.ui import runtime_prompt
 
