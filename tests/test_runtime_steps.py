@@ -41,13 +41,34 @@ def test_runtime_steps_project_successful_actions_without_internal_tool_names():
     result = run_runtime_agent("create rollout artifact", provider=provider)
 
     assert result["steps"] == [
-        {"index": "1", "state": "done", "title": "Record context"},
-        {"index": "2", "state": "done", "title": "Created Rollout plan"},
+        {"index": "1", "state": "done", "title": "Created Rollout plan"},
     ]
     serialized_steps = json.dumps(result["steps"], ensure_ascii=False)
     assert "artifact" not in serialized_steps.lower()
     assert "step-1" not in serialized_steps
     assert "step-2" not in serialized_steps
+
+
+def test_runtime_steps_hide_internal_note_actions():
+    provider = FakeLLMProvider(
+        json.dumps(
+            {
+                "actions": [
+                    {
+                        "id": "step-1",
+                        "tool": "note",
+                        "input": {"text": "internal context"},
+                        "reason": "Capture internal context",
+                    }
+                ]
+            }
+        )
+    )
+
+    result = run_runtime_agent("capture internal context", provider=provider)
+
+    assert result["status"] == "done"
+    assert result["steps"] == []
 
 
 def test_runtime_steps_keep_completed_actions_when_final_plan_has_no_actions():
@@ -58,9 +79,9 @@ def test_runtime_steps_keep_completed_actions_when_final_plan_has_no_actions():
                     "actions": [
                         {
                             "id": "step-1",
-                            "tool": "note",
-                            "input": {"text": "ready"},
-                            "reason": "Record readiness",
+                            "tool": "transform_text",
+                            "input": {"text": "ready", "mode": "uppercase"},
+                            "reason": "Normalize readiness",
                         }
                     ]
                 }
@@ -78,7 +99,7 @@ def test_runtime_steps_keep_completed_actions_when_final_plan_has_no_actions():
         {
             "index": "1",
             "state": "done",
-            "title": "Record readiness",
+            "title": "Normalize readiness",
         }
     ]
 
@@ -103,8 +124,8 @@ def test_runtime_steps_use_latest_action_when_replan_reuses_action_id():
                     "actions": [
                         {
                             "id": "step-1",
-                            "tool": "note",
-                            "input": {"text": "fallback"},
+                            "tool": "transform_text",
+                            "input": {"text": "fallback", "mode": "uppercase"},
                             "reason": "Record fallback",
                         }
                     ]

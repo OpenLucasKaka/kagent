@@ -80,7 +80,11 @@ def _actions_from_plan(plan: Dict[str, Any]) -> List[Dict[str, Any]]:
     actions = plan.get("actions")
     if not isinstance(actions, list):
         return []
-    return [action for action in actions if isinstance(action, dict)]
+    return [
+        action
+        for action in actions
+        if isinstance(action, dict) and str(action.get("tool", "")).strip() != "note"
+    ]
 
 
 def _observations_by_action_id(value: Any) -> Dict[str, Dict[str, Any]]:

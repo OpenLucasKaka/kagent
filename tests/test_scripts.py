@@ -2428,6 +2428,12 @@ def test_run_checks_includes_ruff_lint_gate():
     assert "ruff" in pyproject
 
 
+def test_run_checks_editable_install_avoids_build_isolation_network_fetch():
+    run_checks = Path("scripts/run_checks.sh").read_text()
+
+    assert "-m pip install --no-build-isolation -e '.[dev]'" in run_checks
+
+
 def test_run_checks_uses_isolated_pycache_for_compileall():
     run_checks = Path("scripts/run_checks.sh").read_text()
 

@@ -11,7 +11,7 @@ cleanup_local_build_artifacts() {
 }
 trap cleanup_local_build_artifacts EXIT
 
-PYTHONWARNINGS=ignore .venv/bin/python -m pip install -e '.[dev]' >/tmp/kagent-install.log
+PYTHONWARNINGS=ignore .venv/bin/python -m pip install --no-build-isolation -e '.[dev]' >/tmp/kagent-install.log
 PYTHONWARNINGS=ignore .venv/bin/python -m pytest
 PYTHONWARNINGS=ignore .venv/bin/python -m ruff check src tests
 if command -v npm >/dev/null 2>&1; then
