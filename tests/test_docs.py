@@ -193,6 +193,7 @@ def test_architecture_document_tracks_production_service_contract():
     assert "GET /config" in architecture
     assert "GET /runtime/tools" in architecture
     assert "GET /runtime/graph" in architecture
+    assert "graph_phases" in architecture
     assert "GET /runtime/policy" in architecture
     assert "GET /runtime/approvals" in architecture
     assert "GET /runtime/approvals/summary" in architecture

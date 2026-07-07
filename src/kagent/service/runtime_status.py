@@ -429,6 +429,7 @@ def runtime_status_summary(
         "observation_count": str(_list_count(observations)),
         "event_count": str(_list_count(trace.get("events"))),
         "progress_event_count": str(_list_count(trace.get("progress_events"))),
+        "graph_phase_count": str(_list_count(trace.get("graph_phases"))),
         "progress_event_sink_failure_count": str(
             _parse_non_negative_int(trace.get("progress_event_sink_failure_count"))
         ),

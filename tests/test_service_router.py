@@ -2499,6 +2499,7 @@ def test_service_router_runtime_status_reports_persisted_run_summary(tmp_path):
     ]
     assert payload["observation_count"] == "1"
     assert payload["event_count"] == "2"
+    assert payload["graph_phase_count"] == "3"
     assert payload["failed_observation_count"] == "0"
     assert payload["approval_required_count"] == "1"
     assert payload["pending_approval_action_id"] == "step-1"

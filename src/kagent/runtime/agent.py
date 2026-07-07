@@ -78,6 +78,7 @@ class RuntimeGraphState(TypedDict, total=False):
     event_sink: RuntimeEventSink
     stream_answers: bool
     result: Dict[str, Any]
+    graph_phases: List[Dict[str, str]]
 
 
 def build_runtime_graph():
@@ -158,12 +159,23 @@ def run_runtime_agent(
 
 
 def _runtime_prepare_graph_node(state: RuntimeGraphState) -> RuntimeGraphState:
+    started_at = _utc_timestamp()
+    started_timer = time.perf_counter()
     if "provider" not in state:
         raise ValueError("provider is required")
-    return state
+    return {
+        "graph_phases": _append_graph_phase(
+            state.get("graph_phases"),
+            "prepare",
+            started_at,
+            started_timer,
+        )
+    }
 
 
 def _runtime_loop_graph_node(state: RuntimeGraphState) -> RuntimeGraphState:
+    started_at = _utc_timestamp()
+    started_timer = time.perf_counter()
     result = _run_runtime_agent_loop(
         str(state.get("goal", "")),
         provider=state["provider"],
@@ -176,15 +188,47 @@ def _runtime_loop_graph_node(state: RuntimeGraphState) -> RuntimeGraphState:
         event_sink=state.get("event_sink"),
         stream_answers=state.get("stream_answers", False),
     )
-    return {"result": result}
+    return {
+        "result": result,
+        "graph_phases": _append_graph_phase(
+            state.get("graph_phases"),
+            "runtime_loop",
+            started_at,
+            started_timer,
+        ),
+    }
 
 
 def _runtime_finalize_graph_node(state: RuntimeGraphState) -> RuntimeGraphState:
+    started_at = _utc_timestamp()
+    started_timer = time.perf_counter()
     result = state.get("result")
     if not isinstance(result, dict):
         raise RuntimeError("runtime loop did not return a result")
     result["runtime_engine"] = "langgraph"
+    result["graph_phases"] = _append_graph_phase(
+        state.get("graph_phases"),
+        "finalize",
+        started_at,
+        started_timer,
+    )
     return {"result": result}
+
+
+def _append_graph_phase(
+    phases: List[Dict[str, str]] | None,
+    node: str,
+    started_at: str,
+    started_timer: float,
+) -> List[Dict[str, str]]:
+    return [
+        *(phases or []),
+        {
+            "node": node,
+            "status": "ok",
+            **_timing_fields(started_at, started_timer),
+        },
+    ]
 
 
 def _run_runtime_agent_loop(

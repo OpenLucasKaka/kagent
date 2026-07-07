@@ -577,6 +577,10 @@ confirm the service is running the expected `prepare -> runtime_loop -> finalize
 graph shell. Use `GET /runtime/tools` to inspect Codex-style runtime tool names,
 descriptions, `input_schema`, `output_schema`, and `timeout_seconds` values
 before generating or validating plans.
+Runtime run detail responses include `graph_phase_count`; the expected value is
+`3` for the current graph shell. If it is missing or lower than expected, inspect
+the full trace for graph startup/finalization failures before debugging planner
+or tool behavior.
 Set `KAGENT_SERVICE_RUNTIME_ALLOWED_TOOLS` to a comma-separated
 allowlist when a deployment should execute only selected runtime tools without
 human approval. Leave it empty for the default policy. Unknown tool names fail

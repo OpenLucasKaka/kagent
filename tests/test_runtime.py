@@ -66,6 +66,27 @@ def test_runtime_topology_exposes_production_graph_phases():
     }
 
 
+def test_runtime_agent_result_includes_graph_phase_timings():
+    provider = FakeLLMProvider(
+        '{"actions":[{"id":"step-1","tool":"note","input":{"text":"hello"},"reason":"capture"}]}'
+    )
+
+    result = run_runtime_agent("capture hello", provider=provider)
+
+    assert [phase["node"] for phase in result["graph_phases"]] == [
+        "prepare",
+        "runtime_loop",
+        "finalize",
+    ]
+    for phase in result["graph_phases"]:
+        assert phase["status"] == "ok"
+        assert phase["started_at"]
+        assert phase["completed_at"]
+        assert float(phase["duration_seconds"]) >= 0
+        assert phase["duration_seconds"].count(".") == 1
+        assert len(phase["duration_seconds"].split(".")[1]) == 4
+
+
 def test_runtime_agent_runs_fake_llm_plan_through_policy_and_tools():
     provider = FakeLLMProvider(
         '{"actions":[{"id":"step-1","tool":"note","input":{"text":"hello"},"reason":"capture"}]}'

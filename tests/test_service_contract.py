@@ -88,10 +88,11 @@ def test_service_contract_documents_named_success_schemas():
         "RuntimeRunListResponse",
         "RuntimeRunListItemResponse",
         "RuntimeRunSummaryResponse",
-            "RuntimeApprovalQueueResponse",
-            "RuntimeApprovalSummaryResponse",
-            "RuntimePolicyResponse",
-            "RuntimeToolMetadata",
+        "RuntimeApprovalQueueResponse",
+        "RuntimeApprovalSummaryResponse",
+        "RuntimePolicyResponse",
+        "RuntimeToolMetadata",
+        "RuntimeGraphPhase",
         "RuntimeEvent",
         "RuntimeObservation",
         "RuntimeArtifactListResponse",
@@ -653,9 +654,28 @@ def test_service_contract_documents_named_success_schemas():
         "type": "array",
         "items": {"type": "object"},
     }
+    assert schemas["RuntimeRunResponse"]["properties"]["graph_phases"] == {
+        "type": "array",
+        "items": {"$ref": "#/components/schemas/RuntimeGraphPhase"},
+    }
     assert schemas["RuntimeRunResponse"]["properties"][
         "progress_event_sink_failure_count"
     ] == {"type": "string"}
+    assert schemas["RuntimeGraphPhase"] == {
+        "type": "object",
+        "required": ["node", "status", "started_at", "completed_at", "duration_seconds"],
+        "properties": {
+            "node": {"type": "string"},
+            "status": {"type": "string", "enum": ["ok", "failed"]},
+            "started_at": {"type": "string"},
+            "completed_at": {"type": "string"},
+            "duration_seconds": {
+                "type": "string",
+                "pattern": r"^\d+\.\d{4}$",
+            },
+        },
+        "additionalProperties": False,
+    }
     assert schemas["RuntimeStep"] == {
         "type": "object",
         "required": ["index", "state", "title"],
@@ -757,6 +777,9 @@ def test_service_contract_documents_named_success_schemas():
         "type": "string"
     }
     assert schemas["RuntimeRunStatusResponse"]["properties"]["progress_event_count"] == {
+        "type": "string"
+    }
+    assert schemas["RuntimeRunStatusResponse"]["properties"]["graph_phase_count"] == {
         "type": "string"
     }
     assert schemas["RuntimeRunStatusResponse"]["properties"][

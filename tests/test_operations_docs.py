@@ -99,6 +99,7 @@ def test_operations_runbook_documents_continuous_iteration_and_failure_triage():
     assert "GET /metrics.prom" in runbook
     assert "GET /runtime/tools" in runbook
     assert "GET /runtime/graph" in runbook
+    assert "graph_phase_count" in runbook
     assert "output_schema" in runbook
     assert "timeout_seconds" in runbook
     assert "tool_execution_timeout" in runbook

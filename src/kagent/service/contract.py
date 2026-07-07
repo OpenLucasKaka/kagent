@@ -153,6 +153,27 @@ def service_openapi() -> Dict[str, Any]:
                     },
                     "additionalProperties": False,
                 },
+                "RuntimeGraphPhase": {
+                    "type": "object",
+                    "required": [
+                        "node",
+                        "status",
+                        "started_at",
+                        "completed_at",
+                        "duration_seconds",
+                    ],
+                    "properties": {
+                        "node": {"type": "string"},
+                        "status": {"type": "string", "enum": ["ok", "failed"]},
+                        "started_at": {"type": "string"},
+                        "completed_at": {"type": "string"},
+                        "duration_seconds": {
+                            "type": "string",
+                            "pattern": r"^\d+\.\d{4}$",
+                        },
+                    },
+                    "additionalProperties": False,
+                },
                 "MetricsResponse": {
                     "type": "object",
                     "properties": _metrics_response_properties(),
@@ -353,6 +374,10 @@ def service_openapi() -> Dict[str, Any]:
                         "progress_events": {
                             "type": "array",
                             "items": {"type": "object"},
+                        },
+                        "graph_phases": {
+                            "type": "array",
+                            "items": {"$ref": "#/components/schemas/RuntimeGraphPhase"},
                         },
                         "progress_event_sink_failure_count": {"type": "string"},
                         "error_code": {"type": "string"},
@@ -1973,6 +1998,7 @@ def _runtime_run_status_properties(
         "observation_count": {"type": "string"},
         "event_count": {"type": "string"},
         "progress_event_count": {"type": "string"},
+        "graph_phase_count": {"type": "string"},
         "progress_event_sink_failure_count": {"type": "string"},
         "failed_observation_count": {"type": "string"},
         "planner_failure_count": {"type": "string"},

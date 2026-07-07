@@ -132,6 +132,11 @@ stored in the same directory.
 `runtime_topology()` exposes the same runtime graph shape for clients and
 operators, and `kagent --runtime --graph` prints that topology without requiring
 provider configuration or executing a user goal.
+Each runtime result also includes `graph_phases`, a compact timing list for the
+LangGraph shell nodes (`prepare`, `runtime_loop`, and `finalize`). Planner,
+policy, executor, and tool observations remain in `events` and `observations`;
+`graph_phases` is reserved for graph-level timing so operators can separate
+LangGraph orchestration latency from agent-loop latency.
 `runtime/metadata.py` owns bounded non-secret run labels shared by CLI and
 service execution paths. It normalizes `metadata` string maps and `tags` arrays,
 rejects secret-like metadata keys, and keeps run labels small enough for trace
