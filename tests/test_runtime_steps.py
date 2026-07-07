@@ -4,6 +4,14 @@ from kagent.providers.llm import FakeLLMProvider
 from kagent.runtime import derive_runtime_steps, run_runtime_agent
 
 
+class SequentialLLMProvider:
+    def __init__(self, responses):
+        self.responses = list(responses)
+
+    def complete(self, _system, _user):
+        return self.responses.pop(0)
+
+
 def test_runtime_steps_project_successful_actions_without_internal_tool_names():
     provider = FakeLLMProvider(
         json.dumps(
@@ -40,6 +48,39 @@ def test_runtime_steps_project_successful_actions_without_internal_tool_names():
     assert "artifact" not in serialized_steps.lower()
     assert "step-1" not in serialized_steps
     assert "step-2" not in serialized_steps
+
+
+def test_runtime_steps_keep_completed_actions_when_final_plan_has_no_actions():
+    provider = SequentialLLMProvider(
+        [
+            json.dumps(
+                {
+                    "actions": [
+                        {
+                            "id": "step-1",
+                            "tool": "note",
+                            "input": {"text": "ready"},
+                            "reason": "Record readiness",
+                        }
+                    ]
+                }
+            ),
+            json.dumps({"actions": [], "final_answer": "Done."}),
+        ]
+    )
+
+    result = run_runtime_agent("record then answer", provider=provider, max_iterations=2)
+
+    assert result["status"] == "done"
+    assert result["answer"] == "Done."
+    assert result["plan"] == {"actions": [], "final_answer": "Done."}
+    assert result["steps"] == [
+        {
+            "index": "1",
+            "state": "done",
+            "title": "Record readiness",
+        }
+    ]
 
 
 def test_runtime_steps_project_pending_approval_from_runtime_payload():

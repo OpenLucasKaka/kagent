@@ -14,7 +14,7 @@ def derive_runtime_steps(payload: Dict[str, Any]) -> List[RuntimeStep]:
     This is intentionally derived from the existing trace payload. It is not
     execution state and must not drive policy, retries, resume, or persistence.
     """
-    actions = _latest_actions(payload)
+    actions = _trace_actions(payload)
     observations_by_action_id = _observations_by_action_id(payload.get("observations"))
     pending = payload.get("pending_approval")
     pending_action_id = (
@@ -43,10 +43,39 @@ def derive_runtime_steps(payload: Dict[str, Any]) -> List[RuntimeStep]:
     return _planner_failure_steps(payload)
 
 
+def _trace_actions(payload: Dict[str, Any]) -> List[Dict[str, Any]]:
+    actions = _planned_actions(payload.get("plans"))
+    if actions:
+        return actions
+    return _latest_actions(payload)
+
+
+def _planned_actions(value: Any) -> List[Dict[str, Any]]:
+    if not isinstance(value, list):
+        return []
+    actions: List[Dict[str, Any]] = []
+    seen_action_ids = set()
+    for plan in value:
+        if not isinstance(plan, dict):
+            continue
+        for action in _actions_from_plan(plan):
+            action_id = str(action.get("id", "")).strip()
+            if action_id and action_id in seen_action_ids:
+                continue
+            if action_id:
+                seen_action_ids.add(action_id)
+            actions.append(action)
+    return actions
+
+
 def _latest_actions(payload: Dict[str, Any]) -> List[Dict[str, Any]]:
     plan = payload.get("plan")
     if not isinstance(plan, dict):
         return []
+    return _actions_from_plan(plan)
+
+
+def _actions_from_plan(plan: Dict[str, Any]) -> List[Dict[str, Any]]:
     actions = plan.get("actions")
     if not isinstance(actions, list):
         return []
