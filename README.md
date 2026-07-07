@@ -30,8 +30,11 @@ menu, then asks for that provider's Base URL, model, and API key. The local
 provider config is stored at `${XDG_CONFIG_HOME:-~/.config}/kagent/provider.json`
 with owner-only permissions.
 
-Interactive `kagent` launches check GitHub for a newer package version. When an
-update is available, kagent asks before running
+Interactive `kagent` launches check GitHub for updates. For this GitHub-based
+install path, kagent compares both the package version and the `main` commit
+SHA, so day-to-day updates are detected even when the version has not changed.
+Formal releases should still bump `package.json` version. When an update is
+available, kagent asks before running
 `npm install -g github:OpenLucasKaka/kagent` and restarting the same command.
 Set `KAGENT_NO_SELF_UPDATE=1` to skip this check.
 
