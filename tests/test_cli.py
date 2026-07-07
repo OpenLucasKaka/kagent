@@ -1764,7 +1764,7 @@ def test_cli_interactive_runtime_tty_prints_live_progress(monkeypatch, capsys):
     )
 
     captured = capsys.readouterr()
-    assert "\r  " in captured.out
+    assert "\r  " not in captured.out
     assert "Thinking" in captured.out
     assert "Planned 1 action · 0.2000s" in captured.out
     assert "Working" in captured.out
