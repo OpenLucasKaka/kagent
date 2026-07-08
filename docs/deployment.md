@@ -135,12 +135,15 @@ The service reads these environment variables:
   `workspace`, `reports`, `logs`, `policies`, and `memories` directories.
   Use this for production deployments that need agent-generated reports,
   policy snapshots, logs, or memory assets to survive process restarts.
-- `KAGENT_REDIS_URL`: optional `redis://` endpoint for short-term memory
-  infrastructure. When set, `/ready` sends a real Redis `PING` and `/config`
-  reports `redis_short_term_memory=enabled` without exposing the URL.
-- `KAGENT_MILVUS_URL`: optional HTTP health endpoint for long-term memory or
-  vector-search infrastructure. When set, `/ready` requires a 2xx response and
-  `/config` reports `milvus_long_term_memory=enabled`.
+- `KAGENT_REDIS_URL`: optional `redis://` endpoint for short-term memory.
+  When set, `/ready` sends a real Redis `PING`, `/config` reports
+  `redis_short_term_memory=enabled` without exposing the URL, and the runtime
+  can use `memory_put` / `memory_get`.
+- `KAGENT_MILVUS_URL`: optional Milvus HTTP base URL for long-term semantic
+  memory, for example `http://milvus:19530`. When set, `/ready` requires a 2xx
+  response from the configured URL, `/config` reports
+  `milvus_long_term_memory=enabled`, and the runtime can use
+  `memory_upsert` / `memory_search` with explicit embedding vectors.
 - `KAGENT_KAFKA_AUDIT_URL`: optional HTTP health endpoint for the Kafka audit
   path or Kafka REST proxy. When set, `/ready` requires a 2xx response and
   `/config` reports `kafka_audit_sink=enabled`.

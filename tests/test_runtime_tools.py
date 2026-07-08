@@ -1491,6 +1491,10 @@ def test_registered_runtime_tool_metadata_includes_input_schemas():
         "delegate_task",
         "http_request",
         "list_files",
+        "memory_get",
+        "memory_put",
+        "memory_search",
+        "memory_upsert",
         "note",
         "open_app",
         "open_url",
@@ -1605,6 +1609,26 @@ def test_registered_runtime_tool_metadata_includes_input_schemas():
         "file_count",
         "truncated",
     ]
+    assert by_name["memory_put"]["approval_required_by_default"] == "false"
+    assert by_name["memory_put"]["input_schema"]["required"] == [
+        "namespace",
+        "key",
+        "value",
+    ]
+    assert by_name["memory_get"]["approval_required_by_default"] == "false"
+    assert by_name["memory_get"]["input_schema"]["required"] == ["namespace", "key"]
+    assert by_name["memory_upsert"]["approval_required_by_default"] == "false"
+    assert by_name["memory_upsert"]["input_schema"]["required"] == [
+        "collection",
+        "memory_id",
+        "text",
+        "vector",
+    ]
+    assert by_name["memory_search"]["approval_required_by_default"] == "false"
+    assert by_name["memory_search"]["input_schema"]["required"] == [
+        "collection",
+        "vector",
+    ]
     assert by_name["note"]["approval_required_by_default"] == "false"
     assert by_name["note"]["input_schema"]["required"] == ["text"]
     assert by_name["note"]["output_schema"]["required"] == ["text"]
@@ -1683,6 +1707,108 @@ def test_transform_text_tool_supports_uppercase_mode():
 
     assert observation.status == "ok"
     assert observation.output == {"text": "AGENT RUNTIME"}
+
+
+def test_memory_tools_use_configured_short_and_long_term_backends(monkeypatch):
+    calls = []
+
+    class FakeRedisMemory:
+        def __init__(self, url, *, timeout_seconds):
+            calls.append(("redis_init", url, timeout_seconds))
+
+        def put(self, *, namespace, key, value, ttl_seconds):
+            return {
+                "backend": "redis",
+                "namespace": namespace,
+                "key": key,
+                "stored": True,
+                "ttl_seconds": str(ttl_seconds),
+            }
+
+        def get(self, *, namespace, key):
+            return {
+                "backend": "redis",
+                "namespace": namespace,
+                "key": key,
+                "found": True,
+                "value": {"remembered": True},
+            }
+
+    class FakeMilvusMemory:
+        def __init__(self, url, *, timeout_seconds):
+            calls.append(("milvus_init", url, timeout_seconds))
+
+        def upsert(self, *, collection, memory_id, text, vector, metadata):
+            return {
+                "backend": "milvus",
+                "collection": collection,
+                "memory_id": memory_id,
+                "stored": True,
+            }
+
+        def search(self, *, collection, vector, limit):
+            return {
+                "backend": "milvus",
+                "collection": collection,
+                "matches": [
+                    {
+                        "memory_id": "mem-1",
+                        "text": "remembered",
+                        "score": 0.9,
+                        "metadata": {},
+                    }
+                ],
+                "match_count": 1,
+            }
+
+    monkeypatch.setattr(runtime_tools, "RedisShortTermMemory", FakeRedisMemory)
+    monkeypatch.setattr(runtime_tools, "MilvusLongTermMemory", FakeMilvusMemory)
+    tools = default_runtime_tools(
+        redis_url="redis://memory:6379/0",
+        milvus_url="http://milvus:19530",
+        external_backend_timeout_seconds=1.25,
+    )
+
+    put = execute_runtime_tool(
+        tools,
+        "memory_put",
+        {"namespace": "session", "key": "run", "value": {"text": "hello"}},
+        action_id="step-1",
+    )
+    read = execute_runtime_tool(
+        tools,
+        "memory_get",
+        {"namespace": "session", "key": "run"},
+        action_id="step-2",
+    )
+    upsert = execute_runtime_tool(
+        tools,
+        "memory_upsert",
+        {
+            "collection": "memories",
+            "memory_id": "mem-1",
+            "text": "remembered",
+            "vector": [0.1],
+        },
+        action_id="step-3",
+    )
+    search = execute_runtime_tool(
+        tools,
+        "memory_search",
+        {"collection": "memories", "vector": [0.1], "limit": 1},
+        action_id="step-4",
+    )
+
+    assert put.status == "ok"
+    assert read.output["value"] == {"remembered": True}
+    assert upsert.status == "ok"
+    assert search.output["match_count"] == 1
+    assert calls == [
+        ("redis_init", "redis://memory:6379/0", 1.25),
+        ("redis_init", "redis://memory:6379/0", 1.25),
+        ("milvus_init", "http://milvus:19530", 1.25),
+        ("milvus_init", "http://milvus:19530", 1.25),
+    ]
 
 
 def test_artifact_tool_records_structured_artifact_observation():
@@ -1970,6 +2096,36 @@ def test_default_policy_allows_workspace_read_tools():
 
     assert policy.authorize("read_file", {"path": "README.md"}).status == "allowed"
     assert policy.authorize("list_files", {"path": "."}).status == "allowed"
+    assert (
+        policy.authorize(
+            "memory_put",
+            {"namespace": "session", "key": "x", "value": {"text": "ok"}},
+        ).status
+        == "allowed"
+    )
+    assert (
+        policy.authorize("memory_get", {"namespace": "session", "key": "x"}).status
+        == "allowed"
+    )
+    assert (
+        policy.authorize(
+            "memory_upsert",
+            {
+                "collection": "memories",
+                "memory_id": "x",
+                "text": "ok",
+                "vector": [0.1],
+            },
+        ).status
+        == "allowed"
+    )
+    assert (
+        policy.authorize(
+            "memory_search",
+            {"collection": "memories", "vector": [0.1]},
+        ).status
+        == "allowed"
+    )
     assert (
         policy.authorize(
             "workspace_write",

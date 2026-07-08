@@ -145,6 +145,11 @@ def execute_runtime_resume_request(
                 max_iterations=max_iterations,
                 approved_action_ids=set(approved_action_ids),
                 runtime_workspace_dir=service_config.runtime_workspace_dir,
+                redis_url=service_config.redis_url,
+                milvus_url=service_config.milvus_url,
+                external_backend_timeout_seconds=(
+                    service_config.external_backend_timeout_seconds
+                ),
             ),
             timeout_seconds=service_config.run_timeout_seconds,
         )

@@ -156,6 +156,11 @@ def execute_runtime_run_request(
                 tags=tags,
                 hooks=_runtime_hooks(_service_config),
                 runtime_workspace_dir=_service_config.runtime_workspace_dir,
+                redis_url=_service_config.redis_url,
+                milvus_url=_service_config.milvus_url,
+                external_backend_timeout_seconds=(
+                    _service_config.external_backend_timeout_seconds
+                ),
             ),
             timeout_seconds=_service_config.run_timeout_seconds,
         )

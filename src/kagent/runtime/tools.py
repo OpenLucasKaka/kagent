@@ -16,6 +16,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict
 
+from kagent.integrations.memory import MilvusLongTermMemory, RedisShortTermMemory
 from kagent.runtime.policy import RuntimePolicy
 from kagent.runtime.skills import RuntimeSkillRegistry
 from kagent.runtime.task_state import TASK_EVENTS, TASK_STATES, TaskStateMachine
@@ -95,6 +96,9 @@ _RUNTIME_SKILLS_DIR_ENV_VARS = (
     "KAGENT_RUNTIME_SKILLS_DIR",
     "KAGENT_SKILLS_DIR",
 )
+_REDIS_URL_ENV_VARS = ("KAGENT_REDIS_URL",)
+_MILVUS_URL_ENV_VARS = ("KAGENT_MILVUS_URL",)
+_EXTERNAL_BACKEND_TIMEOUT_ENV_VAR = "KAGENT_EXTERNAL_BACKEND_TIMEOUT_SECONDS"
 _APP_NAME_MAX_LENGTH = 120
 _APP_NAME_ALLOWED_PATTERN = re.compile(r"^[\w .+()#&-]+$", re.UNICODE)
 
@@ -460,6 +464,69 @@ _WORKSPACE_LIST_OUTPUT_SCHEMA = {
     "additionalProperties": False,
 }
 
+_MEMORY_PUT_OUTPUT_SCHEMA = {
+    "type": "object",
+    "required": ["backend", "namespace", "key", "stored", "ttl_seconds"],
+    "properties": {
+        "backend": {"type": "string", "enum": ["redis"]},
+        "namespace": {"type": "string"},
+        "key": {"type": "string"},
+        "stored": {"type": "boolean"},
+        "ttl_seconds": {"type": "string"},
+    },
+    "additionalProperties": False,
+}
+
+_MEMORY_GET_OUTPUT_SCHEMA = {
+    "type": "object",
+    "required": ["backend", "namespace", "key", "found", "value"],
+    "properties": {
+        "backend": {"type": "string", "enum": ["redis"]},
+        "namespace": {"type": "string"},
+        "key": {"type": "string"},
+        "found": {"type": "boolean"},
+        "value": {},
+    },
+    "additionalProperties": False,
+}
+
+_MEMORY_UPSERT_OUTPUT_SCHEMA = {
+    "type": "object",
+    "required": ["backend", "collection", "memory_id", "stored"],
+    "properties": {
+        "backend": {"type": "string", "enum": ["milvus"]},
+        "collection": {"type": "string"},
+        "memory_id": {"type": "string"},
+        "stored": {"type": "boolean"},
+    },
+    "additionalProperties": False,
+}
+
+_MEMORY_SEARCH_OUTPUT_SCHEMA = {
+    "type": "object",
+    "required": ["backend", "collection", "matches", "match_count"],
+    "properties": {
+        "backend": {"type": "string", "enum": ["milvus"]},
+        "collection": {"type": "string"},
+        "matches": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "required": ["memory_id", "text", "score", "metadata"],
+                "properties": {
+                    "memory_id": {"type": "string"},
+                    "text": {"type": "string"},
+                    "score": {"type": "number"},
+                    "metadata": {"type": "object"},
+                },
+                "additionalProperties": False,
+            },
+        },
+        "match_count": {"type": "number", "minimum": 0},
+    },
+    "additionalProperties": False,
+}
+
 _DELEGATE_TASK_OUTPUT_SCHEMA = {
     "type": "object",
     "required": [
@@ -560,9 +627,15 @@ def default_runtime_tools(
     *,
     runtime_workspace_dir: str = "",
     runtime_skills_dir: str = "",
+    redis_url: str = "",
+    milvus_url: str = "",
+    external_backend_timeout_seconds: float = 2.0,
     delegate_runner: Callable[[str, int], Dict[str, Any]] | None = None,
     include_delegate_tool: bool = True,
 ) -> Dict[str, RuntimeToolSpec]:
+    active_redis_url = redis_url.strip() or _first_env_value(_REDIS_URL_ENV_VARS)
+    active_milvus_url = milvus_url.strip() or _first_env_value(_MILVUS_URL_ENV_VARS)
+    active_backend_timeout = _backend_timeout_seconds(external_backend_timeout_seconds)
     tools = {
         "apply_patch": RuntimeToolSpec(
             name="apply_patch",
@@ -909,6 +982,111 @@ def default_runtime_tools(
                 "additionalProperties": False,
             },
             output_schema=_WORKSPACE_LIST_OUTPUT_SCHEMA,
+        ),
+        "memory_put": RuntimeToolSpec(
+            name="memory_put",
+            description=(
+                "Store short-term structured runtime memory in Redis by namespace "
+                "and key. Requires KAGENT_REDIS_URL or service redis_url."
+            ),
+            handler=lambda payload: _memory_put(
+                payload,
+                redis_url=active_redis_url,
+                timeout_seconds=active_backend_timeout,
+            ),
+            input_schema={
+                "type": "object",
+                "required": ["namespace", "key", "value"],
+                "properties": {
+                    "namespace": {"type": "string", "minLength": 1, "maxLength": 120},
+                    "key": {"type": "string", "minLength": 1, "maxLength": 120},
+                    "value": {},
+                    "ttl_seconds": {"type": "number", "minimum": 0},
+                },
+                "additionalProperties": False,
+            },
+            output_schema=_MEMORY_PUT_OUTPUT_SCHEMA,
+        ),
+        "memory_get": RuntimeToolSpec(
+            name="memory_get",
+            description=(
+                "Read short-term structured runtime memory from Redis by "
+                "namespace and key."
+            ),
+            handler=lambda payload: _memory_get(
+                payload,
+                redis_url=active_redis_url,
+                timeout_seconds=active_backend_timeout,
+            ),
+            input_schema={
+                "type": "object",
+                "required": ["namespace", "key"],
+                "properties": {
+                    "namespace": {"type": "string", "minLength": 1, "maxLength": 120},
+                    "key": {"type": "string", "minLength": 1, "maxLength": 120},
+                },
+                "additionalProperties": False,
+            },
+            output_schema=_MEMORY_GET_OUTPUT_SCHEMA,
+        ),
+        "memory_upsert": RuntimeToolSpec(
+            name="memory_upsert",
+            description=(
+                "Store long-term semantic memory in Milvus. The caller must "
+                "provide an embedding vector; this runtime does not invent "
+                "vectors from text."
+            ),
+            handler=lambda payload: _memory_upsert(
+                payload,
+                milvus_url=active_milvus_url,
+                timeout_seconds=active_backend_timeout,
+            ),
+            input_schema={
+                "type": "object",
+                "required": ["collection", "memory_id", "text", "vector"],
+                "properties": {
+                    "collection": {"type": "string", "minLength": 1, "maxLength": 120},
+                    "memory_id": {"type": "string", "minLength": 1, "maxLength": 120},
+                    "text": {"type": "string", "minLength": 1, "maxLength": 20000},
+                    "vector": {
+                        "type": "array",
+                        "minItems": 1,
+                        "maxItems": 4096,
+                        "items": {"type": "number"},
+                    },
+                    "metadata": {"type": "object"},
+                },
+                "additionalProperties": False,
+            },
+            output_schema=_MEMORY_UPSERT_OUTPUT_SCHEMA,
+        ),
+        "memory_search": RuntimeToolSpec(
+            name="memory_search",
+            description=(
+                "Search long-term semantic memory in Milvus with an embedding "
+                "vector. Requires KAGENT_MILVUS_URL or service milvus_url."
+            ),
+            handler=lambda payload: _memory_search(
+                payload,
+                milvus_url=active_milvus_url,
+                timeout_seconds=active_backend_timeout,
+            ),
+            input_schema={
+                "type": "object",
+                "required": ["collection", "vector"],
+                "properties": {
+                    "collection": {"type": "string", "minLength": 1, "maxLength": 120},
+                    "vector": {
+                        "type": "array",
+                        "minItems": 1,
+                        "maxItems": 4096,
+                        "items": {"type": "number"},
+                    },
+                    "limit": {"type": "number", "minimum": 1, "maximum": 50},
+                },
+                "additionalProperties": False,
+            },
+            output_schema=_MEMORY_SEARCH_OUTPUT_SCHEMA,
         ),
         "shell_command": RuntimeToolSpec(
             name="shell_command",
@@ -1419,6 +1597,113 @@ def _runtime_skill_registry(runtime_skills_dir: str = "") -> RuntimeSkillRegistr
         if configured:
             return RuntimeSkillRegistry(configured)
     return RuntimeSkillRegistry(Path.cwd() / ".kagent" / "skills")
+
+
+def _memory_put(
+    input_payload: Dict[str, Any],
+    *,
+    redis_url: str,
+    timeout_seconds: float,
+) -> Dict[str, Any]:
+    if not redis_url:
+        raise ValueError("redis memory backend is not configured")
+    ttl = input_payload.get("ttl_seconds", 0)
+    if isinstance(ttl, bool) or not isinstance(ttl, (int, float)):
+        raise ValueError("ttl_seconds must be a number")
+    if int(ttl) != ttl:
+        raise ValueError("ttl_seconds must be an integer")
+    return RedisShortTermMemory(
+        redis_url,
+        timeout_seconds=timeout_seconds,
+    ).put(
+        namespace=str(input_payload.get("namespace", "")),
+        key=str(input_payload.get("key", "")),
+        value=input_payload.get("value"),
+        ttl_seconds=int(ttl),
+    )
+
+
+def _memory_get(
+    input_payload: Dict[str, Any],
+    *,
+    redis_url: str,
+    timeout_seconds: float,
+) -> Dict[str, Any]:
+    if not redis_url:
+        raise ValueError("redis memory backend is not configured")
+    return RedisShortTermMemory(
+        redis_url,
+        timeout_seconds=timeout_seconds,
+    ).get(
+        namespace=str(input_payload.get("namespace", "")),
+        key=str(input_payload.get("key", "")),
+    )
+
+
+def _memory_upsert(
+    input_payload: Dict[str, Any],
+    *,
+    milvus_url: str,
+    timeout_seconds: float,
+) -> Dict[str, Any]:
+    if not milvus_url:
+        raise ValueError("milvus memory backend is not configured")
+    metadata = input_payload.get("metadata", {})
+    if not isinstance(metadata, dict):
+        raise ValueError("metadata must be an object")
+    return MilvusLongTermMemory(
+        milvus_url,
+        timeout_seconds=timeout_seconds,
+    ).upsert(
+        collection=str(input_payload.get("collection", "")),
+        memory_id=str(input_payload.get("memory_id", "")),
+        text=str(input_payload.get("text", "")),
+        vector=input_payload.get("vector", []),
+        metadata=metadata,
+    )
+
+
+def _memory_search(
+    input_payload: Dict[str, Any],
+    *,
+    milvus_url: str,
+    timeout_seconds: float,
+) -> Dict[str, Any]:
+    if not milvus_url:
+        raise ValueError("milvus memory backend is not configured")
+    limit = input_payload.get("limit", 5)
+    if isinstance(limit, bool) or not isinstance(limit, (int, float)):
+        raise ValueError("limit must be a number")
+    if int(limit) != limit:
+        raise ValueError("limit must be an integer")
+    return MilvusLongTermMemory(
+        milvus_url,
+        timeout_seconds=timeout_seconds,
+    ).search(
+        collection=str(input_payload.get("collection", "")),
+        vector=input_payload.get("vector", []),
+        limit=int(limit),
+    )
+
+
+def _first_env_value(names: tuple[str, ...]) -> str:
+    for name in names:
+        value = os.environ.get(name, "").strip()
+        if value:
+            return value
+    return ""
+
+
+def _backend_timeout_seconds(default_value: float) -> float:
+    env_value = os.environ.get(_EXTERNAL_BACKEND_TIMEOUT_ENV_VAR, "").strip()
+    value = env_value or str(default_value)
+    try:
+        timeout = float(value)
+    except ValueError as exc:
+        raise ValueError("external backend timeout must be a float") from exc
+    if timeout <= 0:
+        raise ValueError("external backend timeout must be positive")
+    return timeout
 
 
 def _shell_command(input_payload: Dict[str, Any]) -> Dict[str, Any]:

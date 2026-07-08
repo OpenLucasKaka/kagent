@@ -19,7 +19,7 @@ def test_doctor_payload_reports_readiness_config_version_and_tool_count(tmp_path
     assert int(payload["tool_count"]) > 0
     assert payload["runtime_policy"]["trace_type"] == "codex_runtime"
     assert payload["runtime_policy"]["effective_policy_source"] == "default"
-    assert payload["runtime_policy"]["effective_allowed_tool_count"] == "16"
+    assert payload["runtime_policy"]["effective_allowed_tool_count"] == "20"
     assert payload["runtime_policy"]["approval_required_tool_count"] == "4"
     assert "open_app" not in payload["runtime_policy"]["effective_allowed_tools"]
     assert "open_url" not in payload["runtime_policy"]["effective_allowed_tools"]
@@ -43,7 +43,7 @@ def test_doctor_payload_reports_runtime_policy_without_tokens(tmp_path):
     assert payload["runtime_policy"]["effective_allowed_tools"] == ["note"]
     assert payload["runtime_policy"]["subject_policy_count"] == "1"
     assert payload["runtime_policy"]["effective_allowed_tool_count"] == "1"
-    assert payload["runtime_policy"]["approval_required_tool_count"] == "19"
+    assert payload["runtime_policy"]["approval_required_tool_count"] == "23"
     assert "long-random-admin-token" not in serialized
     assert "long-random-team-token" not in serialized
 

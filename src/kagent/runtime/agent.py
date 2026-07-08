@@ -62,6 +62,9 @@ Use only tools that are available to you.
     "kagent runtime; keep delegated goals specific and self-contained.\n"
     "Use skill_list and skill_get when the task may benefit from installed "
     "runtime skills or reusable operating procedures.\n"
+    "Use memory_put and memory_get for configured Redis short-term memory. "
+    "Use memory_upsert and memory_search for configured Milvus long-term "
+    "semantic memory only when you have explicit embedding vectors.\n"
     "Use shell_command for bounded non-interactive local CLI checks; it is "
     "policy-gated and may require explicit approval before execution.\n"
     "If the latest previous observation failed, do not return final_answer with "
@@ -86,6 +89,9 @@ class RuntimeGraphState(TypedDict, total=False):
     event_sink: RuntimeEventSink
     hooks: List[Any]
     runtime_workspace_dir: str
+    redis_url: str
+    milvus_url: str
+    external_backend_timeout_seconds: float
     stream_answers: bool
     result: Dict[str, Any]
     graph_phases: List[Dict[str, str]]
@@ -163,6 +169,9 @@ def run_runtime_agent(
     event_sink: Optional[RuntimeEventSink] = None,
     hooks: Optional[List[Any]] = None,
     runtime_workspace_dir: str = "",
+    redis_url: str = "",
+    milvus_url: str = "",
+    external_backend_timeout_seconds: float = 2.0,
     stream_answers: bool = False,
 ) -> Dict[str, Any]:
     graph = build_runtime_graph()
@@ -171,6 +180,9 @@ def run_runtime_agent(
         "provider": provider,
         "max_iterations": max_iterations,
         "runtime_workspace_dir": runtime_workspace_dir,
+        "redis_url": redis_url,
+        "milvus_url": milvus_url,
+        "external_backend_timeout_seconds": external_backend_timeout_seconds,
         "stream_answers": stream_answers,
     }
     if policy is not None:
@@ -224,6 +236,12 @@ def _runtime_loop_graph_node(state: RuntimeGraphState) -> RuntimeGraphState:
         event_sink=state.get("event_sink"),
         hooks=state.get("hooks"),
         runtime_workspace_dir=state.get("runtime_workspace_dir", ""),
+        redis_url=state.get("redis_url", ""),
+        milvus_url=state.get("milvus_url", ""),
+        external_backend_timeout_seconds=state.get(
+            "external_backend_timeout_seconds",
+            2.0,
+        ),
         stream_answers=state.get("stream_answers", False),
     )
     return {
@@ -282,6 +300,9 @@ def _run_runtime_agent_loop(
     event_sink: Optional[RuntimeEventSink] = None,
     hooks: Optional[List[Any]] = None,
     runtime_workspace_dir: str = "",
+    redis_url: str = "",
+    milvus_url: str = "",
+    external_backend_timeout_seconds: float = 2.0,
     stream_answers: bool = False,
 ) -> Dict[str, Any]:
     if max_iterations < 1:
@@ -305,16 +326,25 @@ def _run_runtime_agent_loop(
             policy=active_policy,
             tools=default_runtime_tools(
                 runtime_workspace_dir=runtime_workspace_dir,
+                redis_url=redis_url,
+                milvus_url=milvus_url,
+                external_backend_timeout_seconds=external_backend_timeout_seconds,
                 include_delegate_tool=False,
             ),
             max_iterations=child_max_iterations,
             metadata=normalized_metadata,
             tags=normalized_tags,
             runtime_workspace_dir=runtime_workspace_dir,
+            redis_url=redis_url,
+            milvus_url=milvus_url,
+            external_backend_timeout_seconds=external_backend_timeout_seconds,
         )
 
     active_tools = tools or default_runtime_tools(
         runtime_workspace_dir=runtime_workspace_dir,
+        redis_url=redis_url,
+        milvus_url=milvus_url,
+        external_backend_timeout_seconds=external_backend_timeout_seconds,
         delegate_runner=delegate_child,
     )
     active_approvals = set(approved_action_ids or set())
