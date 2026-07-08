@@ -283,10 +283,7 @@ class _PromptToolkitLineReader(_RuntimeLineReader):
 
     def read(self, *, color: bool) -> str:
         message: Any = (
-            [
-                ("class:input-bar.blank", " \n"),
-                ("class:input-bar.prompt", "› "),
-            ]
+            [("class:input-bar.prompt", "› ")]
             if color
             else "› "
         )
@@ -360,7 +357,6 @@ def _prompt_toolkit_session_for_tty(prompt_stream: Any) -> Any:
             {
                 "": "bg:#303030 #ffffff",
                 "input-bar": "bg:#303030 #ffffff",
-                "input-bar.blank": "bg:#303030 #ffffff",
                 "input-bar.prompt": "bg:#303030 ansicyan bold",
             }
         ),

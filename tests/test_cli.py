@@ -1515,10 +1515,7 @@ def test_cli_prompt_toolkit_reader_wraps_long_lines():
     assert reader.read(color=True) == "帮我制定一个很长很长的周末旅行攻略"
     assert session.calls == [
         {
-            "message": [
-                ("class:input-bar.blank", " \n"),
-                ("class:input-bar.prompt", "› "),
-            ],
+            "message": [("class:input-bar.prompt", "› ")],
             "wrap_lines": True,
             "multiline": False,
             "refresh_interval": 0.12,
@@ -1616,7 +1613,7 @@ def test_cli_prompt_toolkit_session_uses_persistent_history(
     assert created_sessions[0]["style"] is not None
     assert "('', 'bg:#303030 #ffffff')" in str(created_sessions[0]["style"].style_rules)
     assert "bottom-toolbar" not in str(created_sessions[0]["style"].style_rules)
-    assert "input-bar.blank" in str(created_sessions[0]["style"].style_rules)
+    assert "input-bar.blank" not in str(created_sessions[0]["style"].style_rules)
     assert "input-bar.prompt" in str(created_sessions[0]["style"].style_rules)
     assert "input-bar.progress" not in str(created_sessions[0]["style"].style_rules)
     assert "#303030" in str(created_sessions[0]["style"].style_rules)
