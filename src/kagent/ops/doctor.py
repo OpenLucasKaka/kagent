@@ -77,6 +77,11 @@ def main(argv: Optional[List[str]] = None) -> int:
         parser.error(str(exc))
     parser.add_argument("--trace-dir", default=defaults.trace_dir)
     parser.add_argument(
+        "--runtime-workspace-dir",
+        default=defaults.runtime_workspace_dir,
+        help="Optional runtime virtual workspace root to validate in readiness.",
+    )
+    parser.add_argument(
         "--require-auth",
         action="store_true",
         help="Fail the self-check when POST /run bearer auth is disabled.",
@@ -120,6 +125,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         protect_diagnostics=defaults.protect_diagnostics,
         trust_forwarded_for=defaults.trust_forwarded_for,
         trace_dir=args.trace_dir,
+        runtime_workspace_dir=args.runtime_workspace_dir,
         run_timeout_seconds=defaults.run_timeout_seconds,
         request_timeout_seconds=defaults.request_timeout_seconds,
     )

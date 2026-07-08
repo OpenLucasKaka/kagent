@@ -18,6 +18,7 @@ from typing import Any, Callable, Dict
 
 from kagent.runtime.policy import RuntimePolicy
 from kagent.runtime.types import AgentObservation
+from kagent.runtime.workspace import VIRTUAL_WORKSPACE_KINDS, RuntimeWorkspace
 
 RuntimeToolHandler = Callable[[Dict[str, Any]], Dict[str, Any]]
 _ARTIFACT_KINDS = ("report", "plan", "decision", "data", "message")
@@ -81,6 +82,10 @@ _SHELL_NETWORK_COMMAND_PATTERNS = (
 )
 _SHELL_PIPE_TO_SHELL_PATTERN = re.compile(
     r"\|\s*(?:sh|bash|zsh|python[0-9.]*|node|ruby)\b"
+)
+_RUNTIME_WORKSPACE_DIR_ENV_VARS = (
+    "KAGENT_RUNTIME_WORKSPACE_DIR",
+    "KAGENT_SERVICE_RUNTIME_WORKSPACE_DIR",
 )
 _APP_NAME_MAX_LENGTH = 120
 _APP_NAME_ALLOWED_PATTERN = re.compile(r"^[\w .+()#&-]+$", re.UNICODE)
@@ -364,6 +369,78 @@ _LIST_FILES_OUTPUT_SCHEMA = {
     "additionalProperties": False,
 }
 
+_WORKSPACE_ASSET_METADATA_SCHEMA = {
+    "type": "object",
+    "required": [
+        "kind",
+        "path",
+        "bytes",
+        "sha256",
+        "created_at",
+        "updated_at",
+        "metadata",
+    ],
+    "properties": {
+        "kind": {"type": "string", "enum": list(VIRTUAL_WORKSPACE_KINDS)},
+        "path": {"type": "string"},
+        "bytes": {"type": "number", "minimum": 0},
+        "sha256": {"type": "string"},
+        "created_at": {"type": "string"},
+        "updated_at": {"type": "string"},
+        "metadata": {"type": "object"},
+    },
+    "additionalProperties": False,
+}
+
+_WORKSPACE_READ_OUTPUT_SCHEMA = {
+    "type": "object",
+    "required": [
+        "kind",
+        "path",
+        "bytes",
+        "sha256",
+        "created_at",
+        "updated_at",
+        "metadata",
+        "content",
+        "truncated",
+    ],
+    "properties": {
+        **_WORKSPACE_ASSET_METADATA_SCHEMA["properties"],
+        "content": {"type": "string"},
+        "truncated": {"type": "boolean"},
+    },
+    "additionalProperties": False,
+}
+
+_WORKSPACE_LIST_ENTRY_OUTPUT_SCHEMA = {
+    "type": "object",
+    "required": ["path", "type", "bytes", "sha256"],
+    "properties": {
+        "path": {"type": "string"},
+        "type": {"type": "string", "enum": ["directory", "file"]},
+        "bytes": {"type": "number", "minimum": 0},
+        "sha256": {"type": "string"},
+    },
+    "additionalProperties": False,
+}
+
+_WORKSPACE_LIST_OUTPUT_SCHEMA = {
+    "type": "object",
+    "required": ["kind", "root", "entries", "file_count", "truncated"],
+    "properties": {
+        "kind": {"type": "string", "enum": list(VIRTUAL_WORKSPACE_KINDS)},
+        "root": {"type": "string"},
+        "entries": {
+            "type": "array",
+            "items": _WORKSPACE_LIST_ENTRY_OUTPUT_SCHEMA,
+        },
+        "file_count": {"type": "number", "minimum": 0},
+        "truncated": {"type": "boolean"},
+    },
+    "additionalProperties": False,
+}
+
 _SHELL_COMMAND_OUTPUT_SCHEMA = {
     "type": "object",
     "required": [
@@ -402,7 +479,10 @@ _SHELL_COMMAND_OUTPUT_SCHEMA = {
 }
 
 
-def default_runtime_tools() -> Dict[str, RuntimeToolSpec]:
+def default_runtime_tools(
+    *,
+    runtime_workspace_dir: str = "",
+) -> Dict[str, RuntimeToolSpec]:
     return {
         "apply_patch": RuntimeToolSpec(
             name="apply_patch",
@@ -657,6 +737,98 @@ def default_runtime_tools() -> Dict[str, RuntimeToolSpec]:
                 "additionalProperties": False,
             },
             output_schema=_READ_FILE_OUTPUT_SCHEMA,
+        ),
+        "workspace_write": RuntimeToolSpec(
+            name="workspace_write",
+            description=(
+                "Write UTF-8 text into the runtime virtual workspace. "
+                "Kinds are workspace, reports, logs, policies, and memories. "
+                "Paths are relative to the selected virtual directory and "
+                "cannot escape it."
+            ),
+            handler=lambda payload: _workspace_write(
+                payload,
+                runtime_workspace_dir=runtime_workspace_dir,
+            ),
+            input_schema={
+                "type": "object",
+                "required": ["kind", "path", "content"],
+                "properties": {
+                    "kind": {
+                        "type": "string",
+                        "enum": list(VIRTUAL_WORKSPACE_KINDS),
+                    },
+                    "path": {"type": "string", "minLength": 1, "maxLength": 2048},
+                    "content": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": _LONG_TEXT_MAX_LENGTH,
+                    },
+                    "metadata": {"type": "object"},
+                },
+                "additionalProperties": False,
+            },
+            output_schema=_WORKSPACE_ASSET_METADATA_SCHEMA,
+        ),
+        "workspace_read": RuntimeToolSpec(
+            name="workspace_read",
+            description="Read a UTF-8 text asset from the runtime virtual workspace.",
+            handler=lambda payload: _workspace_read(
+                payload,
+                runtime_workspace_dir=runtime_workspace_dir,
+            ),
+            input_schema={
+                "type": "object",
+                "required": ["kind", "path"],
+                "properties": {
+                    "kind": {
+                        "type": "string",
+                        "enum": list(VIRTUAL_WORKSPACE_KINDS),
+                    },
+                    "path": {"type": "string", "minLength": 1, "maxLength": 2048},
+                    "max_bytes": {
+                        "type": "number",
+                        "minimum": 1,
+                        "maximum": _READ_FILE_MAX_BYTES,
+                    },
+                },
+                "additionalProperties": False,
+            },
+            output_schema=_WORKSPACE_READ_OUTPUT_SCHEMA,
+        ),
+        "workspace_list": RuntimeToolSpec(
+            name="workspace_list",
+            description=(
+                "List assets inside a runtime virtual workspace directory with "
+                "bounded depth and entry count."
+            ),
+            handler=lambda payload: _workspace_list(
+                payload,
+                runtime_workspace_dir=runtime_workspace_dir,
+            ),
+            input_schema={
+                "type": "object",
+                "required": ["kind"],
+                "properties": {
+                    "kind": {
+                        "type": "string",
+                        "enum": list(VIRTUAL_WORKSPACE_KINDS),
+                    },
+                    "path": {"type": "string", "maxLength": 2048},
+                    "max_depth": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": _LIST_FILES_MAX_DEPTH,
+                    },
+                    "limit": {
+                        "type": "number",
+                        "minimum": 1,
+                        "maximum": _LIST_FILES_MAX_ENTRIES,
+                    },
+                },
+                "additionalProperties": False,
+            },
+            output_schema=_WORKSPACE_LIST_OUTPUT_SCHEMA,
         ),
         "shell_command": RuntimeToolSpec(
             name="shell_command",
@@ -984,6 +1156,78 @@ def _list_files(input_payload: Dict[str, Any]) -> Dict[str, Any]:
         "file_count": len(entries),
         "truncated": truncated,
     }
+
+
+def _workspace_write(
+    input_payload: Dict[str, Any],
+    *,
+    runtime_workspace_dir: str = "",
+) -> Dict[str, Any]:
+    kind = input_payload.get("kind")
+    relative_path = input_payload.get("path")
+    content = input_payload.get("content")
+    metadata = input_payload.get("metadata", {})
+    if not isinstance(kind, str):
+        raise ValueError("kind must be a string")
+    if not isinstance(relative_path, str) or not relative_path.strip():
+        raise ValueError("path must be a non-empty string")
+    if not isinstance(content, str):
+        raise ValueError("content must be a string")
+    if not isinstance(metadata, dict):
+        raise ValueError("metadata must be an object")
+    return _runtime_workspace(runtime_workspace_dir).write_text(
+        kind,
+        relative_path.strip(),
+        content,
+        metadata=metadata,
+    )
+
+
+def _workspace_read(
+    input_payload: Dict[str, Any],
+    *,
+    runtime_workspace_dir: str = "",
+) -> Dict[str, Any]:
+    kind = input_payload.get("kind")
+    relative_path = input_payload.get("path")
+    if not isinstance(kind, str):
+        raise ValueError("kind must be a string")
+    if not isinstance(relative_path, str) or not relative_path.strip():
+        raise ValueError("path must be a non-empty string")
+    return _runtime_workspace(runtime_workspace_dir).read_text(
+        kind,
+        relative_path.strip(),
+        max_bytes=int(input_payload.get("max_bytes", _READ_FILE_MAX_BYTES)),
+    )
+
+
+def _workspace_list(
+    input_payload: Dict[str, Any],
+    *,
+    runtime_workspace_dir: str = "",
+) -> Dict[str, Any]:
+    kind = input_payload.get("kind")
+    relative_path = input_payload.get("path", ".")
+    if not isinstance(kind, str):
+        raise ValueError("kind must be a string")
+    if not isinstance(relative_path, str) or not relative_path.strip():
+        raise ValueError("path must be a non-empty string")
+    return _runtime_workspace(runtime_workspace_dir).list(
+        kind,
+        relative_path.strip(),
+        max_depth=int(input_payload.get("max_depth", _LIST_FILES_MAX_DEPTH)),
+        limit=int(input_payload.get("limit", _LIST_FILES_MAX_ENTRIES)),
+    )
+
+
+def _runtime_workspace(runtime_workspace_dir: str = "") -> RuntimeWorkspace:
+    if runtime_workspace_dir.strip():
+        return RuntimeWorkspace(runtime_workspace_dir.strip())
+    for env_var in _RUNTIME_WORKSPACE_DIR_ENV_VARS:
+        configured = os.environ.get(env_var, "").strip()
+        if configured:
+            return RuntimeWorkspace(configured)
+    return RuntimeWorkspace(Path.cwd() / ".kagent" / "runtime-workspace")
 
 
 def _shell_command(input_payload: Dict[str, Any]) -> Dict[str, Any]:

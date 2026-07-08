@@ -24,6 +24,9 @@ class RuntimePolicy:
                 "rubric_score",
                 "task_list",
                 "transform_text",
+                "workspace_list",
+                "workspace_read",
+                "workspace_write",
             }
         )
 

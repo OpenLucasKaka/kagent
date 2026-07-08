@@ -8,6 +8,7 @@ from typing import Any, Dict, Tuple
 from kagent.providers.llm import FakeLLMProvider
 from kagent.runtime import run_runtime_agent
 from kagent.runtime.policy import RuntimePolicy
+from kagent.runtime.tools import default_runtime_tools
 from kagent.service import errors as service_errors
 from kagent.service.errors import failure_payload
 from kagent.service.run import run_with_timeout
@@ -142,6 +143,9 @@ def execute_runtime_resume_request(
                 goal,
                 provider=FakeLLMProvider(json.dumps(resumable_plan, sort_keys=True)),
                 policy=policy,
+                tools=default_runtime_tools(
+                    runtime_workspace_dir=service_config.runtime_workspace_dir,
+                ),
                 max_iterations=max_iterations,
                 approved_action_ids=set(approved_action_ids),
             ),

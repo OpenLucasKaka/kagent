@@ -154,6 +154,8 @@ def test_service_config_endpoint_reports_redacted_runtime_config(monkeypatch, tm
         "run_timeout_seconds": "7.5",
         "request_timeout_seconds": "4.5",
         "trace_persistence": "enabled",
+        "runtime_workspace": "disabled",
+        "runtime_workspace_kinds": "workspace,reports,logs,policies,memories",
         "trace_directory_permissions": "0700",
         "trace_file_permissions": "0600",
         "trace_probe_file_permissions": "0600",
@@ -2005,6 +2007,7 @@ def test_service_config_reads_environment_defaults():
             "KAGENT_SERVICE_PROTECT_DIAGNOSTICS": "true",
             "KAGENT_SERVICE_TRUST_FORWARDED_FOR": "true",
             "KAGENT_SERVICE_TRACE_DIR": "/tmp/agent-traces",
+            "KAGENT_SERVICE_RUNTIME_WORKSPACE_DIR": "/tmp/agent-runtime-workspace",
             "KAGENT_SERVICE_RUN_TIMEOUT_SECONDS": "9.5",
             "KAGENT_SERVICE_REQUEST_TIMEOUT_SECONDS": "4.5",
         }
@@ -2030,6 +2033,7 @@ def test_service_config_reads_environment_defaults():
     assert config.protect_diagnostics is True
     assert config.trust_forwarded_for is True
     assert config.trace_dir == "/tmp/agent-traces"
+    assert config.runtime_workspace_dir == "/tmp/agent-runtime-workspace"
     assert config.run_timeout_seconds == 9.5
     assert config.request_timeout_seconds == 4.5
 
@@ -2106,6 +2110,21 @@ def test_service_module_reports_invalid_environment_config_without_traceback():
     assert completed.returncode == 2
     assert "KAGENT_SERVICE_PORT must be an integer" in completed.stderr
     assert "Traceback" not in completed.stderr
+
+
+def test_service_cli_help_exposes_runtime_workspace_dir():
+    completed = subprocess.run(
+        [
+            ".venv/bin/kagent-serve",
+            "--help",
+        ],
+        check=False,
+        text=True,
+        capture_output=True,
+    )
+
+    assert completed.returncode == 0
+    assert "--runtime-workspace-dir" in completed.stdout
 
 
 def test_service_cli_handles_sigterm_with_graceful_exit():

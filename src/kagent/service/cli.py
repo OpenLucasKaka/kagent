@@ -198,6 +198,14 @@ def main(argv: Optional[List[str]] = None) -> int:
         default=defaults.trust_forwarded_for,
     )
     parser.add_argument("--trace-dir", default=defaults.trace_dir)
+    parser.add_argument(
+        "--runtime-workspace-dir",
+        default=defaults.runtime_workspace_dir,
+        help=(
+            "Optional runtime virtual workspace root for /workspace, "
+            "/reports, /logs, /policies, and /memories assets."
+        ),
+    )
     parser.add_argument("--run-timeout-seconds", type=float, default=defaults.run_timeout_seconds)
     parser.add_argument(
         "--request-timeout-seconds",
@@ -229,6 +237,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             protect_diagnostics=args.protect_diagnostics,
             trust_forwarded_for=args.trust_forwarded_for,
             trace_dir=args.trace_dir,
+            runtime_workspace_dir=args.runtime_workspace_dir,
             run_timeout_seconds=args.run_timeout_seconds,
             request_timeout_seconds=args.request_timeout_seconds,
         )

@@ -9,7 +9,17 @@ from kagent.service.status import (
 )
 
 
-def test_service_status_reports_readiness_and_redacted_config(tmp_path):
+def test_service_status_reports_readiness_and_redacted_config(
+    tmp_path,
+    monkeypatch,
+):
+    for key in list(os.environ):
+        if key.startswith("KAGENT_LLM_"):
+            monkeypatch.delenv(key, raising=False)
+    monkeypatch.setenv(
+        "KAGENT_LLM_CONFIG_PATH",
+        str(tmp_path / "missing-provider.json"),
+    )
     trace_dir = tmp_path / "traces"
     config = ServiceConfig(
         host="0.0.0.0",
@@ -58,6 +68,8 @@ def test_service_status_reports_readiness_and_redacted_config(tmp_path):
         "run_timeout_seconds": "7.5",
         "request_timeout_seconds": "4.5",
         "trace_persistence": "enabled",
+        "runtime_workspace": "disabled",
+        "runtime_workspace_kinds": "workspace,reports,logs,policies,memories",
         "trace_directory_permissions": "0700",
         "trace_file_permissions": "0600",
         "trace_probe_file_permissions": "0600",
@@ -105,6 +117,26 @@ def test_readiness_checks_sqlite_idempotency_cache_path(tmp_path):
     assert readiness["checks"]["idempotency_cache_persistence"] == "ok"
     assert cache_path.exists()
     assert S_IMODE(cache_path.stat().st_mode) == 0o600
+
+
+def test_readiness_checks_configured_runtime_workspace_dir(tmp_path):
+    runtime_workspace_dir = tmp_path / "runtime-workspace"
+
+    readiness = readiness_payload(
+        ServiceConfig(runtime_workspace_dir=str(runtime_workspace_dir))
+    )
+    snapshot = service_config_snapshot(
+        ServiceConfig(runtime_workspace_dir=str(runtime_workspace_dir))
+    )
+
+    assert readiness["status"] == "ready"
+    assert readiness["checks"]["runtime_workspace"] == "ok"
+    assert snapshot["runtime_workspace"] == "enabled"
+    assert snapshot["runtime_workspace_kinds"] == (
+        "workspace,reports,logs,policies,memories"
+    )
+    assert S_IMODE(runtime_workspace_dir.stat().st_mode) == 0o700
+    assert S_IMODE((runtime_workspace_dir / "reports").stat().st_mode) == 0o700
 
 
 def test_readiness_fails_when_sqlite_idempotency_cache_path_is_unusable(tmp_path):

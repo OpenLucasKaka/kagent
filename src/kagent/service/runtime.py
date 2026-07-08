@@ -42,6 +42,7 @@ class ServiceConfig:
     protect_diagnostics: bool = False
     trust_forwarded_for: bool = False
     trace_dir: str = ""
+    runtime_workspace_dir: str = ""
     run_timeout_seconds: float = 30.0
     request_timeout_seconds: float = 10.0
 
@@ -119,6 +120,10 @@ class ServiceConfig:
                 cls.trust_forwarded_for,
             ),
             trace_dir=source.get("KAGENT_SERVICE_TRACE_DIR", cls.trace_dir),
+            runtime_workspace_dir=source.get(
+                "KAGENT_SERVICE_RUNTIME_WORKSPACE_DIR",
+                cls.runtime_workspace_dir,
+            ),
             run_timeout_seconds=_env_float(
                 source,
                 "KAGENT_SERVICE_RUN_TIMEOUT_SECONDS",

@@ -130,6 +130,11 @@ The service reads these environment variables:
   run traces. When set, `/ready` validates that the directory can be created
   and written, `/run` responses include `trace_path`, and trace files are
   atomically replaced after a successful temporary-file write.
+- `KAGENT_SERVICE_RUNTIME_WORKSPACE_DIR`: optional root for the runtime
+  virtual workspace. When set, `/ready` creates and validates owner-only
+  `workspace`, `reports`, `logs`, `policies`, and `memories` directories.
+  Use this for production deployments that need agent-generated reports,
+  policy snapshots, logs, or memory assets to survive process restarts.
 - `KAGENT_SERVICE_RUN_TIMEOUT_SECONDS`: maximum wall-clock time for
   one execution route (`/run`, `/runtime/run`, or `/runtime/resume`) before
   returning `504`, default `30`.
@@ -174,10 +179,11 @@ will not start until `/etc/kagent.env` provides bearer auth,
 trace persistence, per-client rate limiting, and bounded run concurrency.
 The unit declares `StateDirectory=kagent` and
 `ReadWritePaths=/var/lib/kagent`, then uses `ProtectSystem=strict`
-so persisted traces have an explicit writable state boundary. The unit passes
-`--trace-dir /var/lib/kagent/traces` to both the production
-doctor and the service process so trace persistence is validated before startup
-and used at runtime.
+so persisted traces and runtime workspace assets have an explicit writable
+state boundary. The unit passes `--trace-dir /var/lib/kagent/traces` and
+`--runtime-workspace-dir /var/lib/kagent/runtime-workspace` to both the
+production doctor and the service process so trace persistence and the virtual
+workspace are validated before startup and used at runtime.
 It also sets `UMask=0077` so newly written trace and state files default to
 owner-only permissions.
 The unit also defines process sandbox boundaries with an empty

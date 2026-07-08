@@ -27,6 +27,59 @@ def test_note_tool_returns_structured_observation():
     assert observation.output == {"text": "remember this"}
 
 
+def test_workspace_tools_write_read_and_list_virtual_assets(tmp_path, monkeypatch):
+    monkeypatch.setenv("KAGENT_RUNTIME_WORKSPACE_DIR", str(tmp_path / "runtime-assets"))
+
+    written = execute_runtime_tool(
+        default_runtime_tools(),
+        "workspace_write",
+        {
+            "kind": "reports",
+            "path": "pilot/summary.md",
+            "content": "# Summary\n\nready\n",
+            "metadata": {"run_id": "run-123"},
+        },
+        action_id="step-1",
+    )
+    read = execute_runtime_tool(
+        default_runtime_tools(),
+        "workspace_read",
+        {"kind": "reports", "path": "pilot/summary.md"},
+        action_id="step-2",
+    )
+    listed = execute_runtime_tool(
+        default_runtime_tools(),
+        "workspace_list",
+        {"kind": "reports", "max_depth": 2},
+        action_id="step-3",
+    )
+
+    assert written.status == "ok"
+    assert written.output["kind"] == "reports"
+    assert written.output["path"] == "pilot/summary.md"
+    assert written.output["metadata"] == {"run_id": "run-123"}
+    assert read.status == "ok"
+    assert read.output["content"] == "# Summary\n\nready\n"
+    assert listed.status == "ok"
+    assert listed.output["entries"][0]["path"] == "pilot"
+    assert listed.output["entries"][1]["path"] == "pilot/summary.md"
+
+
+def test_workspace_tools_reject_virtual_directory_escape(tmp_path, monkeypatch):
+    monkeypatch.setenv("KAGENT_RUNTIME_WORKSPACE_DIR", str(tmp_path / "runtime-assets"))
+
+    observation = execute_runtime_tool(
+        default_runtime_tools(),
+        "workspace_write",
+        {"kind": "reports", "path": "../escape.md", "content": "no"},
+        action_id="step-1",
+    )
+
+    assert observation.status == "failed"
+    assert observation.error_code == "invalid_tool_input"
+    assert "path must stay inside the virtual directory" in observation.error
+
+
 def test_read_file_tool_reads_text_file_inside_workspace(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     target = tmp_path / "docs" / "brief.md"
@@ -1445,6 +1498,9 @@ def test_registered_runtime_tool_metadata_includes_input_schemas():
         "shell_command",
         "task_list",
         "transform_text",
+        "workspace_list",
+        "workspace_read",
+        "workspace_write",
     ]
     assert by_name["apply_patch"]["approval_required_by_default"] == "false"
     assert "*** Add File:" in metadata[0]["description"]
@@ -1476,6 +1532,25 @@ def test_registered_runtime_tool_metadata_includes_input_schemas():
         "tags",
         "bytes",
     ]
+    assert by_name["workspace_write"]["approval_required_by_default"] == "false"
+    assert by_name["workspace_write"]["input_schema"]["required"] == [
+        "kind",
+        "path",
+        "content",
+    ]
+    assert by_name["workspace_write"]["output_schema"]["required"] == [
+        "kind",
+        "path",
+        "bytes",
+        "sha256",
+        "created_at",
+        "updated_at",
+        "metadata",
+    ]
+    assert by_name["workspace_read"]["approval_required_by_default"] == "false"
+    assert by_name["workspace_read"]["input_schema"]["required"] == ["kind", "path"]
+    assert by_name["workspace_list"]["approval_required_by_default"] == "false"
+    assert by_name["workspace_list"]["input_schema"]["required"] == ["kind"]
     assert by_name["decision_matrix"]["input_schema"]["required"] == [
         "question",
         "criteria",
@@ -1869,6 +1944,18 @@ def test_default_policy_allows_workspace_read_tools():
 
     assert policy.authorize("read_file", {"path": "README.md"}).status == "allowed"
     assert policy.authorize("list_files", {"path": "."}).status == "allowed"
+    assert (
+        policy.authorize(
+            "workspace_write",
+            {"kind": "reports", "path": "x.md", "content": "x"},
+        ).status
+        == "allowed"
+    )
+    assert (
+        policy.authorize("workspace_read", {"kind": "reports", "path": "x.md"}).status
+        == "allowed"
+    )
+    assert policy.authorize("workspace_list", {"kind": "reports"}).status == "allowed"
 
 
 def test_default_policy_gates_shell_command_tool():

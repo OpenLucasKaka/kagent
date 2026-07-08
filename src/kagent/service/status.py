@@ -5,6 +5,7 @@ from typing import Any, Callable, Dict, Optional
 from uuid import uuid4
 
 from kagent.providers.llm import LLMProviderConfig
+from kagent.runtime.workspace import VIRTUAL_WORKSPACE_KINDS, RuntimeWorkspace
 from kagent.service import transport as service_transport
 from kagent.service.contract import service_openapi
 from kagent.service.errors import READINESS_FAILED
@@ -32,6 +33,11 @@ def readiness_payload(config: Optional[ServiceConfig] = None) -> Dict[str, Any]:
         checks["trace_persistence"] = _readiness_check(
             lambda: _check_trace_persistence(active_config.trace_dir),
             "trace_persistence_unavailable",
+        )
+    if active_config.runtime_workspace_dir:
+        checks["runtime_workspace"] = _readiness_check(
+            lambda: _check_runtime_workspace(active_config.runtime_workspace_dir),
+            "runtime_workspace_unavailable",
         )
     if active_config.idempotency_cache_path:
         checks["idempotency_cache_persistence"] = _readiness_check(
@@ -79,6 +85,10 @@ def service_config_snapshot(config: ServiceConfig) -> Dict[str, str]:
         "run_timeout_seconds": str(config.run_timeout_seconds),
         "request_timeout_seconds": str(config.request_timeout_seconds),
         "trace_persistence": "enabled" if config.trace_dir else "disabled",
+        "runtime_workspace": (
+            "enabled" if config.runtime_workspace_dir else "disabled"
+        ),
+        "runtime_workspace_kinds": ",".join(VIRTUAL_WORKSPACE_KINDS),
     }
     snapshot.update(security_response_header_snapshot())
     snapshot.update(trace_permission_policy_snapshot())
@@ -147,6 +157,10 @@ def _check_trace_persistence(trace_dir: str) -> None:
         "ok\n",
     )
     probe_path.unlink()
+
+
+def _check_runtime_workspace(runtime_workspace_dir: str) -> None:
+    RuntimeWorkspace(runtime_workspace_dir).ensure_layout()
 
 
 def _check_idempotency_cache_persistence(config: ServiceConfig) -> None:

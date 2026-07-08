@@ -119,6 +119,7 @@ def test_environment_example_documents_service_runtime_knobs():
     assert "KAGENT_SERVICE_PROTECT_DIAGNOSTICS=false" in env_example
     assert "KAGENT_SERVICE_TRUST_FORWARDED_FOR=false" in env_example
     assert "KAGENT_SERVICE_TRACE_DIR=" in env_example
+    assert "KAGENT_SERVICE_RUNTIME_WORKSPACE_DIR=" in env_example
     assert "KAGENT_SERVICE_REQUEST_TIMEOUT_SECONDS=10" in env_example
     assert "KAGENT_LLM_BASE_URL=" in env_example
     llm_api_key_name = "KAGENT_LLM_API_KEY"
@@ -149,9 +150,13 @@ def test_systemd_unit_defines_trace_state_write_boundary():
     assert "ReadWritePaths=/var/lib/kagent" in unit
     assert (
         "kagent-doctor --production --trace-dir "
-        "/var/lib/kagent/traces"
+        "/var/lib/kagent/traces --runtime-workspace-dir "
+        "/var/lib/kagent/runtime-workspace"
     ) in unit
-    assert "kagent-serve --trace-dir /var/lib/kagent/traces" in unit
+    assert (
+        "kagent-serve --trace-dir /var/lib/kagent/traces "
+        "--runtime-workspace-dir /var/lib/kagent/runtime-workspace"
+    ) in unit
     assert "ProtectSystem=strict" in unit
     assert "StateDirectory" in deployment
     assert "ReadWritePaths" in deployment
@@ -231,6 +236,7 @@ def test_kubernetes_manifest_defines_production_runtime_resources():
     assert "KAGENT_SERVICE_PROTECT_DIAGNOSTICS" in manifest
     assert "KAGENT_SERVICE_REQUEST_TIMEOUT_SECONDS" in manifest
     assert "KAGENT_SERVICE_TRACE_DIR" in manifest
+    assert "KAGENT_SERVICE_RUNTIME_WORKSPACE_DIR" in manifest
     assert "configMapRef:" in manifest
     assert "secretRef:" in manifest
 

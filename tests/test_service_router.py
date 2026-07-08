@@ -241,6 +241,9 @@ def test_service_router_runtime_policy_reports_admin_audit_view_without_tokens()
             "allowed": "false",
             "approval_required": "true",
         },
+        {"name": "workspace_list", "allowed": "false", "approval_required": "true"},
+        {"name": "workspace_read", "allowed": "false", "approval_required": "true"},
+        {"name": "workspace_write", "allowed": "false", "approval_required": "true"},
     ]
     assert "admin-token" not in json.dumps(payload)
     assert "team-a-token" not in json.dumps(payload)
@@ -300,6 +303,9 @@ def test_service_router_runtime_policy_scopes_subject_audit_view():
             "allowed": "false",
             "approval_required": "true",
         },
+        {"name": "workspace_list", "allowed": "false", "approval_required": "true"},
+        {"name": "workspace_read", "allowed": "false", "approval_required": "true"},
+        {"name": "workspace_write", "allowed": "false", "approval_required": "true"},
     ]
     assert payload["effective_tool_policy_sha256"] != ""
     assert "team-b" not in json.dumps(payload)
@@ -1419,6 +1425,43 @@ def test_service_router_runtime_run_can_execute_task_list_tool():
         "blocked": 0,
         "done": 1,
     }
+
+
+def test_service_router_runtime_run_uses_configured_runtime_workspace_dir(tmp_path):
+    runtime_workspace_dir = tmp_path / "runtime-workspace"
+    body = json.dumps(
+        {
+            "goal": "write pilot report",
+            "plan": {
+                "actions": [
+                    {
+                        "id": "step-1",
+                        "tool": "workspace_write",
+                        "input": {
+                            "kind": "reports",
+                            "path": "pilot/summary.md",
+                            "content": "# Summary\n\nready\n",
+                        },
+                        "reason": "store report in virtual workspace",
+                    }
+                ],
+                "final_answer": "stored report",
+            },
+        }
+    ).encode("utf-8")
+
+    status_code, payload = service_router.handle_request(
+        "POST",
+        "/runtime/run",
+        body,
+        config=ServiceConfig(runtime_workspace_dir=str(runtime_workspace_dir)),
+    )
+
+    assert status_code == 200
+    assert payload["status"] == "done"
+    assert (
+        runtime_workspace_dir / "reports" / "pilot" / "summary.md"
+    ).read_text(encoding="utf-8") == "# Summary\n\nready\n"
 
 
 def test_service_router_runtime_run_can_execute_rubric_score_tool():

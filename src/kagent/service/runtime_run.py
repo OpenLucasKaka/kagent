@@ -12,6 +12,7 @@ from kagent.providers.llm import (
 )
 from kagent.runtime import run_runtime_agent
 from kagent.runtime.policy import RuntimePolicy
+from kagent.runtime.tools import default_runtime_tools
 from kagent.service import errors as service_errors
 from kagent.service.errors import failure_payload
 from kagent.service.run import run_with_timeout
@@ -149,6 +150,9 @@ def execute_runtime_run_request(
                 goal,
                 provider=provider,
                 policy=policy,
+                tools=default_runtime_tools(
+                    runtime_workspace_dir=_service_config.runtime_workspace_dir,
+                ),
                 max_iterations=max_iterations,
                 approved_action_ids=set(approved_action_ids),
                 metadata=metadata,

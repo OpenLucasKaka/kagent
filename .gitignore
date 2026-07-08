@@ -23,6 +23,7 @@ dist/
 *credential*
 
 # Local runtime outputs.
+.kagent/
 *.log
 *.jsonl
 coverage.xml
