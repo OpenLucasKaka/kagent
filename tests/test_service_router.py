@@ -1514,7 +1514,22 @@ def test_service_router_runtime_run_uses_configured_runtime_workspace_dir(tmp_pa
 def test_service_router_runtime_run_posts_kafka_audit_event_when_configured():
     audit_server = _AuditServer()
     audit_server.start()
-    body = b'{"goal":"capture","plan":{"actions":[],"final_answer":"done"}}'
+    body = json.dumps(
+        {
+            "goal": "capture",
+            "plan": {
+                "actions": [
+                    {
+                        "id": "step-1",
+                        "tool": "note",
+                        "input": {"text": "audit this"},
+                        "reason": "capture audit event",
+                    }
+                ],
+                "final_answer": "done",
+            },
+        }
+    ).encode("utf-8")
     try:
         status_code, payload = service_router.handle_request(
             "POST",
@@ -1531,9 +1546,39 @@ def test_service_router_runtime_run_posts_kafka_audit_event_when_configured():
 
     assert status_code == 200
     assert payload["status"] == "done"
-    assert audit_server.requests[0]["topic"] == "kagent-audit"
-    assert audit_server.requests[0]["event"]["status"] == "done"
-    assert audit_server.requests[0]["event"]["run_id"] == payload["run_id"]
+    assert {request["topic"] for request in audit_server.requests} == {"kagent-audit"}
+    audit_events = [request["event"] for request in audit_server.requests]
+    assert [event["type"] for event in audit_events[:-1]] == [
+        "planner_started",
+        "planner_completed",
+        "policy_completed",
+        "tool_started",
+        "tool_completed",
+        "run_completed",
+    ]
+    assert audit_events[-1]["type"] == "run_end"
+    assert audit_events[-1]["status"] == "done"
+    assert {event["run_id"] for event in audit_events} == {payload["run_id"]}
+    assert "audit this" not in json.dumps(audit_events)
+
+
+def test_service_router_runtime_run_counts_kafka_progress_sink_failures():
+    body = b'{"goal":"capture","plan":{"actions":[],"final_answer":"done"}}'
+
+    status_code, payload = service_router.handle_request(
+        "POST",
+        "/runtime/run",
+        body,
+        config=ServiceConfig(
+            kafka_audit_url="http://127.0.0.1:1/audit",
+            kafka_audit_topic="kagent-audit",
+            external_backend_timeout_seconds=0.1,
+        ),
+    )
+
+    assert status_code == 200
+    assert payload["status"] == "done"
+    assert payload["progress_event_sink_failure_count"] == "3"
 
 
 def test_service_router_runtime_run_can_execute_rubric_score_tool():

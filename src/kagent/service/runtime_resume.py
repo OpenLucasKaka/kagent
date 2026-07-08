@@ -5,6 +5,7 @@ from concurrent.futures import TimeoutError
 from datetime import datetime, timezone
 from typing import Any, Dict, Tuple
 
+from kagent.integrations.audit import KafkaRestProgressEventSink
 from kagent.providers.llm import FakeLLMProvider
 from kagent.runtime import run_runtime_agent
 from kagent.runtime.policy import RuntimePolicy
@@ -143,6 +144,7 @@ def execute_runtime_resume_request(
                 provider=FakeLLMProvider(json.dumps(resumable_plan, sort_keys=True)),
                 policy=policy,
                 max_iterations=max_iterations,
+                event_sink=_runtime_event_sink(service_config),
                 approved_action_ids=set(approved_action_ids),
                 runtime_workspace_dir=service_config.runtime_workspace_dir,
                 redis_url=service_config.redis_url,
@@ -205,6 +207,17 @@ def _pending_approval_plan(
     if isinstance(final_answer, str) and final_answer:
         resumable_plan["final_answer"] = final_answer
     return resumable_plan
+
+
+def _runtime_event_sink(config: ServiceConfig):
+    if not config.kafka_audit_url:
+        return None
+    return KafkaRestProgressEventSink(
+        url=config.kafka_audit_url,
+        topic=config.kafka_audit_topic,
+        timeout_seconds=config.external_backend_timeout_seconds,
+        fail_closed=True,
+    )
 
 
 def _utc_timestamp() -> str:

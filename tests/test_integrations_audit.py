@@ -4,7 +4,7 @@ import json
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
-from kagent.integrations.audit import KafkaRestAuditHook
+from kagent.integrations.audit import KafkaRestAuditHook, KafkaRestProgressEventSink
 
 
 def test_kafka_rest_audit_hook_posts_run_end_event():
@@ -31,10 +31,45 @@ def test_kafka_rest_audit_hook_posts_run_end_event():
         {
             "topic": "kagent-audit",
             "event": {
+                "type": "run_end",
                 "run_id": "run-123",
                 "goal": "test audit",
                 "status": "done",
                 "duration_seconds": "0.1",
+            },
+        }
+    ]
+
+
+def test_kafka_rest_progress_event_sink_posts_redacted_runtime_event():
+    server = _AuditServer()
+    server.start()
+    try:
+        sink = KafkaRestProgressEventSink(
+            url=f"http://127.0.0.1:{server.port}/audit",
+            topic="kagent-audit",
+            timeout_seconds=1.0,
+        )
+        sink(
+            {
+                "run_id": "run-123",
+                "type": "tool_completed",
+                "tool": "note",
+                "status": "ok",
+                "input": {"secret": "must-not-leak"},
+            }
+        )
+    finally:
+        server.stop()
+
+    assert server.requests == [
+        {
+            "topic": "kagent-audit",
+            "event": {
+                "run_id": "run-123",
+                "type": "tool_completed",
+                "tool": "note",
+                "status": "ok",
             },
         }
     ]

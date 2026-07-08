@@ -4,7 +4,7 @@ import json
 from concurrent.futures import TimeoutError
 from typing import Any, Dict, Tuple
 
-from kagent.integrations.audit import KafkaRestAuditHook
+from kagent.integrations.audit import KafkaRestAuditHook, KafkaRestProgressEventSink
 from kagent.providers.llm import (
     FakeLLMProvider,
     LLMProviderConfig,
@@ -154,6 +154,7 @@ def execute_runtime_run_request(
                 approved_action_ids=set(approved_action_ids),
                 metadata=metadata,
                 tags=tags,
+                event_sink=_runtime_event_sink(_service_config),
                 hooks=_runtime_hooks(_service_config),
                 runtime_workspace_dir=_service_config.runtime_workspace_dir,
                 redis_url=_service_config.redis_url,
@@ -193,6 +194,17 @@ def _runtime_hooks(config: ServiceConfig) -> list[Any]:
             )
         )
     return hooks
+
+
+def _runtime_event_sink(config: ServiceConfig):
+    if not config.kafka_audit_url:
+        return None
+    return KafkaRestProgressEventSink(
+        url=config.kafka_audit_url,
+        topic=config.kafka_audit_topic,
+        timeout_seconds=config.external_backend_timeout_seconds,
+        fail_closed=True,
+    )
 
 
 def _planned_action_ids(

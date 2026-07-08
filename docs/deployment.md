@@ -146,7 +146,9 @@ The service reads these environment variables:
   `memory_upsert` / `memory_search` with explicit embedding vectors.
 - `KAGENT_KAFKA_AUDIT_URL`: optional HTTP health endpoint for the Kafka audit
   path or Kafka REST proxy. When set, `/ready` requires a 2xx response and
-  `/config` reports `kafka_audit_sink=enabled`.
+  `/config` reports `kafka_audit_sink=enabled`. `/runtime/run` and
+  `/runtime/resume` also send redacted planner, policy, tool, approval, and
+  run-completion progress events to this endpoint.
 - `KAGENT_KAFKA_AUDIT_TOPIC`: optional audit topic name. `/config` reports only
   whether it is configured.
 - `KAGENT_EXTERNAL_BACKEND_TIMEOUT_SECONDS`: readiness timeout for Redis,
