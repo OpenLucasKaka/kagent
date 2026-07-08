@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 import os
 import queue
-import re
 import shlex
 import sys
 import threading
@@ -84,13 +83,8 @@ def run_runtime_interactive(
     line_reader: Any = None
     state_lock = threading.RLock()
     if interactive_tty:
-        prompt_status = _RuntimePromptStatus()
-        line_reader = _runtime_interactive_line_reader(prompt_stream, prompt_status)
-        if not line_reader.uses_prompt_status():
-            prompt_status = None
+        line_reader = _runtime_interactive_line_reader(prompt_stream)
         print(runtime_ready_message(color=runtime_ui_color_enabled()), file=prompt_stream)
-    else:
-        prompt_status = None
 
     def run_goal_once(
         goal: str,
@@ -105,7 +99,6 @@ def run_runtime_interactive(
             )
         progress_sink = _runtime_interactive_progress_sink(
             enabled=interactive_tty and not run_full_json_mode,
-            prompt_status=prompt_status,
         )
         try:
             payload = json_ready(
@@ -285,9 +278,8 @@ class _InputLineReader(_RuntimeLineReader):
 
 
 class _PromptToolkitLineReader(_RuntimeLineReader):
-    def __init__(self, session: Any, prompt_status: Any = None):
+    def __init__(self, session: Any):
         self._session = session
-        self._prompt_status = prompt_status
 
     def read(self, *, color: bool) -> str:
         message: Any = (
@@ -305,7 +297,6 @@ class _PromptToolkitLineReader(_RuntimeLineReader):
                 message,
                 wrap_lines=True,
                 multiline=False,
-                bottom_toolbar=self._bottom_toolbar if color else None,
                 refresh_interval=0.12,
             )
         with patch_stdout(raw=True):
@@ -313,14 +304,8 @@ class _PromptToolkitLineReader(_RuntimeLineReader):
                 message,
                 wrap_lines=True,
                 multiline=False,
-                bottom_toolbar=self._bottom_toolbar if color else None,
                 refresh_interval=0.12,
             )
-
-    def _bottom_toolbar(self) -> Any:
-        if self._prompt_status is None:
-            return [("class:input-bar.blank", " ")]
-        return self._prompt_status.render()
 
     def clear_history(self) -> None:
         history = getattr(self._session, "history", None)
@@ -332,7 +317,7 @@ class _PromptToolkitLineReader(_RuntimeLineReader):
         return False
 
     def uses_prompt_status(self) -> bool:
-        return True
+        return False
 
     def line_editor_name(self) -> str:
         return "prompt_toolkit"
@@ -340,11 +325,10 @@ class _PromptToolkitLineReader(_RuntimeLineReader):
 
 def _runtime_interactive_line_reader(
     prompt_stream: Any,
-    prompt_status: Any = None,
 ) -> _RuntimeLineReader:
     prompt_toolkit_session = _prompt_toolkit_session_for_tty(prompt_stream)
     if prompt_toolkit_session is not None:
-        return _PromptToolkitLineReader(prompt_toolkit_session, prompt_status)
+        return _PromptToolkitLineReader(prompt_toolkit_session)
     _enable_interactive_line_editing()
     return _InputLineReader()
 
@@ -375,11 +359,9 @@ def _prompt_toolkit_session_for_tty(prompt_stream: Any) -> Any:
         style=Style.from_dict(
             {
                 "": "bg:#303030 #ffffff",
-                "bottom-toolbar": "bg:#303030 #888888",
                 "input-bar": "bg:#303030 #ffffff",
                 "input-bar.blank": "bg:#303030 #ffffff",
                 "input-bar.prompt": "bg:#303030 ansicyan bold",
-                "input-bar.progress": "bg:#303030 #888888",
             }
         ),
     )
@@ -409,11 +391,10 @@ def _print_runtime_interactive_payload(payload: Any, *, full_json: bool) -> None
 def _runtime_interactive_progress_sink(
     *,
     enabled: bool,
-    prompt_status: Any = None,
 ) -> Any:
     if not enabled:
         return None
-    return _RuntimeInteractiveProgress(prompt_status=prompt_status)
+    return _RuntimeInteractiveProgress()
 
 
 def _close_runtime_progress_sink(progress_sink: Any) -> None:
@@ -493,45 +474,11 @@ def _replace_runtime_prompt_with_user_message(goal: str) -> None:
     sys.stdout.flush()
 
 
-class _RuntimePromptStatus:
-    _FRAMES = ("⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏")
-
-    def __init__(self) -> None:
-        self._lock = threading.Lock()
-        self._message = ""
-        self._frame_index = 0
-
-    def set(self, message: str) -> None:
-        with self._lock:
-            self._message = _strip_ansi(message)
-            self._frame_index += 1
-
-    def clear(self) -> None:
-        with self._lock:
-            self._message = ""
-
-    def render(self) -> Any:
-        with self._lock:
-            if not self._message:
-                return [("class:input-bar.blank", " ")]
-            self._frame_index += 1
-            frame = self._FRAMES[self._frame_index % len(self._FRAMES)]
-            return [("class:input-bar.progress", f" {frame} {self._message}")]
-
-
-_ANSI_PATTERN = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]")
-
-
-def _strip_ansi(text: str) -> str:
-    return _ANSI_PATTERN.sub("", str(text))
-
-
 class _RuntimeInteractiveProgress:
     _FRAMES = ("⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏")
 
-    def __init__(self, prompt_status: Any = None) -> None:
+    def __init__(self) -> None:
         self._message = ""
-        self._prompt_status = prompt_status
         self._frame_index = 0
         self._last_width = 0
         self._started = False
@@ -555,7 +502,7 @@ class _RuntimeInteractiveProgress:
                 return
         message = format_runtime_progress_event(
             event,
-            color=runtime_ui_color_enabled() and self._prompt_status is None,
+            color=runtime_ui_color_enabled(),
         )
         if not message or not isinstance(event, dict):
             return
@@ -569,14 +516,9 @@ class _RuntimeInteractiveProgress:
     def close(self) -> None:
         with self._lock:
             self._closed = True
-        if self._prompt_status is not None:
-            self._prompt_status.clear()
         self._finish_active(clear=True)
 
     def _start_or_update(self, message: str) -> None:
-        if self._prompt_status is not None:
-            self._prompt_status.set(message)
-            return
         with self._lock:
             if self._closed:
                 return
@@ -592,8 +534,6 @@ class _RuntimeInteractiveProgress:
             self._last_width = 0
 
     def _finish_active(self, *, clear: bool) -> None:
-        if self._prompt_status is not None:
-            self._prompt_status.clear()
         thread: threading.Thread | None
         with self._lock:
             self._active = False
