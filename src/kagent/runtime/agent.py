@@ -9,6 +9,8 @@ from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional, Set, TypedDict
 from uuid import uuid4
 
+from kagent.runtime.context import RuntimeContextManager
+from kagent.runtime.hooks import RuntimeHookChain
 from kagent.runtime.metadata import (
     validate_runtime_metadata,
     validate_runtime_tags,
@@ -56,6 +58,10 @@ Use only tools that are available to you.
     "content as an observation.\n"
     "Use list_files and read_file to observe workspace state before changing "
     "workspace files with apply_patch.\n"
+    "Use delegate_task to hand off a bounded independent subtask to a child "
+    "kagent runtime; keep delegated goals specific and self-contained.\n"
+    "Use skill_list and skill_get when the task may benefit from installed "
+    "runtime skills or reusable operating procedures.\n"
     "Use shell_command for bounded non-interactive local CLI checks; it is "
     "policy-gated and may require explicit approval before execution.\n"
     "If the latest previous observation failed, do not return final_answer with "
@@ -78,6 +84,8 @@ class RuntimeGraphState(TypedDict, total=False):
     metadata: Dict[str, str]
     tags: List[str]
     event_sink: RuntimeEventSink
+    hooks: List[Any]
+    runtime_workspace_dir: str
     stream_answers: bool
     result: Dict[str, Any]
     graph_phases: List[Dict[str, str]]
@@ -153,6 +161,8 @@ def run_runtime_agent(
     metadata: Optional[Dict[str, str]] = None,
     tags: Optional[List[str]] = None,
     event_sink: Optional[RuntimeEventSink] = None,
+    hooks: Optional[List[Any]] = None,
+    runtime_workspace_dir: str = "",
     stream_answers: bool = False,
 ) -> Dict[str, Any]:
     graph = build_runtime_graph()
@@ -160,6 +170,7 @@ def run_runtime_agent(
         "goal": goal,
         "provider": provider,
         "max_iterations": max_iterations,
+        "runtime_workspace_dir": runtime_workspace_dir,
         "stream_answers": stream_answers,
     }
     if policy is not None:
@@ -174,6 +185,8 @@ def run_runtime_agent(
         state["tags"] = tags
     if event_sink is not None:
         state["event_sink"] = event_sink
+    if hooks is not None:
+        state["hooks"] = hooks
     final_state = graph.invoke(state)
     result = final_state.get("result")
     if not isinstance(result, dict):
@@ -209,6 +222,8 @@ def _runtime_loop_graph_node(state: RuntimeGraphState) -> RuntimeGraphState:
         metadata=state.get("metadata"),
         tags=state.get("tags"),
         event_sink=state.get("event_sink"),
+        hooks=state.get("hooks"),
+        runtime_workspace_dir=state.get("runtime_workspace_dir", ""),
         stream_answers=state.get("stream_answers", False),
     )
     return {
@@ -265,6 +280,8 @@ def _run_runtime_agent_loop(
     metadata: Optional[Dict[str, str]] = None,
     tags: Optional[List[str]] = None,
     event_sink: Optional[RuntimeEventSink] = None,
+    hooks: Optional[List[Any]] = None,
+    runtime_workspace_dir: str = "",
     stream_answers: bool = False,
 ) -> Dict[str, Any]:
     if max_iterations < 1:
@@ -280,7 +297,26 @@ def _run_runtime_agent_loop(
     started_at = _utc_timestamp()
     started_timer = time.perf_counter()
     active_policy = policy or RuntimePolicy()
-    active_tools = tools or default_runtime_tools()
+
+    def delegate_child(child_goal: str, child_max_iterations: int) -> Dict[str, Any]:
+        return run_runtime_agent(
+            child_goal,
+            provider=provider,
+            policy=active_policy,
+            tools=default_runtime_tools(
+                runtime_workspace_dir=runtime_workspace_dir,
+                include_delegate_tool=False,
+            ),
+            max_iterations=child_max_iterations,
+            metadata=normalized_metadata,
+            tags=normalized_tags,
+            runtime_workspace_dir=runtime_workspace_dir,
+        )
+
+    active_tools = tools or default_runtime_tools(
+        runtime_workspace_dir=runtime_workspace_dir,
+        delegate_runner=delegate_child,
+    )
     active_approvals = set(approved_action_ids or set())
     consumed_approved_action_ids: Set[str] = set()
     status = "done"
@@ -296,6 +332,10 @@ def _run_runtime_agent_loop(
     progress_events: List[Dict[str, Any]] = []
     progress_event_sink_failure_count = 0
     answer_streamed = False
+    hook_chain = RuntimeHookChain(hooks or [])
+    context_manager = RuntimeContextManager(
+        max_string_chars=MAX_PLANNER_OBSERVATION_STRING_CHARS
+    )
 
     def emit_progress(event: Dict[str, Any]) -> None:
         nonlocal progress_event_sink_failure_count
@@ -307,10 +347,26 @@ def _run_runtime_agent_loop(
             except Exception:
                 progress_event_sink_failure_count += 1
 
+    if hook_chain:
+        hook_chain.on_run_start(
+            {
+                "run_id": run_id,
+                "goal": goal,
+                "started_at": started_at,
+                "metadata": normalized_metadata,
+                "tags": normalized_tags,
+            }
+        )
+
     for iteration in range(1, max_iterations + 1):
         iteration_count = iteration
         iteration_label = str(iteration)
-        user_prompt = _runtime_user_prompt(goal, active_tools, observations)
+        user_prompt = _runtime_user_prompt(
+            goal,
+            active_tools,
+            observations,
+            context_manager=context_manager,
+        )
         planner_started_at = _utc_timestamp()
         planner_timer = time.perf_counter()
         events.append(
@@ -480,6 +536,50 @@ def _run_runtime_agent_loop(
                 )
                 status = "requires_approval"
                 break
+            if hook_chain:
+                hook_started_at = _utc_timestamp()
+                hook_timer = time.perf_counter()
+                hook_decision = hook_chain.before_tool(
+                    {
+                        "run_id": run_id,
+                        "goal": goal,
+                        "iteration": iteration_label,
+                        "action_id": action.id,
+                        "tool": action.tool,
+                        "input": action.input,
+                        "reason": action.reason,
+                        **dependency_metadata,
+                    }
+                )
+                hook_timing = _timing_fields(hook_started_at, hook_timer)
+                events.append(
+                    {
+                        "node": "hook",
+                        "action_id": action.id,
+                        "tool": action.tool,
+                        "status": hook_decision.status,
+                        "reason": hook_decision.reason,
+                        "iteration": iteration_label,
+                        **dependency_metadata,
+                        **hook_timing,
+                    }
+                )
+                if hook_decision.status == "denied":
+                    observations.append(
+                        AgentObservation(
+                            action_id=action.id,
+                            tool=action.tool,
+                            status="failed",
+                            output={},
+                            error_code="runtime_hook_denied",
+                            error=hook_decision.reason,
+                            started_at=hook_started_at,
+                            completed_at=hook_timing["completed_at"],
+                            duration_seconds=hook_timing["duration_seconds"],
+                        )
+                    )
+                    status = "failed"
+                    break
             _emit_runtime_progress(
                 emit_progress,
                 "tool_started",
@@ -497,6 +597,19 @@ def _run_runtime_agent_loop(
             )
             observations.append(observation)
             iteration_observations[action.id] = observation
+            if hook_chain:
+                hook_chain.after_tool(
+                    {
+                        "run_id": run_id,
+                        "goal": goal,
+                        "iteration": iteration_label,
+                        "action_id": action.id,
+                        "tool": action.tool,
+                        "input": action.input,
+                        "observation": observation.to_dict(),
+                        **dependency_metadata,
+                    }
+                )
             events.append(
                 {
                     "node": "executor",
@@ -556,7 +669,7 @@ def _run_runtime_agent_loop(
         "iteration_count": str(iteration_count),
         "max_iterations": str(max_iterations),
         "iteration_budget_remaining": str(max(0, max_iterations - iteration_count)),
-        "prompt_observation_compaction": _prompt_observation_compaction(),
+        "prompt_observation_compaction": context_manager.report(),
         "approved_action_count": str(len(consumed_approved_action_ids)),
         "approved_action_ids": sorted(consumed_approved_action_ids),
         "events": events,
@@ -599,6 +712,17 @@ def _run_runtime_agent_loop(
     if progress_event_sink_failure_count:
         result["progress_event_sink_failure_count"] = str(
             progress_event_sink_failure_count
+        )
+    if hook_chain:
+        hook_chain.on_run_end(
+            {
+                "run_id": run_id,
+                "goal": goal,
+                "status": status,
+                "completed_at": result["completed_at"],
+                "duration_seconds": result["duration_seconds"],
+                "iteration_count": result["iteration_count"],
+            }
         )
     return redact_runtime_payload(result)
 
@@ -730,6 +854,8 @@ def _runtime_user_prompt(
     goal: str,
     tools: Dict[str, RuntimeToolSpec],
     observations: List[AgentObservation],
+    *,
+    context_manager: RuntimeContextManager,
 ) -> str:
     tool_payload = runtime_tool_metadata(tools)
     prompt = "Goal:\n" + goal + "\n\nAvailable tools:\n" + json.dumps(
@@ -738,7 +864,13 @@ def _runtime_user_prompt(
     )
     if observations:
         prompt += "\n\nPrevious observations:\n" + json.dumps(
-            [_planner_observation_payload(observation) for observation in observations],
+            [
+                _planner_observation_payload(
+                    observation,
+                    context_manager=context_manager,
+                )
+                for observation in observations
+            ],
             sort_keys=True,
         )
     return prompt
@@ -833,48 +965,16 @@ def _runtime_deployment_answer() -> str:
     )
 
 
-def _prompt_observation_compaction() -> Dict[str, Any]:
-    return {
-        "artifact_content_omitted": True,
-        "max_string_chars": str(MAX_PLANNER_OBSERVATION_STRING_CHARS),
-        "long_string_shape": "text_prefix/original_chars/truncated_chars",
-    }
-
-
-def _planner_observation_payload(observation: AgentObservation) -> Dict[str, Any]:
+def _planner_observation_payload(
+    observation: AgentObservation,
+    *,
+    context_manager: RuntimeContextManager,
+) -> Dict[str, Any]:
     payload = observation.to_dict()
-    output = payload.get("output")
-    if isinstance(output, dict) and str(output.get("artifact_id", "")).strip():
-        payload["output"] = _artifact_prompt_metadata(output)
-    else:
-        payload["output"] = _compact_prompt_value(output)
+    payload["output"] = context_manager.compact_observation_output(
+        payload.get("output")
+    )
     return payload
-
-
-def _artifact_prompt_metadata(output: Dict[str, Any]) -> Dict[str, Any]:
-    metadata = {
-        key: output[key]
-        for key in ["artifact_id", "title", "kind", "format", "tags", "bytes"]
-        if key in output
-    }
-    metadata["content_omitted"] = True
-    return metadata
-
-
-def _compact_prompt_value(value: Any) -> Any:
-    if isinstance(value, str):
-        if len(value) <= MAX_PLANNER_OBSERVATION_STRING_CHARS:
-            return value
-        return {
-            "text_prefix": value[:MAX_PLANNER_OBSERVATION_STRING_CHARS],
-            "original_chars": len(value),
-            "truncated_chars": len(value) - MAX_PLANNER_OBSERVATION_STRING_CHARS,
-        }
-    if isinstance(value, dict):
-        return {key: _compact_prompt_value(item) for key, item in value.items()}
-    if isinstance(value, list):
-        return [_compact_prompt_value(item) for item in value]
-    return value
 
 
 def _action_dependency_event_metadata(

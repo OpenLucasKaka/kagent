@@ -4,6 +4,7 @@ import json
 from concurrent.futures import TimeoutError
 from typing import Any, Dict, Tuple
 
+from kagent.integrations.audit import KafkaRestAuditHook
 from kagent.providers.llm import (
     FakeLLMProvider,
     LLMProviderConfig,
@@ -12,7 +13,6 @@ from kagent.providers.llm import (
 )
 from kagent.runtime import run_runtime_agent
 from kagent.runtime.policy import RuntimePolicy
-from kagent.runtime.tools import default_runtime_tools
 from kagent.service import errors as service_errors
 from kagent.service.errors import failure_payload
 from kagent.service.run import run_with_timeout
@@ -150,13 +150,12 @@ def execute_runtime_run_request(
                 goal,
                 provider=provider,
                 policy=policy,
-                tools=default_runtime_tools(
-                    runtime_workspace_dir=_service_config.runtime_workspace_dir,
-                ),
                 max_iterations=max_iterations,
                 approved_action_ids=set(approved_action_ids),
                 metadata=metadata,
                 tags=tags,
+                hooks=_runtime_hooks(_service_config),
+                runtime_workspace_dir=_service_config.runtime_workspace_dir,
             ),
             timeout_seconds=_service_config.run_timeout_seconds,
         )
@@ -176,6 +175,19 @@ def execute_runtime_run_request(
                 f"could not persist trace: {exc}",
             )
     return 200, json_ready(result)
+
+
+def _runtime_hooks(config: ServiceConfig) -> list[Any]:
+    hooks: list[Any] = []
+    if config.kafka_audit_url:
+        hooks.append(
+            KafkaRestAuditHook(
+                url=config.kafka_audit_url,
+                topic=config.kafka_audit_topic,
+                timeout_seconds=config.external_backend_timeout_seconds,
+            )
+        )
+    return hooks
 
 
 def _planned_action_ids(

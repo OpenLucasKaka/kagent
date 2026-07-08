@@ -70,6 +70,11 @@ def test_service_status_reports_readiness_and_redacted_config(
         "trace_persistence": "enabled",
         "runtime_workspace": "disabled",
         "runtime_workspace_kinds": "workspace,reports,logs,policies,memories",
+        "redis_short_term_memory": "disabled",
+        "milvus_long_term_memory": "disabled",
+        "kafka_audit_sink": "disabled",
+        "kafka_audit_topic_configured": "false",
+        "external_backend_timeout_seconds": "2.0",
         "trace_directory_permissions": "0700",
         "trace_file_permissions": "0600",
         "trace_probe_file_permissions": "0600",
@@ -137,6 +142,24 @@ def test_readiness_checks_configured_runtime_workspace_dir(tmp_path):
     )
     assert S_IMODE(runtime_workspace_dir.stat().st_mode) == 0o700
     assert S_IMODE((runtime_workspace_dir / "reports").stat().st_mode) == 0o700
+
+
+def test_service_status_reports_configured_external_backend_snapshot():
+    snapshot = service_config_snapshot(
+        ServiceConfig(
+            redis_url="redis://localhost:6379/0",
+            milvus_url="http://milvus.internal/healthz",
+            kafka_audit_url="http://kafka-rest.internal/topics/kagent-audit",
+            kafka_audit_topic="kagent-audit",
+            external_backend_timeout_seconds=1.5,
+        )
+    )
+
+    assert snapshot["redis_short_term_memory"] == "enabled"
+    assert snapshot["milvus_long_term_memory"] == "enabled"
+    assert snapshot["kafka_audit_sink"] == "enabled"
+    assert snapshot["kafka_audit_topic_configured"] == "true"
+    assert snapshot["external_backend_timeout_seconds"] == "1.5"
 
 
 def test_readiness_fails_when_sqlite_idempotency_cache_path_is_unusable(tmp_path):

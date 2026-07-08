@@ -221,9 +221,13 @@ def test_runtime_agent_result_describes_prompt_observation_compaction():
     result = run_runtime_agent("inspect prompt compaction", provider=provider)
 
     assert result["prompt_observation_compaction"] == {
+        "strategy": "runtime_context_manager",
         "artifact_content_omitted": True,
         "max_string_chars": "500",
         "long_string_shape": "text_prefix/original_chars/truncated_chars",
+        "truncated_string_count": "0",
+        "truncated_chars": "0",
+        "omitted_artifact_content_count": "0",
     }
 
 

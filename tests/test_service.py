@@ -156,6 +156,11 @@ def test_service_config_endpoint_reports_redacted_runtime_config(monkeypatch, tm
         "trace_persistence": "enabled",
         "runtime_workspace": "disabled",
         "runtime_workspace_kinds": "workspace,reports,logs,policies,memories",
+        "redis_short_term_memory": "disabled",
+        "milvus_long_term_memory": "disabled",
+        "kafka_audit_sink": "disabled",
+        "kafka_audit_topic_configured": "false",
+        "external_backend_timeout_seconds": "2.0",
         "trace_directory_permissions": "0700",
         "trace_file_permissions": "0600",
         "trace_probe_file_permissions": "0600",
@@ -2008,6 +2013,11 @@ def test_service_config_reads_environment_defaults():
             "KAGENT_SERVICE_TRUST_FORWARDED_FOR": "true",
             "KAGENT_SERVICE_TRACE_DIR": "/tmp/agent-traces",
             "KAGENT_SERVICE_RUNTIME_WORKSPACE_DIR": "/tmp/agent-runtime-workspace",
+            "KAGENT_REDIS_URL": "redis://localhost:6379/0",
+            "KAGENT_MILVUS_URL": "http://milvus.internal/healthz",
+            "KAGENT_KAFKA_AUDIT_URL": "http://kafka-rest.internal/topics/audit",
+            "KAGENT_KAFKA_AUDIT_TOPIC": "kagent-audit",
+            "KAGENT_EXTERNAL_BACKEND_TIMEOUT_SECONDS": "1.5",
             "KAGENT_SERVICE_RUN_TIMEOUT_SECONDS": "9.5",
             "KAGENT_SERVICE_REQUEST_TIMEOUT_SECONDS": "4.5",
         }
@@ -2034,6 +2044,11 @@ def test_service_config_reads_environment_defaults():
     assert config.trust_forwarded_for is True
     assert config.trace_dir == "/tmp/agent-traces"
     assert config.runtime_workspace_dir == "/tmp/agent-runtime-workspace"
+    assert config.redis_url == "redis://localhost:6379/0"
+    assert config.milvus_url == "http://milvus.internal/healthz"
+    assert config.kafka_audit_url == "http://kafka-rest.internal/topics/audit"
+    assert config.kafka_audit_topic == "kagent-audit"
+    assert config.external_backend_timeout_seconds == 1.5
     assert config.run_timeout_seconds == 9.5
     assert config.request_timeout_seconds == 4.5
 

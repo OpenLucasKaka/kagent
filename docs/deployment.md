@@ -135,6 +135,19 @@ The service reads these environment variables:
   `workspace`, `reports`, `logs`, `policies`, and `memories` directories.
   Use this for production deployments that need agent-generated reports,
   policy snapshots, logs, or memory assets to survive process restarts.
+- `KAGENT_REDIS_URL`: optional `redis://` endpoint for short-term memory
+  infrastructure. When set, `/ready` sends a real Redis `PING` and `/config`
+  reports `redis_short_term_memory=enabled` without exposing the URL.
+- `KAGENT_MILVUS_URL`: optional HTTP health endpoint for long-term memory or
+  vector-search infrastructure. When set, `/ready` requires a 2xx response and
+  `/config` reports `milvus_long_term_memory=enabled`.
+- `KAGENT_KAFKA_AUDIT_URL`: optional HTTP health endpoint for the Kafka audit
+  path or Kafka REST proxy. When set, `/ready` requires a 2xx response and
+  `/config` reports `kafka_audit_sink=enabled`.
+- `KAGENT_KAFKA_AUDIT_TOPIC`: optional audit topic name. `/config` reports only
+  whether it is configured.
+- `KAGENT_EXTERNAL_BACKEND_TIMEOUT_SECONDS`: readiness timeout for Redis,
+  Milvus, and Kafka probes, default `2`.
 - `KAGENT_SERVICE_RUN_TIMEOUT_SECONDS`: maximum wall-clock time for
   one execution route (`/run`, `/runtime/run`, or `/runtime/resume`) before
   returning `504`, default `30`.

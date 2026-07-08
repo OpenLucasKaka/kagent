@@ -1,6 +1,8 @@
 import json
 import os
+import threading
 import time
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
 from kagent.runtime import tools as runtime_tools
@@ -18,6 +20,35 @@ from kagent.service.runtime import (
     SqliteServiceIdempotencyCache,
 )
 from kagent.service.trace_store import persist_trace
+
+
+class _AuditServer:
+    def __init__(self) -> None:
+        self.requests = []
+        outer = self
+
+        class Handler(BaseHTTPRequestHandler):
+            def do_POST(self) -> None:
+                length = int(self.headers.get("Content-Length", "0"))
+                body = self.rfile.read(length)
+                outer.requests.append(json.loads(body.decode("utf-8")))
+                self.send_response(200)
+                self.end_headers()
+
+            def log_message(self, _format, *_args):
+                return
+
+        self._server = HTTPServer(("127.0.0.1", 0), Handler)
+        self.port = int(self._server.server_address[1])
+        self._thread = threading.Thread(target=self._server.serve_forever, daemon=True)
+
+    def start(self) -> None:
+        self._thread.start()
+
+    def stop(self) -> None:
+        self._server.shutdown()
+        self._server.server_close()
+        self._thread.join(timeout=1)
 
 
 def _mock_public_http_request(monkeypatch, body: bytes = b"ok") -> str:
@@ -227,6 +258,7 @@ def test_service_router_runtime_policy_reports_admin_audit_view_without_tokens()
             "allowed": "false",
             "approval_required": "true",
         },
+        {"name": "delegate_task", "allowed": "false", "approval_required": "true"},
         {"name": "http_request", "allowed": "false", "approval_required": "true"},
         {"name": "list_files", "allowed": "false", "approval_required": "true"},
         {"name": "note", "allowed": "true", "approval_required": "false"},
@@ -235,7 +267,10 @@ def test_service_router_runtime_policy_reports_admin_audit_view_without_tokens()
         {"name": "read_file", "allowed": "false", "approval_required": "true"},
         {"name": "rubric_score", "allowed": "false", "approval_required": "true"},
         {"name": "shell_command", "allowed": "false", "approval_required": "true"},
+        {"name": "skill_get", "allowed": "false", "approval_required": "true"},
+        {"name": "skill_list", "allowed": "false", "approval_required": "true"},
         {"name": "task_list", "allowed": "true", "approval_required": "false"},
+        {"name": "task_transition", "allowed": "false", "approval_required": "true"},
         {
             "name": "transform_text",
             "allowed": "false",
@@ -289,6 +324,7 @@ def test_service_router_runtime_policy_scopes_subject_audit_view():
             "allowed": "false",
             "approval_required": "true",
         },
+        {"name": "delegate_task", "allowed": "false", "approval_required": "true"},
         {"name": "http_request", "allowed": "false", "approval_required": "true"},
         {"name": "list_files", "allowed": "false", "approval_required": "true"},
         {"name": "note", "allowed": "true", "approval_required": "false"},
@@ -297,7 +333,10 @@ def test_service_router_runtime_policy_scopes_subject_audit_view():
         {"name": "read_file", "allowed": "false", "approval_required": "true"},
         {"name": "rubric_score", "allowed": "false", "approval_required": "true"},
         {"name": "shell_command", "allowed": "false", "approval_required": "true"},
+        {"name": "skill_get", "allowed": "false", "approval_required": "true"},
+        {"name": "skill_list", "allowed": "false", "approval_required": "true"},
         {"name": "task_list", "allowed": "false", "approval_required": "true"},
+        {"name": "task_transition", "allowed": "false", "approval_required": "true"},
         {
             "name": "transform_text",
             "allowed": "false",
@@ -1462,6 +1501,31 @@ def test_service_router_runtime_run_uses_configured_runtime_workspace_dir(tmp_pa
     assert (
         runtime_workspace_dir / "reports" / "pilot" / "summary.md"
     ).read_text(encoding="utf-8") == "# Summary\n\nready\n"
+
+
+def test_service_router_runtime_run_posts_kafka_audit_event_when_configured():
+    audit_server = _AuditServer()
+    audit_server.start()
+    body = b'{"goal":"capture","plan":{"actions":[],"final_answer":"done"}}'
+    try:
+        status_code, payload = service_router.handle_request(
+            "POST",
+            "/runtime/run",
+            body,
+            config=ServiceConfig(
+                kafka_audit_url=f"http://127.0.0.1:{audit_server.port}/audit",
+                kafka_audit_topic="kagent-audit",
+                external_backend_timeout_seconds=1.0,
+            ),
+        )
+    finally:
+        audit_server.stop()
+
+    assert status_code == 200
+    assert payload["status"] == "done"
+    assert audit_server.requests[0]["topic"] == "kagent-audit"
+    assert audit_server.requests[0]["event"]["status"] == "done"
+    assert audit_server.requests[0]["event"]["run_id"] == payload["run_id"]
 
 
 def test_service_router_runtime_run_can_execute_rubric_score_tool():

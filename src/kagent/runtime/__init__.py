@@ -7,6 +7,7 @@ from kagent.runtime.agent import (
     run_runtime_agent,
     runtime_topology,
 )
+from kagent.runtime.hooks import RuntimeHookChain, RuntimeHookDecision
 from kagent.runtime.steps import derive_runtime_steps
 
 __all__ = [
@@ -15,5 +16,7 @@ __all__ = [
     "build_runtime_graph",
     "derive_runtime_steps",
     "runtime_topology",
+    "RuntimeHookChain",
+    "RuntimeHookDecision",
     "run_runtime_agent",
 ]

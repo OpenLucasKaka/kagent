@@ -1488,6 +1488,7 @@ def test_registered_runtime_tool_metadata_includes_input_schemas():
         "apply_patch",
         "artifact",
         "decision_matrix",
+        "delegate_task",
         "http_request",
         "list_files",
         "note",
@@ -1496,7 +1497,10 @@ def test_registered_runtime_tool_metadata_includes_input_schemas():
         "read_file",
         "rubric_score",
         "shell_command",
+        "skill_get",
+        "skill_list",
         "task_list",
+        "task_transition",
         "transform_text",
         "workspace_list",
         "workspace_read",
@@ -1555,6 +1559,28 @@ def test_registered_runtime_tool_metadata_includes_input_schemas():
         "question",
         "criteria",
         "options",
+    ]
+    assert by_name["delegate_task"]["approval_required_by_default"] == "false"
+    assert by_name["delegate_task"]["input_schema"]["required"] == ["goal"]
+    assert by_name["delegate_task"]["output_schema"]["required"] == [
+        "child_run_id",
+        "status",
+        "answer",
+        "error_code",
+        "child_iteration_count",
+        "child_observation_count",
+    ]
+    assert by_name["skill_get"]["approval_required_by_default"] == "false"
+    assert by_name["skill_get"]["input_schema"]["required"] == ["name"]
+    assert by_name["skill_list"]["approval_required_by_default"] == "false"
+    assert by_name["skill_list"]["output_schema"]["required"] == [
+        "skills",
+        "skill_count",
+    ]
+    assert by_name["task_transition"]["approval_required_by_default"] == "false"
+    assert by_name["task_transition"]["input_schema"]["required"] == [
+        "state",
+        "event",
     ]
     assert by_name["decision_matrix"]["output_schema"]["required"] == [
         "question",
@@ -1949,6 +1975,16 @@ def test_default_policy_allows_workspace_read_tools():
             "workspace_write",
             {"kind": "reports", "path": "x.md", "content": "x"},
         ).status
+        == "allowed"
+    )
+    assert (
+        policy.authorize("delegate_task", {"goal": "summarize risks"}).status
+        == "allowed"
+    )
+    assert policy.authorize("skill_list", {}).status == "allowed"
+    assert policy.authorize("skill_get", {"name": "briefing"}).status == "allowed"
+    assert (
+        policy.authorize("task_transition", {"state": "pending", "event": "start"}).status
         == "allowed"
     )
     assert (

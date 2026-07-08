@@ -4,6 +4,10 @@ from pathlib import Path
 from typing import Any, Callable, Dict, Optional
 from uuid import uuid4
 
+from kagent.integrations.backends import (
+    ExternalBackendConfig,
+    check_external_backends,
+)
 from kagent.providers.llm import LLMProviderConfig
 from kagent.runtime.workspace import VIRTUAL_WORKSPACE_KINDS, RuntimeWorkspace
 from kagent.service import transport as service_transport
@@ -44,6 +48,7 @@ def readiness_payload(config: Optional[ServiceConfig] = None) -> Dict[str, Any]:
             lambda: _check_idempotency_cache_persistence(active_config),
             "idempotency_cache_unavailable",
         )
+    checks.update(check_external_backends(_external_backend_config(active_config)))
     failed_checks = [name for name, value in checks.items() if value != "ok"]
     status = "ready" if not failed_checks else "not_ready"
     payload = {"status": status, "checks": checks, "failed_checks": failed_checks}
@@ -92,6 +97,7 @@ def service_config_snapshot(config: ServiceConfig) -> Dict[str, str]:
     }
     snapshot.update(security_response_header_snapshot())
     snapshot.update(trace_permission_policy_snapshot())
+    snapshot.update(_external_backend_config(config).redacted_snapshot())
     snapshot.update(llm_provider_snapshot())
     return snapshot
 
@@ -168,3 +174,13 @@ def _check_idempotency_cache_persistence(config: ServiceConfig) -> None:
         max_entries=config.idempotency_cache_size,
         database_path=config.idempotency_cache_path,
     ).snapshot()
+
+
+def _external_backend_config(config: ServiceConfig) -> ExternalBackendConfig:
+    return ExternalBackendConfig(
+        redis_url=config.redis_url,
+        milvus_url=config.milvus_url,
+        kafka_audit_url=config.kafka_audit_url,
+        kafka_audit_topic=config.kafka_audit_topic,
+        timeout_seconds=config.external_backend_timeout_seconds,
+    )

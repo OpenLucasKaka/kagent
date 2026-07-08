@@ -238,6 +238,13 @@ def main(argv: Optional[List[str]] = None) -> int:
             trust_forwarded_for=args.trust_forwarded_for,
             trace_dir=args.trace_dir,
             runtime_workspace_dir=args.runtime_workspace_dir,
+            redis_url=defaults.redis_url,
+            milvus_url=defaults.milvus_url,
+            kafka_audit_url=defaults.kafka_audit_url,
+            kafka_audit_topic=defaults.kafka_audit_topic,
+            external_backend_timeout_seconds=(
+                defaults.external_backend_timeout_seconds
+            ),
             run_timeout_seconds=args.run_timeout_seconds,
             request_timeout_seconds=args.request_timeout_seconds,
         )

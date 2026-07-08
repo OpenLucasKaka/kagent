@@ -43,6 +43,11 @@ class ServiceConfig:
     trust_forwarded_for: bool = False
     trace_dir: str = ""
     runtime_workspace_dir: str = ""
+    redis_url: str = ""
+    milvus_url: str = ""
+    kafka_audit_url: str = ""
+    kafka_audit_topic: str = ""
+    external_backend_timeout_seconds: float = 2.0
     run_timeout_seconds: float = 30.0
     request_timeout_seconds: float = 10.0
 
@@ -124,6 +129,21 @@ class ServiceConfig:
                 "KAGENT_SERVICE_RUNTIME_WORKSPACE_DIR",
                 cls.runtime_workspace_dir,
             ),
+            redis_url=source.get("KAGENT_REDIS_URL", cls.redis_url),
+            milvus_url=source.get("KAGENT_MILVUS_URL", cls.milvus_url),
+            kafka_audit_url=source.get(
+                "KAGENT_KAFKA_AUDIT_URL",
+                cls.kafka_audit_url,
+            ),
+            kafka_audit_topic=source.get(
+                "KAGENT_KAFKA_AUDIT_TOPIC",
+                cls.kafka_audit_topic,
+            ),
+            external_backend_timeout_seconds=_env_float(
+                source,
+                "KAGENT_EXTERNAL_BACKEND_TIMEOUT_SECONDS",
+                cls.external_backend_timeout_seconds,
+            ),
             run_timeout_seconds=_env_float(
                 source,
                 "KAGENT_SERVICE_RUN_TIMEOUT_SECONDS",
@@ -168,6 +188,8 @@ class ServiceConfig:
             raise ValueError("run_timeout_seconds must be positive")
         if self.request_timeout_seconds <= 0:
             raise ValueError("request_timeout_seconds must be positive")
+        if self.external_backend_timeout_seconds <= 0:
+            raise ValueError("external_backend_timeout_seconds must be positive")
 
     @property
     def auth_required(self) -> bool:

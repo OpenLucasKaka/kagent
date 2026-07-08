@@ -17,6 +17,8 @@ from pathlib import Path
 from typing import Any, Callable, Dict
 
 from kagent.runtime.policy import RuntimePolicy
+from kagent.runtime.skills import RuntimeSkillRegistry
+from kagent.runtime.task_state import TASK_EVENTS, TASK_STATES, TaskStateMachine
 from kagent.runtime.types import AgentObservation
 from kagent.runtime.workspace import VIRTUAL_WORKSPACE_KINDS, RuntimeWorkspace
 
@@ -34,6 +36,8 @@ _DECISION_OPTIONS_MAX_ITEMS = 50
 _RUBRIC_CRITERIA_MAX_ITEMS = 100
 _TASK_ITEMS_MAX_ITEMS = 200
 _RUBRIC_SEVERITIES = ("low", "normal", "blocking")
+_DELEGATE_GOAL_MAX_LENGTH = 4000
+_DELEGATE_MAX_ITERATIONS = 3
 _HTTP_REQUEST_MAX_BYTES = 65536
 _HTTP_REQUEST_TIMEOUT_SECONDS = 10.0
 _BLOCKED_HTTP_HOSTS = {"localhost", "localhost."}
@@ -86,6 +90,10 @@ _SHELL_PIPE_TO_SHELL_PATTERN = re.compile(
 _RUNTIME_WORKSPACE_DIR_ENV_VARS = (
     "KAGENT_RUNTIME_WORKSPACE_DIR",
     "KAGENT_SERVICE_RUNTIME_WORKSPACE_DIR",
+)
+_RUNTIME_SKILLS_DIR_ENV_VARS = (
+    "KAGENT_RUNTIME_SKILLS_DIR",
+    "KAGENT_SKILLS_DIR",
 )
 _APP_NAME_MAX_LENGTH = 120
 _APP_NAME_ALLOWED_PATTERN = re.compile(r"^[\w .+()#&-]+$", re.UNICODE)
@@ -289,6 +297,17 @@ _TASK_LIST_OUTPUT_SCHEMA = {
     "additionalProperties": False,
 }
 
+_TASK_TRANSITION_OUTPUT_SCHEMA = {
+    "type": "object",
+    "required": ["previous_state", "event", "state"],
+    "properties": {
+        "previous_state": {"type": "string", "enum": list(TASK_STATES)},
+        "event": {"type": "string", "enum": list(TASK_EVENTS)},
+        "state": {"type": "string", "enum": list(TASK_STATES)},
+    },
+    "additionalProperties": False,
+}
+
 _HTTP_REQUEST_OUTPUT_SCHEMA = {
     "type": "object",
     "required": [
@@ -441,6 +460,64 @@ _WORKSPACE_LIST_OUTPUT_SCHEMA = {
     "additionalProperties": False,
 }
 
+_DELEGATE_TASK_OUTPUT_SCHEMA = {
+    "type": "object",
+    "required": [
+        "child_run_id",
+        "status",
+        "answer",
+        "error_code",
+        "child_iteration_count",
+        "child_observation_count",
+    ],
+    "properties": {
+        "child_run_id": {"type": "string"},
+        "status": {
+            "type": "string",
+            "enum": ["done", "failed", "requires_approval", "cancelled"],
+        },
+        "answer": {"type": "string"},
+        "error_code": {"type": "string"},
+        "child_iteration_count": {"type": "string"},
+        "child_observation_count": {"type": "string"},
+    },
+    "additionalProperties": False,
+}
+
+_SKILL_LIST_OUTPUT_SCHEMA = {
+    "type": "object",
+    "required": ["skills", "skill_count"],
+    "properties": {
+        "skills": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "required": ["name", "description", "tags"],
+                "properties": {
+                    "name": {"type": "string"},
+                    "description": {"type": "string"},
+                    "tags": {"type": "array", "items": {"type": "string"}},
+                },
+                "additionalProperties": False,
+            },
+        },
+        "skill_count": {"type": "number", "minimum": 0},
+    },
+    "additionalProperties": False,
+}
+
+_SKILL_GET_OUTPUT_SCHEMA = {
+    "type": "object",
+    "required": ["name", "description", "instructions", "tags"],
+    "properties": {
+        "name": {"type": "string"},
+        "description": {"type": "string"},
+        "instructions": {"type": "string"},
+        "tags": {"type": "array", "items": {"type": "string"}},
+    },
+    "additionalProperties": False,
+}
+
 _SHELL_COMMAND_OUTPUT_SCHEMA = {
     "type": "object",
     "required": [
@@ -482,8 +559,11 @@ _SHELL_COMMAND_OUTPUT_SCHEMA = {
 def default_runtime_tools(
     *,
     runtime_workspace_dir: str = "",
+    runtime_skills_dir: str = "",
+    delegate_runner: Callable[[str, int], Dict[str, Any]] | None = None,
+    include_delegate_tool: bool = True,
 ) -> Dict[str, RuntimeToolSpec]:
-    return {
+    tools = {
         "apply_patch": RuntimeToolSpec(
             name="apply_patch",
             description=(
@@ -865,6 +945,37 @@ def default_runtime_tools(
             output_schema=_SHELL_COMMAND_OUTPUT_SCHEMA,
             timeout_seconds=_SHELL_COMMAND_MAX_TIMEOUT_SECONDS + 1,
         ),
+        "skill_list": RuntimeToolSpec(
+            name="skill_list",
+            description="List installed runtime skills available to the agent.",
+            handler=lambda payload: _skill_list(
+                payload,
+                runtime_skills_dir=runtime_skills_dir,
+            ),
+            input_schema={
+                "type": "object",
+                "properties": {},
+                "additionalProperties": False,
+            },
+            output_schema=_SKILL_LIST_OUTPUT_SCHEMA,
+        ),
+        "skill_get": RuntimeToolSpec(
+            name="skill_get",
+            description="Read one installed runtime skill's instructions by name.",
+            handler=lambda payload: _skill_get(
+                payload,
+                runtime_skills_dir=runtime_skills_dir,
+            ),
+            input_schema={
+                "type": "object",
+                "required": ["name"],
+                "properties": {
+                    "name": {"type": "string", "minLength": 1, "maxLength": 80},
+                },
+                "additionalProperties": False,
+            },
+            output_schema=_SKILL_GET_OUTPUT_SCHEMA,
+        ),
         "task_list": RuntimeToolSpec(
             name="task_list",
             description="Create a structured task list with normalized status counts.",
@@ -904,6 +1015,24 @@ def default_runtime_tools(
                 "additionalProperties": False,
             },
             output_schema=_TASK_LIST_OUTPUT_SCHEMA,
+        ),
+        "task_transition": RuntimeToolSpec(
+            name="task_transition",
+            description=(
+                "Advance one task through the runtime task lifecycle using a "
+                "validated state-machine transition."
+            ),
+            handler=_task_transition,
+            input_schema={
+                "type": "object",
+                "required": ["state", "event"],
+                "properties": {
+                    "state": {"type": "string", "enum": list(TASK_STATES)},
+                    "event": {"type": "string", "enum": list(TASK_EVENTS)},
+                },
+                "additionalProperties": False,
+            },
+            output_schema=_TASK_TRANSITION_OUTPUT_SCHEMA,
         ),
         "rubric_score": RuntimeToolSpec(
             name="rubric_score",
@@ -966,6 +1095,38 @@ def default_runtime_tools(
             output_schema=_TEXT_OUTPUT_SCHEMA,
         ),
     }
+    if include_delegate_tool:
+        tools["delegate_task"] = RuntimeToolSpec(
+            name="delegate_task",
+            description=(
+                "Delegate a bounded subtask to a child kagent runtime. Child "
+                "runs return a compact summary and cannot delegate again by default."
+            ),
+            handler=lambda payload: _delegate_task(
+                payload,
+                delegate_runner=delegate_runner,
+            ),
+            input_schema={
+                "type": "object",
+                "required": ["goal"],
+                "properties": {
+                    "goal": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": _DELEGATE_GOAL_MAX_LENGTH,
+                    },
+                    "max_iterations": {
+                        "type": "number",
+                        "minimum": 1,
+                        "maximum": _DELEGATE_MAX_ITERATIONS,
+                    },
+                },
+                "additionalProperties": False,
+            },
+            output_schema=_DELEGATE_TASK_OUTPUT_SCHEMA,
+            timeout_seconds=30.0,
+        )
+    return tools
 
 
 def registered_runtime_tool_metadata() -> list[Dict[str, Any]]:
@@ -1228,6 +1389,36 @@ def _runtime_workspace(runtime_workspace_dir: str = "") -> RuntimeWorkspace:
         if configured:
             return RuntimeWorkspace(configured)
     return RuntimeWorkspace(Path.cwd() / ".kagent" / "runtime-workspace")
+
+
+def _skill_list(
+    _input_payload: Dict[str, Any],
+    *,
+    runtime_skills_dir: str = "",
+) -> Dict[str, Any]:
+    skills = _runtime_skill_registry(runtime_skills_dir).list_skills()
+    return {"skills": skills, "skill_count": len(skills)}
+
+
+def _skill_get(
+    input_payload: Dict[str, Any],
+    *,
+    runtime_skills_dir: str = "",
+) -> Dict[str, Any]:
+    name = input_payload.get("name")
+    if not isinstance(name, str) or not name.strip():
+        raise ValueError("name must be a non-empty string")
+    return _runtime_skill_registry(runtime_skills_dir).get_skill(name.strip())
+
+
+def _runtime_skill_registry(runtime_skills_dir: str = "") -> RuntimeSkillRegistry:
+    if runtime_skills_dir.strip():
+        return RuntimeSkillRegistry(runtime_skills_dir.strip())
+    for env_var in _RUNTIME_SKILLS_DIR_ENV_VARS:
+        configured = os.environ.get(env_var, "").strip()
+        if configured:
+            return RuntimeSkillRegistry(configured)
+    return RuntimeSkillRegistry(Path.cwd() / ".kagent" / "skills")
 
 
 def _shell_command(input_payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -2100,6 +2291,35 @@ def _duration_since(started_at: float) -> str:
     return f"{time.perf_counter() - started_at:.4f}"
 
 
+def _delegate_task(
+    input_payload: Dict[str, Any],
+    *,
+    delegate_runner: Callable[[str, int], Dict[str, Any]] | None,
+) -> Dict[str, Any]:
+    if delegate_runner is None:
+        raise ValueError("delegate runner is not configured")
+    goal = input_payload.get("goal")
+    if not isinstance(goal, str) or not goal.strip():
+        raise ValueError("goal must be a non-empty string")
+    max_iterations = int(input_payload.get("max_iterations", 1))
+    if max_iterations < 1 or max_iterations > _DELEGATE_MAX_ITERATIONS:
+        raise ValueError(
+            f"max_iterations must be between 1 and {_DELEGATE_MAX_ITERATIONS}"
+        )
+    child = delegate_runner(goal.strip(), max_iterations)
+    observations = child.get("observations", [])
+    if not isinstance(observations, list):
+        observations = []
+    return {
+        "child_run_id": str(child.get("run_id", "")),
+        "status": str(child.get("status", "")),
+        "answer": str(child.get("answer", "")),
+        "error_code": str(child.get("error_code", "")),
+        "child_iteration_count": str(child.get("iteration_count", "")),
+        "child_observation_count": str(len(observations)),
+    }
+
+
 def _transform_text(input_payload: Dict[str, Any]) -> Dict[str, Any]:
     text = input_payload.get("text")
     mode = input_payload.get("mode")
@@ -2187,6 +2407,16 @@ def _task_list(input_payload: Dict[str, Any]) -> Dict[str, Any]:
         "counts": counts,
         "total": len(normalized_items),
     }
+
+
+def _task_transition(input_payload: Dict[str, Any]) -> Dict[str, Any]:
+    state = input_payload.get("state")
+    event = input_payload.get("event")
+    if not isinstance(state, str):
+        raise ValueError("state must be a string")
+    if not isinstance(event, str):
+        raise ValueError("event must be a string")
+    return TaskStateMachine().transition(state, event)
 
 
 def _normalize_task_item(item: Dict[str, Any], index: int) -> Dict[str, Any]:
