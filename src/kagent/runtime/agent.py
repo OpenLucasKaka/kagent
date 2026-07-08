@@ -63,8 +63,9 @@ Use only tools that are available to you.
     "Use skill_list and skill_get when the task may benefit from installed "
     "runtime skills or reusable operating procedures.\n"
     "Use memory_put and memory_get for configured Redis short-term memory. "
-    "Use memory_upsert and memory_search for configured Milvus long-term "
-    "semantic memory only when you have explicit embedding vectors.\n"
+    "Use memory_remember and memory_recall for configured text-based long-term "
+    "semantic memory. Use memory_upsert and memory_search only when you have "
+    "explicit embedding vectors.\n"
     "Use shell_command for bounded non-interactive local CLI checks; it is "
     "policy-gated and may require explicit approval before execution.\n"
     "If the latest previous observation failed, do not return final_answer with "
@@ -91,6 +92,10 @@ class RuntimeGraphState(TypedDict, total=False):
     runtime_workspace_dir: str
     redis_url: str
     milvus_url: str
+    embedding_base_url: str
+    embedding_api_key: str
+    embedding_model: str
+    embedding_timeout_seconds: float
     external_backend_timeout_seconds: float
     stream_answers: bool
     result: Dict[str, Any]
@@ -171,6 +176,10 @@ def run_runtime_agent(
     runtime_workspace_dir: str = "",
     redis_url: str = "",
     milvus_url: str = "",
+    embedding_base_url: str = "",
+    embedding_api_key: str = "",
+    embedding_model: str = "",
+    embedding_timeout_seconds: float = 30.0,
     external_backend_timeout_seconds: float = 2.0,
     stream_answers: bool = False,
 ) -> Dict[str, Any]:
@@ -182,6 +191,10 @@ def run_runtime_agent(
         "runtime_workspace_dir": runtime_workspace_dir,
         "redis_url": redis_url,
         "milvus_url": milvus_url,
+        "embedding_base_url": embedding_base_url,
+        "embedding_api_key": embedding_api_key,
+        "embedding_model": embedding_model,
+        "embedding_timeout_seconds": embedding_timeout_seconds,
         "external_backend_timeout_seconds": external_backend_timeout_seconds,
         "stream_answers": stream_answers,
     }
@@ -238,6 +251,10 @@ def _runtime_loop_graph_node(state: RuntimeGraphState) -> RuntimeGraphState:
         runtime_workspace_dir=state.get("runtime_workspace_dir", ""),
         redis_url=state.get("redis_url", ""),
         milvus_url=state.get("milvus_url", ""),
+        embedding_base_url=state.get("embedding_base_url", ""),
+        embedding_api_key=state.get("embedding_api_key", ""),
+        embedding_model=state.get("embedding_model", ""),
+        embedding_timeout_seconds=state.get("embedding_timeout_seconds", 30.0),
         external_backend_timeout_seconds=state.get(
             "external_backend_timeout_seconds",
             2.0,
@@ -302,6 +319,10 @@ def _run_runtime_agent_loop(
     runtime_workspace_dir: str = "",
     redis_url: str = "",
     milvus_url: str = "",
+    embedding_base_url: str = "",
+    embedding_api_key: str = "",
+    embedding_model: str = "",
+    embedding_timeout_seconds: float = 30.0,
     external_backend_timeout_seconds: float = 2.0,
     stream_answers: bool = False,
 ) -> Dict[str, Any]:
@@ -328,6 +349,10 @@ def _run_runtime_agent_loop(
                 runtime_workspace_dir=runtime_workspace_dir,
                 redis_url=redis_url,
                 milvus_url=milvus_url,
+                embedding_base_url=embedding_base_url,
+                embedding_api_key=embedding_api_key,
+                embedding_model=embedding_model,
+                embedding_timeout_seconds=embedding_timeout_seconds,
                 external_backend_timeout_seconds=external_backend_timeout_seconds,
                 include_delegate_tool=False,
             ),
@@ -337,6 +362,10 @@ def _run_runtime_agent_loop(
             runtime_workspace_dir=runtime_workspace_dir,
             redis_url=redis_url,
             milvus_url=milvus_url,
+            embedding_base_url=embedding_base_url,
+            embedding_api_key=embedding_api_key,
+            embedding_model=embedding_model,
+            embedding_timeout_seconds=embedding_timeout_seconds,
             external_backend_timeout_seconds=external_backend_timeout_seconds,
         )
 
@@ -344,6 +373,10 @@ def _run_runtime_agent_loop(
         runtime_workspace_dir=runtime_workspace_dir,
         redis_url=redis_url,
         milvus_url=milvus_url,
+        embedding_base_url=embedding_base_url,
+        embedding_api_key=embedding_api_key,
+        embedding_model=embedding_model,
+        embedding_timeout_seconds=embedding_timeout_seconds,
         external_backend_timeout_seconds=external_backend_timeout_seconds,
         delegate_runner=delegate_child,
     )

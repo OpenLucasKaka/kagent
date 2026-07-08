@@ -45,6 +45,10 @@ class ServiceConfig:
     runtime_workspace_dir: str = ""
     redis_url: str = ""
     milvus_url: str = ""
+    embedding_base_url: str = ""
+    embedding_api_key: str = ""
+    embedding_model: str = ""
+    embedding_timeout_seconds: float = 30.0
     kafka_audit_url: str = ""
     kafka_audit_topic: str = ""
     external_backend_timeout_seconds: float = 2.0
@@ -131,6 +135,23 @@ class ServiceConfig:
             ),
             redis_url=source.get("KAGENT_REDIS_URL", cls.redis_url),
             milvus_url=source.get("KAGENT_MILVUS_URL", cls.milvus_url),
+            embedding_base_url=source.get(
+                "KAGENT_EMBEDDING_BASE_URL",
+                source.get("KAGENT_LLM_BASE_URL", cls.embedding_base_url),
+            ),
+            embedding_api_key=source.get(
+                "KAGENT_EMBEDDING_API_KEY",
+                source.get("KAGENT_LLM_API_KEY", cls.embedding_api_key),
+            ),
+            embedding_model=source.get(
+                "KAGENT_EMBEDDING_MODEL",
+                cls.embedding_model,
+            ),
+            embedding_timeout_seconds=_env_float(
+                source,
+                "KAGENT_EMBEDDING_TIMEOUT_SECONDS",
+                cls.embedding_timeout_seconds,
+            ),
             kafka_audit_url=source.get(
                 "KAGENT_KAFKA_AUDIT_URL",
                 cls.kafka_audit_url,
@@ -190,6 +211,8 @@ class ServiceConfig:
             raise ValueError("request_timeout_seconds must be positive")
         if self.external_backend_timeout_seconds <= 0:
             raise ValueError("external_backend_timeout_seconds must be positive")
+        if self.embedding_timeout_seconds <= 0:
+            raise ValueError("embedding_timeout_seconds must be positive")
 
     @property
     def auth_required(self) -> bool:

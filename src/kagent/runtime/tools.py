@@ -17,6 +17,10 @@ from pathlib import Path
 from typing import Any, Callable, Dict
 
 from kagent.integrations.memory import MilvusLongTermMemory, RedisShortTermMemory
+from kagent.providers.embeddings import (
+    EmbeddingProviderConfig,
+    OpenAICompatibleEmbeddingProvider,
+)
 from kagent.runtime.policy import RuntimePolicy
 from kagent.runtime.skills import RuntimeSkillRegistry
 from kagent.runtime.task_state import TASK_EVENTS, TASK_STATES, TaskStateMachine
@@ -98,6 +102,9 @@ _RUNTIME_SKILLS_DIR_ENV_VARS = (
 )
 _REDIS_URL_ENV_VARS = ("KAGENT_REDIS_URL",)
 _MILVUS_URL_ENV_VARS = ("KAGENT_MILVUS_URL",)
+_EMBEDDING_BASE_URL_ENV_VARS = ("KAGENT_EMBEDDING_BASE_URL", "KAGENT_LLM_BASE_URL")
+_EMBEDDING_API_KEY_ENV_VARS = ("KAGENT_EMBEDDING_API_KEY", "KAGENT_LLM_API_KEY")
+_EMBEDDING_MODEL_ENV_VARS = ("KAGENT_EMBEDDING_MODEL",)
 _EXTERNAL_BACKEND_TIMEOUT_ENV_VAR = "KAGENT_EXTERNAL_BACKEND_TIMEOUT_SECONDS"
 _APP_NAME_MAX_LENGTH = 120
 _APP_NAME_ALLOWED_PATTERN = re.compile(r"^[\w .+()#&-]+$", re.UNICODE)
@@ -527,6 +534,42 @@ _MEMORY_SEARCH_OUTPUT_SCHEMA = {
     "additionalProperties": False,
 }
 
+_MEMORY_REMEMBER_OUTPUT_SCHEMA = {
+    "type": "object",
+    "required": [
+        "backend",
+        "collection",
+        "memory_id",
+        "stored",
+        "embedding_model",
+        "vector_dimensions",
+    ],
+    "properties": {
+        **_MEMORY_UPSERT_OUTPUT_SCHEMA["properties"],
+        "embedding_model": {"type": "string"},
+        "vector_dimensions": {"type": "string"},
+    },
+    "additionalProperties": False,
+}
+
+_MEMORY_RECALL_OUTPUT_SCHEMA = {
+    "type": "object",
+    "required": [
+        "backend",
+        "collection",
+        "matches",
+        "match_count",
+        "embedding_model",
+        "vector_dimensions",
+    ],
+    "properties": {
+        **_MEMORY_SEARCH_OUTPUT_SCHEMA["properties"],
+        "embedding_model": {"type": "string"},
+        "vector_dimensions": {"type": "string"},
+    },
+    "additionalProperties": False,
+}
+
 _DELEGATE_TASK_OUTPUT_SCHEMA = {
     "type": "object",
     "required": [
@@ -629,12 +672,22 @@ def default_runtime_tools(
     runtime_skills_dir: str = "",
     redis_url: str = "",
     milvus_url: str = "",
+    embedding_base_url: str = "",
+    embedding_api_key: str = "",
+    embedding_model: str = "",
+    embedding_timeout_seconds: float = 30.0,
     external_backend_timeout_seconds: float = 2.0,
     delegate_runner: Callable[[str, int], Dict[str, Any]] | None = None,
     include_delegate_tool: bool = True,
 ) -> Dict[str, RuntimeToolSpec]:
     active_redis_url = redis_url.strip() or _first_env_value(_REDIS_URL_ENV_VARS)
     active_milvus_url = milvus_url.strip() or _first_env_value(_MILVUS_URL_ENV_VARS)
+    active_embedding_config = _embedding_config(
+        base_url=embedding_base_url,
+        api_key=embedding_api_key,
+        model=embedding_model,
+        timeout_seconds=embedding_timeout_seconds,
+    )
     active_backend_timeout = _backend_timeout_seconds(external_backend_timeout_seconds)
     tools = {
         "apply_patch": RuntimeToolSpec(
@@ -1087,6 +1140,55 @@ def default_runtime_tools(
                 "additionalProperties": False,
             },
             output_schema=_MEMORY_SEARCH_OUTPUT_SCHEMA,
+        ),
+        "memory_remember": RuntimeToolSpec(
+            name="memory_remember",
+            description=(
+                "Embed text with the configured OpenAI-compatible embedding "
+                "provider and store it in Milvus long-term memory."
+            ),
+            handler=lambda payload: _memory_remember(
+                payload,
+                milvus_url=active_milvus_url,
+                embedding_config=active_embedding_config,
+                timeout_seconds=active_backend_timeout,
+            ),
+            input_schema={
+                "type": "object",
+                "required": ["collection", "memory_id", "text"],
+                "properties": {
+                    "collection": {"type": "string", "minLength": 1, "maxLength": 120},
+                    "memory_id": {"type": "string", "minLength": 1, "maxLength": 120},
+                    "text": {"type": "string", "minLength": 1, "maxLength": 20000},
+                    "metadata": {"type": "object"},
+                },
+                "additionalProperties": False,
+            },
+            output_schema=_MEMORY_REMEMBER_OUTPUT_SCHEMA,
+        ),
+        "memory_recall": RuntimeToolSpec(
+            name="memory_recall",
+            description=(
+                "Embed a text query with the configured OpenAI-compatible "
+                "embedding provider and search Milvus long-term memory."
+            ),
+            handler=lambda payload: _memory_recall(
+                payload,
+                milvus_url=active_milvus_url,
+                embedding_config=active_embedding_config,
+                timeout_seconds=active_backend_timeout,
+            ),
+            input_schema={
+                "type": "object",
+                "required": ["collection", "query"],
+                "properties": {
+                    "collection": {"type": "string", "minLength": 1, "maxLength": 120},
+                    "query": {"type": "string", "minLength": 1, "maxLength": 20000},
+                    "limit": {"type": "number", "minimum": 1, "maximum": 50},
+                },
+                "additionalProperties": False,
+            },
+            output_schema=_MEMORY_RECALL_OUTPUT_SCHEMA,
         ),
         "shell_command": RuntimeToolSpec(
             name="shell_command",
@@ -1686,12 +1788,111 @@ def _memory_search(
     )
 
 
+def _memory_remember(
+    input_payload: Dict[str, Any],
+    *,
+    milvus_url: str,
+    embedding_config: EmbeddingProviderConfig,
+    timeout_seconds: float,
+) -> Dict[str, Any]:
+    if not milvus_url:
+        raise ValueError("milvus memory backend is not configured")
+    _require_embedding_config(embedding_config)
+    metadata = input_payload.get("metadata", {})
+    if not isinstance(metadata, dict):
+        raise ValueError("metadata must be an object")
+    text = str(input_payload.get("text", ""))
+    vector = OpenAICompatibleEmbeddingProvider(embedding_config).embed(text)
+    output = MilvusLongTermMemory(
+        milvus_url,
+        timeout_seconds=timeout_seconds,
+    ).upsert(
+        collection=str(input_payload.get("collection", "")),
+        memory_id=str(input_payload.get("memory_id", "")),
+        text=text,
+        vector=vector,
+        metadata=metadata,
+    )
+    return {
+        **output,
+        "embedding_model": embedding_config.model,
+        "vector_dimensions": str(len(vector)),
+    }
+
+
+def _memory_recall(
+    input_payload: Dict[str, Any],
+    *,
+    milvus_url: str,
+    embedding_config: EmbeddingProviderConfig,
+    timeout_seconds: float,
+) -> Dict[str, Any]:
+    if not milvus_url:
+        raise ValueError("milvus memory backend is not configured")
+    _require_embedding_config(embedding_config)
+    limit = input_payload.get("limit", 5)
+    if isinstance(limit, bool) or not isinstance(limit, (int, float)):
+        raise ValueError("limit must be a number")
+    if int(limit) != limit:
+        raise ValueError("limit must be an integer")
+    vector = OpenAICompatibleEmbeddingProvider(embedding_config).embed(
+        str(input_payload.get("query", ""))
+    )
+    output = MilvusLongTermMemory(
+        milvus_url,
+        timeout_seconds=timeout_seconds,
+    ).search(
+        collection=str(input_payload.get("collection", "")),
+        vector=vector,
+        limit=int(limit),
+    )
+    return {
+        **output,
+        "embedding_model": embedding_config.model,
+        "vector_dimensions": str(len(vector)),
+    }
+
+
+def _require_embedding_config(config: EmbeddingProviderConfig) -> None:
+    if not config.base_url:
+        raise ValueError("embedding base_url is not configured")
+    if not config.model:
+        raise ValueError("embedding model is not configured")
+
+
 def _first_env_value(names: tuple[str, ...]) -> str:
     for name in names:
         value = os.environ.get(name, "").strip()
         if value:
             return value
     return ""
+
+
+def _embedding_config(
+    *,
+    base_url: str,
+    api_key: str,
+    model: str,
+    timeout_seconds: float,
+) -> EmbeddingProviderConfig:
+    return EmbeddingProviderConfig(
+        base_url=base_url.strip() or _first_env_value(_EMBEDDING_BASE_URL_ENV_VARS),
+        api_key=api_key.strip() or _first_env_value(_EMBEDDING_API_KEY_ENV_VARS),
+        model=model.strip() or _first_env_value(_EMBEDDING_MODEL_ENV_VARS),
+        timeout_seconds=_embedding_timeout_seconds(timeout_seconds),
+    )
+
+
+def _embedding_timeout_seconds(default_value: float) -> float:
+    env_value = os.environ.get("KAGENT_EMBEDDING_TIMEOUT_SECONDS", "").strip()
+    value = env_value or str(default_value)
+    try:
+        timeout = float(value)
+    except ValueError as exc:
+        raise ValueError("embedding timeout must be a float") from exc
+    if timeout <= 0:
+        raise ValueError("embedding timeout must be positive")
+    return timeout
 
 
 def _backend_timeout_seconds(default_value: float) -> float:

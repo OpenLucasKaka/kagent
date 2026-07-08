@@ -1493,6 +1493,8 @@ def test_registered_runtime_tool_metadata_includes_input_schemas():
         "list_files",
         "memory_get",
         "memory_put",
+        "memory_recall",
+        "memory_remember",
         "memory_search",
         "memory_upsert",
         "note",
@@ -1628,6 +1630,17 @@ def test_registered_runtime_tool_metadata_includes_input_schemas():
     assert by_name["memory_search"]["input_schema"]["required"] == [
         "collection",
         "vector",
+    ]
+    assert by_name["memory_remember"]["approval_required_by_default"] == "false"
+    assert by_name["memory_remember"]["input_schema"]["required"] == [
+        "collection",
+        "memory_id",
+        "text",
+    ]
+    assert by_name["memory_recall"]["approval_required_by_default"] == "false"
+    assert by_name["memory_recall"]["input_schema"]["required"] == [
+        "collection",
+        "query",
     ]
     assert by_name["note"]["approval_required_by_default"] == "false"
     assert by_name["note"]["input_schema"]["required"] == ["text"]
@@ -1808,6 +1821,98 @@ def test_memory_tools_use_configured_short_and_long_term_backends(monkeypatch):
         ("redis_init", "redis://memory:6379/0", 1.25),
         ("milvus_init", "http://milvus:19530", 1.25),
         ("milvus_init", "http://milvus:19530", 1.25),
+    ]
+
+
+def test_memory_text_tools_embed_text_before_milvus_operations(monkeypatch):
+    calls = []
+
+    class FakeEmbeddingProvider:
+        def __init__(self, config):
+            calls.append(("embedding_init", config.base_url, config.model))
+
+        def embed(self, text):
+            calls.append(("embed", text))
+            return [0.4, 0.2]
+
+    class FakeMilvusMemory:
+        def __init__(self, url, *, timeout_seconds):
+            calls.append(("milvus_init", url, timeout_seconds))
+
+        def upsert(self, *, collection, memory_id, text, vector, metadata):
+            calls.append(("upsert", collection, memory_id, text, vector, metadata))
+            return {
+                "backend": "milvus",
+                "collection": collection,
+                "memory_id": memory_id,
+                "stored": True,
+            }
+
+        def search(self, *, collection, vector, limit):
+            calls.append(("search", collection, vector, limit))
+            return {
+                "backend": "milvus",
+                "collection": collection,
+                "matches": [
+                    {
+                        "memory_id": "mem-1",
+                        "text": "remembered",
+                        "score": 0.9,
+                        "metadata": {},
+                    }
+                ],
+                "match_count": 1,
+            }
+
+    monkeypatch.setattr(runtime_tools, "OpenAICompatibleEmbeddingProvider", FakeEmbeddingProvider)
+    monkeypatch.setattr(runtime_tools, "MilvusLongTermMemory", FakeMilvusMemory)
+    tools = default_runtime_tools(
+        milvus_url="http://milvus:19530",
+        embedding_base_url="https://llm.example/v1",
+        embedding_api_key="secret-key",
+        embedding_model="embed-model",
+        external_backend_timeout_seconds=1.25,
+    )
+
+    remember = execute_runtime_tool(
+        tools,
+        "memory_remember",
+        {
+            "collection": "memories",
+            "memory_id": "mem-1",
+            "text": "remembered",
+            "metadata": {"source": "test"},
+        },
+        action_id="step-1",
+    )
+    recall = execute_runtime_tool(
+        tools,
+        "memory_recall",
+        {"collection": "memories", "query": "what is remembered", "limit": 1},
+        action_id="step-2",
+    )
+
+    assert remember.status == "ok"
+    assert remember.output == {
+        "backend": "milvus",
+        "collection": "memories",
+        "memory_id": "mem-1",
+        "stored": True,
+        "embedding_model": "embed-model",
+        "vector_dimensions": "2",
+    }
+    assert recall.status == "ok"
+    assert recall.output["match_count"] == 1
+    assert recall.output["embedding_model"] == "embed-model"
+    assert calls == [
+        ("embedding_init", "https://llm.example/v1", "embed-model"),
+        ("embed", "remembered"),
+        ("milvus_init", "http://milvus:19530", 1.25),
+        ("upsert", "memories", "mem-1", "remembered", [0.4, 0.2], {"source": "test"}),
+        ("embedding_init", "https://llm.example/v1", "embed-model"),
+        ("embed", "what is remembered"),
+        ("milvus_init", "http://milvus:19530", 1.25),
+        ("search", "memories", [0.4, 0.2], 1),
     ]
 
 
@@ -2123,6 +2228,20 @@ def test_default_policy_allows_workspace_read_tools():
         policy.authorize(
             "memory_search",
             {"collection": "memories", "vector": [0.1]},
+        ).status
+        == "allowed"
+    )
+    assert (
+        policy.authorize(
+            "memory_remember",
+            {"collection": "memories", "memory_id": "x", "text": "ok"},
+        ).status
+        == "allowed"
+    )
+    assert (
+        policy.authorize(
+            "memory_recall",
+            {"collection": "memories", "query": "ok"},
         ).status
         == "allowed"
     )

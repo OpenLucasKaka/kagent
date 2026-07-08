@@ -158,10 +158,15 @@ def test_service_config_endpoint_reports_redacted_runtime_config(monkeypatch, tm
         "runtime_workspace_kinds": "workspace,reports,logs,policies,memories",
         "redis_short_term_memory": "disabled",
         "milvus_long_term_memory": "disabled",
-        "kafka_audit_sink": "disabled",
-        "kafka_audit_topic_configured": "false",
-        "external_backend_timeout_seconds": "2.0",
-        "trace_directory_permissions": "0700",
+            "kafka_audit_sink": "disabled",
+            "kafka_audit_topic_configured": "false",
+            "external_backend_timeout_seconds": "2.0",
+            "embedding_provider": "unconfigured",
+            "embedding_base_url": "",
+            "embedding_model": "",
+            "embedding_api_key_configured": "false",
+            "embedding_timeout_seconds": "30.0",
+            "trace_directory_permissions": "0700",
         "trace_file_permissions": "0600",
         "trace_probe_file_permissions": "0600",
         "llm_provider": "unconfigured",
@@ -2015,6 +2020,10 @@ def test_service_config_reads_environment_defaults():
             "KAGENT_SERVICE_RUNTIME_WORKSPACE_DIR": "/tmp/agent-runtime-workspace",
             "KAGENT_REDIS_URL": "redis://localhost:6379/0",
             "KAGENT_MILVUS_URL": "http://milvus.internal/healthz",
+            "KAGENT_EMBEDDING_BASE_URL": "https://embedding.example/v1",
+            "KAGENT_EMBEDDING_API_KEY": "embedding-key",
+            "KAGENT_EMBEDDING_MODEL": "text-embedding-model",
+            "KAGENT_EMBEDDING_TIMEOUT_SECONDS": "6.5",
             "KAGENT_KAFKA_AUDIT_URL": "http://kafka-rest.internal/topics/audit",
             "KAGENT_KAFKA_AUDIT_TOPIC": "kagent-audit",
             "KAGENT_EXTERNAL_BACKEND_TIMEOUT_SECONDS": "1.5",
@@ -2046,6 +2055,10 @@ def test_service_config_reads_environment_defaults():
     assert config.runtime_workspace_dir == "/tmp/agent-runtime-workspace"
     assert config.redis_url == "redis://localhost:6379/0"
     assert config.milvus_url == "http://milvus.internal/healthz"
+    assert config.embedding_base_url == "https://embedding.example/v1"
+    assert config.embedding_api_key == "embedding-key"
+    assert config.embedding_model == "text-embedding-model"
+    assert config.embedding_timeout_seconds == 6.5
     assert config.kafka_audit_url == "http://kafka-rest.internal/topics/audit"
     assert config.kafka_audit_topic == "kagent-audit"
     assert config.external_backend_timeout_seconds == 1.5

@@ -144,6 +144,15 @@ The service reads these environment variables:
   response from the configured URL, `/config` reports
   `milvus_long_term_memory=enabled`, and the runtime can use
   `memory_upsert` / `memory_search` with explicit embedding vectors.
+- `KAGENT_EMBEDDING_BASE_URL`: optional OpenAI-compatible embedding endpoint
+  base URL. When omitted, kagent falls back to `KAGENT_LLM_BASE_URL` for
+  embedding requests.
+- `KAGENT_EMBEDDING_API_KEY`: optional embedding bearer token. When omitted,
+  kagent falls back to `KAGENT_LLM_API_KEY`. `/config` only reports whether a
+  key is configured.
+- `KAGENT_EMBEDDING_MODEL`: embedding model name used by `memory_remember` and
+  `memory_recall`, for example `text-embedding-nomic-embed-text-v1.5`.
+- `KAGENT_EMBEDDING_TIMEOUT_SECONDS`: embedding request timeout, default `30`.
 - `KAGENT_KAFKA_AUDIT_URL`: optional HTTP health endpoint for the Kafka audit
   path or Kafka REST proxy. When set, `/ready` requires a 2xx response and
   `/config` reports `kafka_audit_sink=enabled`. `/runtime/run` and

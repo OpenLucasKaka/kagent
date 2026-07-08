@@ -159,6 +159,10 @@ def execute_runtime_run_request(
                 runtime_workspace_dir=_service_config.runtime_workspace_dir,
                 redis_url=_service_config.redis_url,
                 milvus_url=_service_config.milvus_url,
+                embedding_base_url=_service_config.embedding_base_url,
+                embedding_api_key=_service_config.embedding_api_key,
+                embedding_model=_service_config.embedding_model,
+                embedding_timeout_seconds=_service_config.embedding_timeout_seconds,
                 external_backend_timeout_seconds=(
                     _service_config.external_backend_timeout_seconds
                 ),

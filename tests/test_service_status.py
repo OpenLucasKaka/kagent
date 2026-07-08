@@ -75,6 +75,11 @@ def test_service_status_reports_readiness_and_redacted_config(
         "kafka_audit_sink": "disabled",
         "kafka_audit_topic_configured": "false",
         "external_backend_timeout_seconds": "2.0",
+        "embedding_provider": "unconfigured",
+        "embedding_base_url": "",
+        "embedding_model": "",
+        "embedding_api_key_configured": "false",
+        "embedding_timeout_seconds": "30.0",
         "trace_directory_permissions": "0700",
         "trace_file_permissions": "0600",
         "trace_probe_file_permissions": "0600",
@@ -149,6 +154,10 @@ def test_service_status_reports_configured_external_backend_snapshot():
         ServiceConfig(
             redis_url="redis://localhost:6379/0",
             milvus_url="http://milvus.internal/healthz",
+            embedding_base_url="https://embedding.example/v1",
+            embedding_api_key="embedding-key",
+            embedding_model="text-embedding-model",
+            embedding_timeout_seconds=6.5,
             kafka_audit_url="http://kafka-rest.internal/topics/kagent-audit",
             kafka_audit_topic="kagent-audit",
             external_backend_timeout_seconds=1.5,
@@ -157,6 +166,12 @@ def test_service_status_reports_configured_external_backend_snapshot():
 
     assert snapshot["redis_short_term_memory"] == "enabled"
     assert snapshot["milvus_long_term_memory"] == "enabled"
+    assert snapshot["embedding_provider"] == "openai_compatible"
+    assert snapshot["embedding_base_url"] == "https://embedding.example/v1"
+    assert snapshot["embedding_model"] == "text-embedding-model"
+    assert snapshot["embedding_api_key_configured"] == "true"
+    assert snapshot["embedding_timeout_seconds"] == "6.5"
+    assert "embedding-key" not in str(snapshot)
     assert snapshot["kafka_audit_sink"] == "enabled"
     assert snapshot["kafka_audit_topic_configured"] == "true"
     assert snapshot["external_backend_timeout_seconds"] == "1.5"

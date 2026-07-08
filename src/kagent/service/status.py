@@ -8,6 +8,7 @@ from kagent.integrations.backends import (
     ExternalBackendConfig,
     check_external_backends,
 )
+from kagent.providers.embeddings import EmbeddingProviderConfig
 from kagent.providers.llm import LLMProviderConfig
 from kagent.runtime.workspace import VIRTUAL_WORKSPACE_KINDS, RuntimeWorkspace
 from kagent.service import transport as service_transport
@@ -98,6 +99,7 @@ def service_config_snapshot(config: ServiceConfig) -> Dict[str, str]:
     snapshot.update(security_response_header_snapshot())
     snapshot.update(trace_permission_policy_snapshot())
     snapshot.update(_external_backend_config(config).redacted_snapshot())
+    snapshot.update(_embedding_provider_snapshot(config))
     snapshot.update(llm_provider_snapshot())
     return snapshot
 
@@ -112,6 +114,15 @@ def trace_permission_policy_snapshot() -> Dict[str, str]:
 
 def llm_provider_snapshot() -> Dict[str, str]:
     return LLMProviderConfig.from_sources().redacted_snapshot()
+
+
+def _embedding_provider_snapshot(config: ServiceConfig) -> Dict[str, str]:
+    return EmbeddingProviderConfig(
+        base_url=config.embedding_base_url,
+        api_key=config.embedding_api_key,
+        model=config.embedding_model,
+        timeout_seconds=config.embedding_timeout_seconds,
+    ).redacted_snapshot()
 
 
 def security_response_header_snapshot() -> Dict[str, str]:

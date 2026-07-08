@@ -22,6 +22,8 @@ class RuntimePolicy:
                 "list_files",
                 "memory_get",
                 "memory_put",
+                "memory_recall",
+                "memory_remember",
                 "memory_search",
                 "memory_upsert",
                 "note",
