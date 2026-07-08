@@ -6,6 +6,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 from kagent.ops.release_evidence import (
+    REQUIRED_OBSERVABILITY_ACCEPTANCE_METRICS,
     REQUIRED_OBSERVABILITY_ACCEPTANCE_METRICS_SHA256,
 )
 from kagent.service import ServiceConfig, create_server
@@ -339,6 +340,8 @@ def test_production_readiness_audit_reports_required_artifacts():
     assert "scripts/production_readiness_audit.py" in rollout
     assert "kagent_runtime_progress_event_sink_failures_total" in script_text
     assert "kagentRuntimeProgressSinkFailures" in script_text
+    assert "kagent_runtime_run_lifecycle_state_total" in script_text
+    assert "kagent_runtime_run_lifecycle_state_by_auth_subject_total" in script_text
 
     completed = subprocess.run(
         [".venv/bin/python", str(script_path)],
@@ -531,8 +534,17 @@ def test_observability_acceptance_script_is_secret_safe_and_documented():
     assert "kagent_runtime_progress_event_sink_failures_total" in script
     assert "deploy/grafana/kagent-dashboard.json" in script
     assert "deploy/prometheus/kagent-rules.yaml" in script
+    assert "kagentRuntimeLifecycleFailures" in script
+    assert "kagentRuntimeSubjectLifecycleApprovalsPending" in script
     assert "observability_token" not in script
     assert "sk-" not in script
+
+
+def test_observability_acceptance_script_requires_lifecycle_metrics():
+    script = Path("scripts/observability_acceptance.sh").read_text()
+
+    assert "kagent_runtime_run_lifecycle_state_total" in script
+    assert "kagent_runtime_run_lifecycle_state_by_auth_subject_total" in script
 
 
 def test_observability_acceptance_script_verifies_live_metrics(tmp_path):
@@ -573,7 +585,9 @@ def test_observability_acceptance_script_verifies_live_metrics(tmp_path):
     assert payload["metrics_endpoint"] == "/metrics.prom"
     assert payload["metrics_status"] == "200"
     assert payload["required_metrics_present"] == "true"
-    assert int(payload["required_metric_count"]) >= 10
+    assert int(payload["required_metric_count"]) >= len(
+        REQUIRED_OBSERVABILITY_ACCEPTANCE_METRICS
+    )
     assert payload["missing_required_metrics"] == []
     assert (
         payload["required_metrics_sha256"]
@@ -1033,7 +1047,7 @@ def test_production_approval_bundle_script_builds_strict_release_evidence(tmp_pa
                 "metrics_endpoint": "/metrics.prom",
                 "metrics_status": "200",
                 "required_metrics_present": "true",
-                "required_metric_count": "10",
+                "required_metric_count": str(len(REQUIRED_OBSERVABILITY_ACCEPTANCE_METRICS)),
                 "missing_required_metrics": [],
                 "required_metrics_sha256": (
                     REQUIRED_OBSERVABILITY_ACCEPTANCE_METRICS_SHA256
@@ -1765,7 +1779,7 @@ def test_production_readiness_audit_accepts_observability_acceptance_evidence(tm
                 "metrics_endpoint": "/metrics.prom",
                 "metrics_status": "200",
                 "required_metrics_present": "true",
-                "required_metric_count": "10",
+                "required_metric_count": str(len(REQUIRED_OBSERVABILITY_ACCEPTANCE_METRICS)),
                 "missing_required_metrics": [],
                 "required_metrics_sha256": (
                     REQUIRED_OBSERVABILITY_ACCEPTANCE_METRICS_SHA256
@@ -1941,7 +1955,7 @@ def test_production_readiness_audit_rejects_observability_missing_metric_list(
                 "metrics_endpoint": "/metrics.prom",
                 "metrics_status": "200",
                 "required_metrics_present": "true",
-                "required_metric_count": "10",
+                "required_metric_count": str(len(REQUIRED_OBSERVABILITY_ACCEPTANCE_METRICS)),
                 "missing_required_metrics": [
                     "kagent_runtime_progress_event_sink_failures_total"
                 ],
@@ -1995,7 +2009,7 @@ def test_production_readiness_audit_rejects_observability_metric_fingerprint_mis
                 "metrics_endpoint": "/metrics.prom",
                 "metrics_status": "200",
                 "required_metrics_present": "true",
-                "required_metric_count": "10",
+                "required_metric_count": str(len(REQUIRED_OBSERVABILITY_ACCEPTANCE_METRICS)),
                 "missing_required_metrics": [],
                 "required_metrics_sha256": "0" * 64,
                 "metrics_sha256": "a" * 64,

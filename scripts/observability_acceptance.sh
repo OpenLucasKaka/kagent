@@ -61,6 +61,8 @@ required_metrics = [
     "kagent_request_duration_seconds_bucket",
     "kagent_runtime_runs_total",
     "kagent_runtime_run_duration_seconds_bucket",
+    "kagent_runtime_run_lifecycle_state_total",
+    "kagent_runtime_run_lifecycle_state_by_auth_subject_total",
     "kagent_runtime_approval_required_total",
     "kagent_runtime_stale_pending_approvals_current",
     "kagent_runtime_progress_event_sink_failures_total",
@@ -122,6 +124,25 @@ def grafana_status():
     panels = payload.get("panels")
     if not isinstance(panels, list) or len(panels) < 8:
         return "invalid", file_sha256(path)
+    required_dashboard_metrics = [
+        "kagent_runtime_run_lifecycle_state_total",
+        "kagent_runtime_run_lifecycle_state_by_auth_subject_total",
+        "kagent_runtime_progress_event_sink_failures_total",
+        "kagent_runtime_stale_pending_approvals_current",
+    ]
+    expressions = []
+    for panel in panels:
+        if not isinstance(panel, dict):
+            continue
+        targets = panel.get("targets")
+        if not isinstance(targets, list):
+            continue
+        for target in targets:
+            if isinstance(target, dict) and target.get("expr"):
+                expressions.append(str(target["expr"]))
+    expression_text = "\n".join(expressions)
+    if any(metric not in expression_text for metric in required_dashboard_metrics):
+        return "missing_required_metrics", file_sha256(path)
     return "passed", file_sha256(path)
 
 
@@ -135,6 +156,8 @@ def prometheus_rules_status():
         "kagentHighErrorRate",
         "kagentSlowRuntimeRuns",
         "kagentRuntimeSubjectRunFailures",
+        "kagentRuntimeLifecycleFailures",
+        "kagentRuntimeSubjectLifecycleApprovalsPending",
     ]
     if any(alert not in text for alert in required_alerts):
         return "missing_required_alerts", file_sha256(path)

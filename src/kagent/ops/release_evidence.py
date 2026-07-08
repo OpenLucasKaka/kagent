@@ -88,6 +88,8 @@ REQUIRED_OBSERVABILITY_ACCEPTANCE_METRICS = (
     "kagent_runtime_approval_required_total",
     "kagent_runtime_progress_event_sink_failures_total",
     "kagent_runtime_run_duration_seconds_bucket",
+    "kagent_runtime_run_lifecycle_state_by_auth_subject_total",
+    "kagent_runtime_run_lifecycle_state_total",
     "kagent_runtime_runs_by_auth_subject_total",
     "kagent_runtime_runs_total",
     "kagent_runtime_stale_pending_approvals_current",

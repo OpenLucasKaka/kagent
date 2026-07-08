@@ -88,6 +88,20 @@ groups:
           summary: Codex-style runtime runs are failing
           description: Runtime executions are ending in failed status; inspect latest_failed_* run summaries.
 
+      - alert: kagentRuntimeLifecycleFailures
+        expr: |
+          sum(rate(
+            kagent_runtime_run_lifecycle_state_total{
+              lifecycle_state="failed"
+            }[5m]
+          )) > 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Codex-style runtime lifecycle failures are elevated
+          description: Operator-facing lifecycle state metrics show failed runtime executions.
+
       - alert: kagentRuntimeSubjectRunFailures
         expr: |
           sum by (auth_subject) (
@@ -128,6 +142,22 @@ groups:
         annotations:
           summary: Codex-style runtime runs require approval for an internal subject
           description: A named internal auth subject is producing approval-required runtime runs.
+
+      - alert: kagentRuntimeSubjectLifecycleApprovalsPending
+        expr: |
+          sum by (auth_subject) (
+            rate(
+              kagent_runtime_run_lifecycle_state_by_auth_subject_total{
+                lifecycle_state="waiting_approval"
+              }[5m]
+            )
+          ) > 0
+        for: 10m
+        labels:
+          severity: info
+        annotations:
+          summary: Codex-style runtime lifecycle approvals are pending by subject
+          description: A named internal auth subject has runs waiting at the approval lifecycle boundary.
 
       - alert: kagentRuntimeStalePendingApprovals
         expr: sum(kagent_runtime_stale_pending_approvals_current) > 0

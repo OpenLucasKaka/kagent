@@ -2,8 +2,20 @@ import json
 import subprocess
 
 from kagent.ops.release_evidence import (
+    REQUIRED_OBSERVABILITY_ACCEPTANCE_METRICS,
     REQUIRED_OBSERVABILITY_ACCEPTANCE_METRICS_SHA256,
 )
+
+
+def test_release_evidence_requires_lifecycle_observability_metrics():
+    assert (
+        "kagent_runtime_run_lifecycle_state_total"
+        in REQUIRED_OBSERVABILITY_ACCEPTANCE_METRICS
+    )
+    assert (
+        "kagent_runtime_run_lifecycle_state_by_auth_subject_total"
+        in REQUIRED_OBSERVABILITY_ACCEPTANCE_METRICS
+    )
 
 
 def test_release_evidence_cli_builds_verified_bundle(tmp_path):
@@ -100,7 +112,7 @@ def test_release_evidence_cli_builds_verified_bundle(tmp_path):
                 "metrics_endpoint": "/metrics.prom",
                 "metrics_status": "200",
                 "required_metrics_present": "true",
-                "required_metric_count": "10",
+                "required_metric_count": str(len(REQUIRED_OBSERVABILITY_ACCEPTANCE_METRICS)),
                 "missing_required_metrics": [],
                 "required_metrics_sha256": (
                     REQUIRED_OBSERVABILITY_ACCEPTANCE_METRICS_SHA256
@@ -228,7 +240,7 @@ def test_release_evidence_cli_builds_verified_bundle(tmp_path):
         "metrics_endpoint": "/metrics.prom",
         "metrics_status": "200",
         "required_metrics_present": "true",
-        "required_metric_count": "10",
+        "required_metric_count": str(len(REQUIRED_OBSERVABILITY_ACCEPTANCE_METRICS)),
         "missing_required_metrics": [],
         "required_metrics_sha256": REQUIRED_OBSERVABILITY_ACCEPTANCE_METRICS_SHA256,
         "metrics_sha256": "a" * 64,
@@ -716,7 +728,7 @@ def test_release_evidence_cli_rejects_observability_missing_metric_list(tmp_path
                 "metrics_endpoint": "/metrics.prom",
                 "metrics_status": "200",
                 "required_metrics_present": "true",
-                "required_metric_count": "10",
+                "required_metric_count": str(len(REQUIRED_OBSERVABILITY_ACCEPTANCE_METRICS)),
                 "missing_required_metrics": [
                     "kagent_runtime_progress_event_sink_failures_total"
                 ],
@@ -779,7 +791,7 @@ def test_release_evidence_cli_rejects_observability_metric_fingerprint_mismatch(
                 "metrics_endpoint": "/metrics.prom",
                 "metrics_status": "200",
                 "required_metrics_present": "true",
-                "required_metric_count": "10",
+                "required_metric_count": str(len(REQUIRED_OBSERVABILITY_ACCEPTANCE_METRICS)),
                 "missing_required_metrics": [],
                 "required_metrics_sha256": "0" * 64,
                 "metrics_sha256": "a" * 64,

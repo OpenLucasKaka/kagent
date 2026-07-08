@@ -320,6 +320,62 @@
       ],
       "title": "Runtime Tool Errors",
       "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 24
+      },
+      "id": 11,
+      "targets": [
+        {
+          "expr": "sum by (lifecycle_state) (rate(kagent_runtime_run_lifecycle_state_total[5m]))",
+          "legendFormat": "{{lifecycle_state}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Runtime Lifecycle by State",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 24
+      },
+      "id": 12,
+      "targets": [
+        {
+          "expr": "sum by (auth_subject, lifecycle_state) (rate(kagent_runtime_run_lifecycle_state_by_auth_subject_total[5m]))",
+          "legendFormat": "{{auth_subject}} {{lifecycle_state}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Runtime Lifecycle by Subject",
+      "type": "timeseries"
     }
   ],
   "refresh": "30s",
