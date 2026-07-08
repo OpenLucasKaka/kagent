@@ -311,6 +311,11 @@ ready for SRE review.
   Matching `auth_subject` entries override the global allowlist, and audit
   surfaces expose `runtime_allowed_tools_by_subject_count` without exposing
   bearer tokens.
+- Runtime shell sandboxing for approved `shell_command` actions: command cwd is
+  confined to the workspace, network-capable shell clients are rejected, host
+  process environment variables are replaced with a minimal sandbox environment,
+  and shell observations expose `sandbox.enabled`, `sandbox.filesystem`,
+  `sandbox.network`, and `sandbox.env_policy` for audit.
 - Optional diagnostic endpoint bearer protection, required by production doctor
   gates while leaving health/readiness/version probes public.
 - Request body size limit before agent execution.

@@ -646,7 +646,12 @@ and returns response metadata plus text. `open_app` opens local macOS
 applications by app name and rejects paths or shell-like input. `open_url` is
 the separate local browser-opening tool for `http://` and `https://` URLs. It
 uses Google Chrome automation first, falls back to macOS `open`, and does not
-fetch page content into the runtime trace. Approval does not bypass SSRF
+fetch page content into the runtime trace. `shell_command` executes only after
+policy approval, uses workspace-confined cwd, strips host secrets by replacing
+the inherited environment with a minimal sandbox environment, rejects
+network-capable shell clients, and returns `sandbox.enabled`,
+`sandbox.filesystem`, `sandbox.network`, and `sandbox.env_policy` in the
+observation output. Approval does not bypass SSRF
 protection: `http_request` rejects private, loopback, and link-local URL
 targets before opening a socket, including `localhost`, literal private IPs,
 link-local metadata addresses, and hostnames that resolve to blocked

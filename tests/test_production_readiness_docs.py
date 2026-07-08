@@ -62,6 +62,8 @@ def test_production_readiness_checklist_documents_release_gates():
     assert "KAGENT_SERVICE_RUNTIME_ALLOWED_TOOLS" in readiness
     assert "KAGENT_SERVICE_RUNTIME_ALLOWED_TOOLS_BY_SUBJECT" in readiness
     assert "runtime tool execution policy" in readiness
+    assert "Runtime shell sandboxing" in readiness
+    assert "sandbox.env_policy" in readiness
     assert "auth_subject" in readiness
     assert "subject-scoped runtime trace reads" in readiness
     assert "subject-scoped runtime resume" in readiness

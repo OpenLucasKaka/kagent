@@ -106,6 +106,7 @@ def test_operations_runbook_documents_continuous_iteration_and_failure_triage():
     assert "GET /runtime/runs/{run_id}/timeline" in runbook
     assert "output_schema" in runbook
     assert "timeout_seconds" in runbook
+    assert "sandbox.env_policy" in runbook
     assert "tool_execution_timeout" in runbook
     assert "invalid_tool_output" in runbook
     assert "GET /runtime/approvals" in runbook

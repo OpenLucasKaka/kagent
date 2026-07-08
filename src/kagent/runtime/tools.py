@@ -369,6 +369,7 @@ _SHELL_COMMAND_OUTPUT_SCHEMA = {
     "required": [
         "command",
         "cwd",
+        "sandbox",
         "exit_code",
         "stdout",
         "stderr",
@@ -379,6 +380,17 @@ _SHELL_COMMAND_OUTPUT_SCHEMA = {
     "properties": {
         "command": {"type": "string"},
         "cwd": {"type": "string"},
+        "sandbox": {
+            "type": "object",
+            "required": ["enabled", "filesystem", "network", "env_policy"],
+            "properties": {
+                "enabled": {"type": "string", "enum": ["true"]},
+                "filesystem": {"type": "string", "enum": ["workspace"]},
+                "network": {"type": "string", "enum": ["disabled"]},
+                "env_policy": {"type": "string", "enum": ["minimal"]},
+            },
+            "additionalProperties": False,
+        },
         "exit_code": {"type": "number"},
         "stdout": {"type": "string"},
         "stderr": {"type": "string"},
@@ -989,6 +1001,7 @@ def _shell_command(input_payload: Dict[str, Any]) -> Dict[str, Any]:
     )
     workspace_root = Path.cwd().resolve()
     cwd = _resolve_shell_cwd(workspace_root, input_payload.get("cwd", "."))
+    sandbox = _shell_sandbox_metadata()
     started = time.perf_counter()
     timed_out = False
     try:
@@ -996,6 +1009,7 @@ def _shell_command(input_payload: Dict[str, Any]) -> Dict[str, Any]:
             normalized_command,
             shell=True,
             cwd=str(cwd),
+            env=_shell_sandbox_env(workspace_root, cwd),
             stdin=subprocess.DEVNULL,
             capture_output=True,
             text=False,
@@ -1019,6 +1033,7 @@ def _shell_command(input_payload: Dict[str, Any]) -> Dict[str, Any]:
     return {
         "command": normalized_command,
         "cwd": _workspace_output_path(workspace_root, cwd),
+        "sandbox": sandbox,
         "exit_code": exit_code,
         "stdout": stdout.decode("utf-8", errors="replace"),
         "stderr": stderr.decode("utf-8", errors="replace"),
@@ -1047,6 +1062,28 @@ def _validate_shell_command(command: str) -> None:
     for pattern in _SHELL_NETWORK_COMMAND_PATTERNS:
         if pattern.search(command):
             raise ValueError("network shell commands are not supported; use http_request")
+
+
+def _shell_sandbox_metadata() -> Dict[str, str]:
+    return {
+        "enabled": "true",
+        "filesystem": "workspace",
+        "network": "disabled",
+        "env_policy": "minimal",
+    }
+
+
+def _shell_sandbox_env(workspace_root: Path, cwd: Path) -> Dict[str, str]:
+    return {
+        "HOME": str(workspace_root),
+        "LANG": "C.UTF-8",
+        "LC_ALL": "C.UTF-8",
+        "PATH": os.environ.get("PATH", os.defpath),
+        "PWD": str(cwd),
+        "KAGENT_RUNTIME_SANDBOX": "1",
+        "KAGENT_SANDBOX_FILESYSTEM": "workspace",
+        "KAGENT_SANDBOX_NETWORK": "disabled",
+    }
 
 
 def _resolve_shell_cwd(workspace_root: Path, relative_path: Any) -> Path:

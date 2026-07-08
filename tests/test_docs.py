@@ -98,6 +98,7 @@ def test_architecture_document_names_runtime_and_operational_boundaries():
     assert "terminal tool failure" in architecture
     assert "artifact_count" in architecture
     assert "artifact_kinds" in architecture
+    assert "sandbox.env_policy" in architecture
     assert "artifact_formats" in architecture
     assert "artifact_tags" in architecture
     assert "artifact_total_bytes" in architecture

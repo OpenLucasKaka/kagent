@@ -187,6 +187,32 @@ def test_shell_command_tool_executes_bounded_command_inside_workspace(
     assert observation.output["truncated"] is False
 
 
+def test_shell_command_tool_runs_with_minimal_sandbox_environment(
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("KAGENT_LLM_API_KEY", "host-secret")
+    command = (
+        f"{shlex.quote(sys.executable)} -c "
+        "'import os; print(os.environ.get(\"KAGENT_LLM_API_KEY\", \"missing\"))'"
+    )
+
+    observation = execute_runtime_tool(
+        default_runtime_tools(),
+        "shell_command",
+        {"command": command},
+        action_id="step-1",
+    )
+
+    assert observation.status == "ok"
+    assert observation.output["stdout"] == "missing\n"
+    assert observation.output["sandbox"]["enabled"] == "true"
+    assert observation.output["sandbox"]["env_policy"] == "minimal"
+    assert observation.output["sandbox"]["network"] == "disabled"
+    assert observation.output["sandbox"]["filesystem"] == "workspace"
+
+
 def test_shell_command_tool_reports_nonzero_exit_without_failing_tool(
     tmp_path,
     monkeypatch,
@@ -1511,6 +1537,7 @@ def test_registered_runtime_tool_metadata_includes_input_schemas():
     assert by_name["shell_command"]["output_schema"]["required"] == [
         "command",
         "cwd",
+        "sandbox",
         "exit_code",
         "stdout",
         "stderr",
@@ -1518,6 +1545,9 @@ def test_registered_runtime_tool_metadata_includes_input_schemas():
         "timed_out",
         "truncated",
     ]
+    assert by_name["shell_command"]["output_schema"]["properties"]["sandbox"][
+        "required"
+    ] == ["enabled", "filesystem", "network", "env_policy"]
     assert by_name["rubric_score"]["output_schema"]["required"] == [
         "criteria",
         "passed",

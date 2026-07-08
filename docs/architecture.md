@@ -64,7 +64,11 @@ can register behind the same metadata, input, output, and error-code contract.
 `shell_command` stays approval-required by default and rejects destructive
 local commands, secret-exposing environment reads, pipe-to-shell installers, and
 network-capable shell clients; use `http_request` for approved HTTP fetches
-instead.
+instead. Approved shell commands execute with workspace-confined cwd, bounded
+timeout/output, and a minimal sandbox environment that does not inherit provider
+keys or host process secrets. Shell observations expose `sandbox.enabled`,
+`sandbox.filesystem`, `sandbox.network`, and `sandbox.env_policy` so operators
+can audit whether the command ran under the runtime sandbox boundary.
 Tool `input_schema` metadata includes
 planner-visible shape and validation constraints such as `required`, `enum`,
 `minItems`, `maxItems`, `minLength`, and `maxLength`, and the executor enforces
