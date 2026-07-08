@@ -550,6 +550,16 @@ def test_service_contract_documents_named_success_schemas():
             "schema": {"type": "string", "minLength": 1},
         },
         {
+            "name": "approved_by_auth_subject",
+            "in": "query",
+            "required": False,
+            "description": (
+                "Filter persisted runtime runs by the subject that approved "
+                "the pending action"
+            ),
+            "schema": {"type": "string", "minLength": 1},
+        },
+        {
             "name": "resumed_from_run_id",
             "in": "query",
             "required": False,
@@ -682,6 +692,12 @@ def test_service_contract_documents_named_success_schemas():
     }
     assert schemas["RuntimeRunResponse"]["properties"]["trace_path"] == {"type": "string"}
     assert schemas["RuntimeRunResponse"]["properties"]["resumed_by_auth_subject"] == {
+        "type": "string"
+    }
+    assert schemas["RuntimeRunResponse"]["properties"]["approved_by_auth_subject"] == {
+        "type": "string"
+    }
+    assert schemas["RuntimeRunResponse"]["properties"]["approved_at"] == {
         "type": "string"
     }
     assert schemas["RuntimeRunResponse"]["properties"]["duration_seconds"] == {
@@ -1018,12 +1034,24 @@ def test_service_contract_documents_named_success_schemas():
     assert schemas["RuntimeRunStatusResponse"]["properties"]["resumed_by_auth_subject"] == {
         "type": "string"
     }
+    assert schemas["RuntimeRunStatusResponse"]["properties"]["approved_by_auth_subject"] == {
+        "type": "string"
+    }
+    assert schemas["RuntimeRunStatusResponse"]["properties"]["approved_at"] == {
+        "type": "string"
+    }
     assert schemas["RuntimeRunListItemResponse"]["properties"]["auth_subject"] == {
         "type": "string"
     }
     assert schemas["RuntimeRunListItemResponse"]["properties"][
         "resumed_by_auth_subject"
     ] == {"type": "string"}
+    assert schemas["RuntimeRunListItemResponse"]["properties"][
+        "approved_by_auth_subject"
+    ] == {"type": "string"}
+    assert schemas["RuntimeRunListItemResponse"]["properties"]["approved_at"] == {
+        "type": "string"
+    }
     assert schemas["RuntimeRunStatusResponse"]["properties"]["pending_approval"] == {
         "type": "object",
         "properties": {
@@ -1066,6 +1094,7 @@ def test_service_contract_documents_named_success_schemas():
         "lifecycle_state_counts",
         "runtime_engine_counts",
         "auth_subject_counts",
+        "approved_by_auth_subject_counts",
         "tool_counts",
         "error_code_counts",
         "failed_observation_count",
@@ -1135,6 +1164,12 @@ def test_service_contract_documents_named_success_schemas():
         "additionalProperties": {"type": "string"},
     }
     assert schemas["RuntimeRunSummaryResponse"]["properties"]["auth_subject_counts"] == {
+        "type": "object",
+        "additionalProperties": {"type": "string"},
+    }
+    assert schemas["RuntimeRunSummaryResponse"]["properties"][
+        "approved_by_auth_subject_counts"
+    ] == {
         "type": "object",
         "additionalProperties": {"type": "string"},
     }

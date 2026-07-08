@@ -217,19 +217,20 @@ The service intentionally keeps a narrow API:
   `latest_failed_error_code=invalid_tool_input`,
   `latest_failed_action_id=fetch-site`, `latest_failed_tool=planner`,
   `iteration_budget_remaining=0`,
-  `lifecycle_state=waiting_approval`,
-  `artifact_kind=report`, `artifact_format=markdown`,
-  `artifact_tag=release`, `tag=internal-smoke`,
+	  `lifecycle_state=waiting_approval`,
+	  `artifact_kind=report`, `artifact_format=markdown`,
+	  `artifact_tag=release`, `tag=internal-smoke`,
 	  `metadata_key=workflow`, `metadata_value=internal`,
 	  `llm_provider_status=failed`, `llm_provider_error_type=http_error`,
 	  `llm_provider_http_status=429`, `has_llm_provider_retries=true`,
 	  `has_artifacts=true`, `has_errors=true`,
-  `has_failures=true`,
+	  `has_failures=true`,
   `has_approvals=true`, `has_pending_approval=true`,
   `has_final_answer_guardrail=true`,
-  `final_answer_guardrail_reason=runtime_identity_boundary`,
-  `approved_action_id=step-1`, and
-  `resumed_from_run_id=pending-run`, `resumed_by_auth_subject=default`,
+	  `final_answer_guardrail_reason=runtime_identity_boundary`,
+	  `approved_action_id=step-1`, and
+	  `approved_by_auth_subject=default`,
+	  `resumed_from_run_id=pending-run`, `resumed_by_auth_subject=default`,
   `pending_approval_tool=http_request`, and `pending_approval_action_id=step-1`;
   `limit` is applied after those filters
   so dashboards can ask for the most recent matching runs. List responses
@@ -251,7 +252,7 @@ The service intentionally keeps a narrow API:
   subject visibility rules as runtime list/detail routes, accepts the compact
   list filters, and returns aggregate `run_count`, `status_counts`,
   `lifecycle_state_counts`, `runtime_engine_counts`, `auth_subject_counts`,
-	  `tool_counts`, `error_code_counts`,
+	  `approved_by_auth_subject_counts`, `tool_counts`, `error_code_counts`,
 	  `failed_observation_count`, `graph_phase_count`, `graph_phase_node_counts`,
 	  `llm_provider_request_count`, `llm_provider_request_attempt_count`,
 	  `llm_provider_request_retry_count`, `llm_provider_request_status_counts`,
@@ -394,8 +395,9 @@ The service intentionally keeps a narrow API:
   from that trace and does not replay earlier actions that
   already executed before approval was requested. The persisted
   `pending_approval` payload must match the plan action with the same ID before
-  execution resumes. Resumed traces keep the original owner `auth_subject` and
-  record the approver in `resumed_by_auth_subject`.
+	  execution resumes. Resumed traces keep the original owner `auth_subject` and
+	  record the resuming subject in `resumed_by_auth_subject` plus approval audit
+	  fields `approved_by_auth_subject` and `approved_at`.
 - `/runtime/run trace persistence` uses the same configured trace directory as
   `/run`; successful persisted runtime responses include `trace_path`, and HTTP
   responses expose it through `X-Trace-Path`. Runtime status and list surfaces

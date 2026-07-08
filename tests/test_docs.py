@@ -119,6 +119,7 @@ def test_architecture_document_names_runtime_and_operational_boundaries():
     assert "KAGENT_SERVICE_RUNTIME_ALLOWED_TOOLS" in architecture
     assert "KAGENT_SERVICE_RUNTIME_ALLOWED_TOOLS_BY_SUBJECT" in architecture
     assert "approved_action_id=step-1" in architecture
+    assert "approved_by_auth_subject=default" in architecture
     assert "resumed_from_run_id=pending-run" in architecture
     assert "resumed_by_auth_subject" in architecture
     assert "resumed_by_auth_subject=default" in architecture

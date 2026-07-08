@@ -222,7 +222,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         "resume",
         help=(
             "POST /runtime/resume and print audit fields such as "
-            "resumed_by_auth_subject when present"
+            "resumed_by_auth_subject and approved_by_auth_subject when present"
         ),
     )
     resume_parser.add_argument("--run-id", required=True)

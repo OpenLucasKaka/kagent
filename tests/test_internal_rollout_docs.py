@@ -60,5 +60,7 @@ def test_internal_rollout_guide_is_linked_and_actionable():
     assert "kagent_runtime_runs_by_auth_subject_total" in guide
     assert "kagent_runtime_resumes_by_auth_subject_total" in guide
     assert "runtime_owner_auth_subject" in guide
+    assert "approved_by_auth_subject" in guide
+    assert "approved_at" in guide
     assert "Rollback" in guide
     assert "Sign-off" in guide

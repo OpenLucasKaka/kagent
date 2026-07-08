@@ -348,6 +348,8 @@ def service_openapi() -> Dict[str, Any]:
                         "goal": {"type": "string"},
                         "auth_subject": {"type": "string"},
                         "resumed_by_auth_subject": {"type": "string"},
+                        "approved_by_auth_subject": {"type": "string"},
+                        "approved_at": {"type": "string"},
                         "answer": {"type": "string"},
                         "final_answer_guardrail": _final_answer_guardrail_schema(),
                         "trace_path": {"type": "string"},
@@ -624,6 +626,7 @@ def service_openapi() -> Dict[str, Any]:
                         "lifecycle_state_counts",
                         "runtime_engine_counts",
                         "auth_subject_counts",
+                        "approved_by_auth_subject_counts",
                         "tool_counts",
                         "error_code_counts",
                         "failed_observation_count",
@@ -665,6 +668,10 @@ def service_openapi() -> Dict[str, Any]:
                             "additionalProperties": {"type": "string"},
                         },
                         "auth_subject_counts": {
+                            "type": "object",
+                            "additionalProperties": {"type": "string"},
+                        },
+                        "approved_by_auth_subject_counts": {
                             "type": "object",
                             "additionalProperties": {"type": "string"},
                         },
@@ -1811,6 +1818,16 @@ def service_openapi() -> Dict[str, Any]:
                             "schema": {"type": "string", "minLength": 1},
                         },
                         {
+                            "name": "approved_by_auth_subject",
+                            "in": "query",
+                            "required": False,
+                            "description": (
+                                "Filter persisted runtime runs by the subject "
+                                "that approved the pending action"
+                            ),
+                            "schema": {"type": "string", "minLength": 1},
+                        },
+                        {
                             "name": "resumed_from_run_id",
                             "in": "query",
                             "required": False,
@@ -2149,6 +2166,8 @@ def _runtime_run_status_properties(
         "goal": {"type": "string"},
         "auth_subject": {"type": "string"},
         "resumed_by_auth_subject": {"type": "string"},
+        "approved_by_auth_subject": {"type": "string"},
+        "approved_at": {"type": "string"},
         "metadata": {
             "type": "object",
             "additionalProperties": {"type": "string"},

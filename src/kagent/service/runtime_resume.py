@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from concurrent.futures import TimeoutError
+from datetime import datetime, timezone
 from typing import Any, Dict, Tuple
 
 from kagent.providers.llm import FakeLLMProvider
@@ -155,6 +156,8 @@ def execute_runtime_resume_request(
         result["auth_subject"] = owner_auth_subject
     if auth_subject:
         result["resumed_by_auth_subject"] = auth_subject
+        result["approved_by_auth_subject"] = auth_subject
+    result["approved_at"] = _utc_timestamp()
     if isinstance(previous_trace.get("metadata"), dict):
         result["metadata"] = dict(previous_trace["metadata"])
     if isinstance(previous_trace.get("tags"), list):
@@ -196,3 +199,7 @@ def _pending_approval_plan(
     if isinstance(final_answer, str) and final_answer:
         resumable_plan["final_answer"] = final_answer
     return resumable_plan
+
+
+def _utc_timestamp() -> str:
+    return datetime.now(timezone.utc).isoformat()

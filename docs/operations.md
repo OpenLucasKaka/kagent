@@ -410,11 +410,11 @@ If trace persistence is enabled, `POST /runtime/resume` can resume from a
 persisted pending run by `run_id` and `approved_action_ids`; resume accepts
 only the pending approval action from that trace and does not replay earlier
 actions that already executed before approval was requested. The persisted
-`pending_approval` payload must match the plan action with the same ID before
-execution resumes. Resumed responses include
-`resumed_from_run_id` and a new `trace_path`. Operator/admin resumes keep the
-original run owner in `auth_subject` and record the approver in
-`resumed_by_auth_subject`.
+	`pending_approval` payload must match the plan action with the same ID before
+	execution resumes. Resumed responses include
+	`resumed_from_run_id` and a new `trace_path`. Operator/admin resumes keep the
+	original run owner in `auth_subject` and record the approver in
+	`resumed_by_auth_subject`, `approved_by_auth_subject`, and `approved_at`.
 `/runtime/run trace persistence` uses `KAGENT_SERVICE_TRACE_DIR` too:
 persisted runtime responses include `trace_path`, HTTP responses include
 `X-Trace-Path`, and write failures return `trace_persistence_failed`. Runtime
@@ -727,19 +727,21 @@ and interactive sessions attach those labels to each submitted goal.
 	rate-limit and gateway clusters, and `has_llm_provider_retries=true` to find
 	runs that consumed retry budget before completing or failing. These filters use
 	redacted scalar diagnostics only and never expose prompts, headers, API keys,
-	provider base URLs, or response bodies.
-	Use
-	`has_errors=true` to find runs with observation-level
+provider base URLs, or response bodies.
+Use
+`has_errors=true` to find runs with observation-level
 `error_code_counts` or a run-level `error_code` before narrowing to a specific
 error code. Use `has_failures=true` to find runs with failed observations,
 excluding run-level-only errors. Use `has_approvals=true` to find runs whose
 compact approval audit
-metadata includes approved actions, then `approved_action_id=step-1` to trace
-one reviewed action across runs. Use `resumed_from_run_id=pending-run` to find
-resume attempts for a persisted pending run. Use `resumed_by_auth_subject` to
-separate the run owner from the subject that performed the resume, for example
-`resumed_by_auth_subject=default` for primary-token admin resumes. Use
-`pending_approval_tool=http_request` or `pending_approval_action_id=step-1` to
+	metadata includes approved actions, then `approved_action_id=step-1` to trace
+	one reviewed action across runs. Use `resumed_from_run_id=pending-run` to find
+	resume attempts for a persisted pending run. Use `resumed_by_auth_subject` to
+	separate the run owner from the subject that performed the resume, for example
+	`resumed_by_auth_subject=default` for primary-token admin resumes. Use
+	`approved_by_auth_subject=default` to filter the same runs by approver audit
+	metadata, and inspect `approved_at` to see when the approval was consumed. Use
+	`pending_approval_tool=http_request` or `pending_approval_action_id=step-1` to
 partition active approval queues without opening full traces; lists omit full `pending_approval` payloads, and `GET /runtime/runs/{run_id}` remains the
 approval detail endpoint. Invalid filter values, including a blank
 `auth_subject`, return
@@ -756,7 +758,8 @@ runtime traces whose persisted `auth_subject` is `team-a`, and cross-subject run
 Use `GET /runtime/runs/summary` to build a lightweight operations dashboard or
 approval queue badge without loading individual runs. It applies subject
 	visibility and compact list filters, then returns `run_count`, `status_counts`,
-	`lifecycle_state_counts`, `runtime_engine_counts`, `auth_subject_counts`, `tool_counts`, `error_code_counts`,
+	`lifecycle_state_counts`, `runtime_engine_counts`, `auth_subject_counts`,
+	`approved_by_auth_subject_counts`, `tool_counts`, `error_code_counts`,
 	`failed_observation_count`, `llm_provider_request_count`,
 	`llm_provider_request_attempt_count`, `llm_provider_request_retry_count`,
 	`llm_provider_request_status_counts`,

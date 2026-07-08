@@ -2132,6 +2132,8 @@ def test_service_router_runtime_resume_allows_primary_token_for_any_subject_run(
     assert resume_payload["status"] == "done"
     assert resume_payload["auth_subject"] == "team-a"
     assert resume_payload["resumed_by_auth_subject"] == "default"
+    assert resume_payload["approved_by_auth_subject"] == "default"
+    assert "T" in resume_payload["approved_at"]
     assert resume_payload["resumed_from_run_id"] == first_payload["run_id"]
     resumed_trace = json.loads(Path(resume_payload["trace_path"]).read_text())
     detail_status, detail_payload = service_router.handle_request(
@@ -2151,14 +2153,31 @@ def test_service_router_runtime_resume_allows_primary_token_for_any_subject_run(
 
     assert resumed_trace["auth_subject"] == "team-a"
     assert resumed_trace["resumed_by_auth_subject"] == "default"
+    assert resumed_trace["approved_by_auth_subject"] == "default"
+    assert resumed_trace["approved_at"] == resume_payload["approved_at"]
     assert detail_status == 200
     assert detail_payload["auth_subject"] == "team-a"
     assert detail_payload["resumed_by_auth_subject"] == "default"
+    assert detail_payload["approved_by_auth_subject"] == "default"
+    assert detail_payload["approved_at"] == resume_payload["approved_at"]
     assert list_status == 200
     resumed_items = [
         run for run in list_payload["runs"] if run["run_id"] == resume_payload["run_id"]
     ]
     assert resumed_items[0]["resumed_by_auth_subject"] == "default"
+    assert resumed_items[0]["approved_by_auth_subject"] == "default"
+    assert resumed_items[0]["approved_at"] == resume_payload["approved_at"]
+
+    filter_status, filter_payload = service_router.handle_request(
+        "GET",
+        "/runtime/runs?approved_by_auth_subject=default&limit=10",
+        b"",
+        headers={"Authorization": "Bearer primary-admin-token"},
+        config=config,
+    )
+
+    assert filter_status == 200
+    assert resume_payload["run_id"] in [run["run_id"] for run in filter_payload["runs"]]
 
 
 def test_service_router_runtime_resume_rejects_non_pending_approved_action_id(tmp_path):
@@ -3093,6 +3112,7 @@ def test_service_router_runtime_runs_summary_aggregates_visible_traces(tmp_path)
             "runtime_engine": "langgraph",
             "goal": "fetch launch brief",
             "auth_subject": "team-a",
+            "approved_by_auth_subject": "default",
             "final_answer_guardrail": {
                 "applied": "true",
                 "reason": "runtime_identity_boundary",
@@ -3150,6 +3170,7 @@ def test_service_router_runtime_runs_summary_aggregates_visible_traces(tmp_path)
             "runtime_engine": "langgraph",
             "goal": "fetch vendor status",
             "auth_subject": "ops",
+            "approved_by_auth_subject": "ops",
             "pending_approval": {"id": "ops-fetch", "tool": "http_request"},
             "graph_phases": [
                 {"node": "prepare", "status": "ok"},
@@ -3211,6 +3232,7 @@ def test_service_router_runtime_runs_summary_aggregates_visible_traces(tmp_path)
         "llm_provider_request_http_status_counts": {"429": "1"},
         "approval_required_count": "1",
         "approved_tool_counts": {"http_request": "1"},
+        "approved_by_auth_subject_counts": {"default": "1", "ops": "1"},
         "pending_approval_count": "1",
         "final_answer_guardrail_applied_count": "1",
         "final_answer_guardrail_reason_counts": {
@@ -5580,6 +5602,21 @@ def test_service_router_runtime_runs_list_rejects_blank_approved_action_id_filte
     assert status_code == 400
     assert payload["error_code"] == "invalid_request_body"
     assert "approved_action_id" in payload["error"]
+
+
+def test_service_router_runtime_runs_list_rejects_blank_approved_by_filter(
+    tmp_path,
+):
+    status_code, payload = service_router.handle_request(
+        "GET",
+        "/runtime/runs?approved_by_auth_subject=",
+        b"",
+        config=ServiceConfig(trace_dir=str(tmp_path)),
+    )
+
+    assert status_code == 400
+    assert payload["error_code"] == "invalid_request_body"
+    assert "approved_by_auth_subject" in payload["error"]
 
 
 def test_service_router_runtime_runs_list_rejects_blank_resumed_from_run_id_filter(

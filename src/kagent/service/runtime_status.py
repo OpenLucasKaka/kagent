@@ -511,6 +511,8 @@ def runtime_status_summary(
         "error",
         "resumed_from_run_id",
         "resumed_by_auth_subject",
+        "approved_by_auth_subject",
+        "approved_at",
         "cancelled_at",
         "cancelled_by_auth_subject",
         "cancel_reason",
@@ -617,6 +619,7 @@ def _empty_runtime_summary_aggregate() -> Dict[str, Any]:
         "lifecycle_state_counts": {},
         "runtime_engine_counts": {},
         "auth_subject_counts": {},
+        "approved_by_auth_subject_counts": {},
         "tool_counts": {},
         "error_code_counts": {},
         "failed_observation_count": "0",
@@ -658,6 +661,10 @@ def _add_runtime_summary_to_aggregate(
     _increment_count(
         aggregate["auth_subject_counts"],
         str(summary.get("auth_subject", "")),
+    )
+    _increment_count(
+        aggregate["approved_by_auth_subject_counts"],
+        str(summary.get("approved_by_auth_subject", "")),
     )
     for tool_name in summary.get("tool_names", []):
         _increment_count(aggregate["tool_counts"], str(tool_name))
@@ -1619,6 +1626,9 @@ def _runtime_list_filters(query: str) -> Dict[str, Any]:
     approved_action_id = _single_query_value(values, "approved_action_id")
     if approved_action_id is not None and not approved_action_id.strip():
         raise ValueError("approved_action_id must be a non-empty string")
+    approved_by_auth_subject = _single_query_value(values, "approved_by_auth_subject")
+    if approved_by_auth_subject is not None and not approved_by_auth_subject.strip():
+        raise ValueError("approved_by_auth_subject must be a non-empty string")
     resumed_from_run_id = _single_query_value(values, "resumed_from_run_id")
     if resumed_from_run_id is not None and not resumed_from_run_id.strip():
         raise ValueError("resumed_from_run_id must be a non-empty string")
@@ -1690,6 +1700,7 @@ def _runtime_list_filters(query: str) -> Dict[str, Any]:
         "metadata_key": metadata_key,
         "metadata_value": metadata_value,
         "approved_action_id": approved_action_id,
+        "approved_by_auth_subject": approved_by_auth_subject,
         "resumed_from_run_id": resumed_from_run_id,
         "resumed_by_auth_subject": resumed_by_auth_subject,
         "pending_approval_tool": pending_approval_tool,
@@ -1850,6 +1861,12 @@ def _runtime_summary_matches_filters(
     if (
         approved_action_id is not None
         and approved_action_id not in summary.get("approved_action_ids", [])
+    ):
+        return False
+    approved_by_auth_subject = filters["approved_by_auth_subject"]
+    if (
+        approved_by_auth_subject is not None
+        and summary.get("approved_by_auth_subject") != approved_by_auth_subject
     ):
         return False
     resumed_from_run_id = filters["resumed_from_run_id"]

@@ -29,6 +29,7 @@ def test_internal_runtime_client_example_is_linked_and_executable():
     assert "approved_action_ids" in example
     assert "auth_subject" in example
     assert "resumed_by_auth_subject" in example
+    assert "approved_by_auth_subject" in example
     assert "KAGENT_CLIENT_BASE_URL" in example
     assert "KAGENT_CLIENT_TOKEN" in example
     assert "sk-" not in example

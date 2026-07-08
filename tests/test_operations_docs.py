@@ -204,6 +204,8 @@ def test_operations_runbook_documents_continuous_iteration_and_failure_triage():
     assert "auth_subject=team-a" in runbook
     assert "who initiated a persisted runtime run" in runbook
     assert "approved_action_id=step-1" in runbook
+    assert "approved_by_auth_subject=default" in runbook
+    assert "approved_at" in runbook
     assert "resumed_from_run_id=pending-run" in runbook
     assert "resumed_by_auth_subject" in runbook
     assert "resumed_by_auth_subject=default" in runbook
