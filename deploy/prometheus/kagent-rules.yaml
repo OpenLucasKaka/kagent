@@ -198,6 +198,34 @@ groups:
           summary: Codex-style runtime progress event sinks are failing
           description: Runtime progress events could not be delivered to an operator UI, webhook, or streaming sink.
 
+      - alert: kagentRuntimeToolExecutionFailures
+        expr: |
+          sum by (tool) (
+            rate(kagent_runtime_tool_executions_total{status="failed"}[5m])
+          ) > 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Codex-style runtime tool executions are failing
+          description: A runtime tool is producing failed observations; inspect tool and error-code metrics together.
+
+      - alert: kagentRuntimeToolApprovalPressure
+        expr: |
+          sum by (tool) (
+            rate(
+              kagent_runtime_tool_executions_total{
+                status="requires_approval"
+              }[5m]
+            )
+          ) > 0
+        for: 15m
+        labels:
+          severity: info
+        annotations:
+          summary: Codex-style runtime tool approval pressure is present
+          description: A runtime tool is frequently stopping at the approval boundary.
+
       - alert: kagentRuntimeToolExecutionTimeouts
         expr: |
           sum(rate(

@@ -481,6 +481,7 @@ def test_service_metrics_tracks_requests_by_path_and_status():
         "runtime_failed_observations_total": "0",
         "runtime_progress_event_sink_failures_total": "0",
         "runtime_observation_errors_by_code": {},
+        "runtime_tool_executions_by_tool_status": {},
         "runtime_approval_required_total": "0",
         "runtime_failed_budget_exhaustions_total": "0",
         "runtime_run_duration_seconds_bucket": {
@@ -771,6 +772,10 @@ def test_service_metrics_endpoint_reports_runtime_operational_outcomes():
         "invalid_tool_input": "1",
         "tool_not_allowed": "1",
     }
+    assert metrics_payload["runtime_tool_executions_by_tool_status"] == {
+        "http_request:requires_approval": "1",
+        "transform_text:failed": "1",
+    }
     assert metrics_payload["runtime_approval_required_total"] == "1"
     assert metrics_payload["runtime_failed_budget_exhaustions_total"] == "1"
     assert metrics_payload["runtime_run_duration_seconds_count"] == "2"
@@ -926,6 +931,7 @@ def test_service_prometheus_metrics_endpoint_reports_text_exposition(monkeypatch
         auth_subject="team-a",
         resumed_by_auth_subject="default",
         progress_event_sink_failure_count=1,
+        tool_status_counts={"http_request:requires_approval": 1},
     )
     metrics.record_runtime_run(
         status="failed",
@@ -936,11 +942,12 @@ def test_service_prometheus_metrics_endpoint_reports_text_exposition(monkeypatch
         auth_subject="team-a",
         resumed_by_auth_subject="team-a",
         progress_event_sink_failure_count=2,
-        error_code_counts={
-            "invalid_tool_input": 1,
-            "tool_execution_timeout": 1,
-        },
-    )
+            error_code_counts={
+                "invalid_tool_input": 1,
+                "tool_execution_timeout": 1,
+            },
+            tool_status_counts={"transform_text:failed": 1},
+        )
     limiter = ServiceConcurrencyLimiter(max_concurrent_runs=2)
     idempotency_cache = ServiceIdempotencyCache(max_entries=5)
     release = limiter.try_acquire()
@@ -1123,6 +1130,18 @@ def test_service_prometheus_metrics_endpoint_reports_text_exposition(monkeypatch
     assert (
         'kagent_runtime_observation_errors_total'
         '{error_code="tool_execution_timeout"} 1'
+        in payload
+    )
+    assert "# HELP kagent_runtime_tool_executions_total" in payload
+    assert "# TYPE kagent_runtime_tool_executions_total counter" in payload
+    assert (
+        'kagent_runtime_tool_executions_total'
+        '{tool="http_request",status="requires_approval"} 1'
+        in payload
+    )
+    assert (
+        'kagent_runtime_tool_executions_total'
+        '{tool="transform_text",status="failed"} 1'
         in payload
     )
     assert "kagent_runtime_approval_required_total 1" in payload

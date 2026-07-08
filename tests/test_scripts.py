@@ -342,6 +342,7 @@ def test_production_readiness_audit_reports_required_artifacts():
     assert "kagentRuntimeProgressSinkFailures" in script_text
     assert "kagent_runtime_run_lifecycle_state_total" in script_text
     assert "kagent_runtime_run_lifecycle_state_by_auth_subject_total" in script_text
+    assert "kagent_runtime_tool_executions_total" in script_text
 
     completed = subprocess.run(
         [".venv/bin/python", str(script_path)],
@@ -532,6 +533,7 @@ def test_observability_acceptance_script_is_secret_safe_and_documented():
     assert "/metrics.prom" in script
     assert "kagent_runtime_stale_pending_approvals_current" in script
     assert "kagent_runtime_progress_event_sink_failures_total" in script
+    assert "kagent_runtime_tool_executions_total" in script
     assert "deploy/grafana/kagent-dashboard.json" in script
     assert "deploy/prometheus/kagent-rules.yaml" in script
     assert "kagentRuntimeLifecycleFailures" in script

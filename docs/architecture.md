@@ -548,6 +548,11 @@ exposes `kagent_runtime_run_lifecycle_state_total` plus
 dashboards can graph `waiting_approval`, `running`, `succeeded`, and `failed`
 phases globally and per team without recomputing status mappings outside the
 service.
+Metrics snapshots additionally expose
+`runtime_tool_executions_by_tool_status`, and Prometheus exposes
+`kagent_runtime_tool_executions_total`, so operators can identify which runtime
+tool is failing, succeeding, or stopping at the approval boundary without
+opening every full trace.
 Runtime run responses and compact persisted status summaries also carry
 run-level duration as `duration_seconds`, giving dashboards a low-cardinality
 sort key before operators open full traces.

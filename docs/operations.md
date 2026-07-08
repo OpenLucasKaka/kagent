@@ -922,6 +922,12 @@ Use `kagent_runtime_observation_errors_total{error_code="..."}`
 to separate runtime observation failures by stable error code, including
 `tool_execution_timeout`, `invalid_tool_input`, `invalid_tool_output`, and
 `tool_not_allowed`.
+Use `runtime_tool_executions_by_tool_status` and
+`kagent_runtime_tool_executions_total{tool="...",status="..."}` to identify
+which bounded runtime tool is succeeding, failing, or stopping at an approval
+boundary. Unknown tool names are collapsed to `unknown`, and unknown statuses
+are collapsed to `other`, keeping Prometheus labels low-cardinality while still
+showing the operational hotspot.
 Use `kagent_runtime_run_duration_seconds_bucket`,
 `kagent_runtime_run_duration_seconds_count`, and
 `kagent_runtime_run_duration_seconds_sum` for percentile and SLO

@@ -207,6 +207,7 @@ class ServiceMetrics:
         self._runtime_failed_observations_total = 0
         self._runtime_progress_event_sink_failures_total = 0
         self._runtime_observation_errors_by_code: Dict[str, int] = {}
+        self._runtime_tool_executions_by_tool_status: Dict[str, int] = {}
         self._runtime_approval_required_total = 0
         self._runtime_failed_budget_exhaustions_total = 0
         self._runtime_run_duration_seconds = 0.0
@@ -269,6 +270,7 @@ class ServiceMetrics:
         budget_exhausted: bool = False,
         duration_seconds: float = 0.0,
         error_code_counts: Optional[Mapping[str, int]] = None,
+        tool_status_counts: Optional[Mapping[str, int]] = None,
         auth_subject: str = "",
         resumed_by_auth_subject: str = "",
         progress_event_sink_failure_count: int = 0,
@@ -343,6 +345,17 @@ class ServiceMetrics:
                     )
                     + max(0, int(count))
                 )
+            for tool_status, count in (tool_status_counts or {}).items():
+                tool, status_label = _split_combined_metrics_key(str(tool_status))
+                normalized_tool = _runtime_tool_metrics_label(tool)
+                normalized_status = _runtime_observation_status_metrics_label(
+                    status_label
+                )
+                key = _combined_metrics_key(normalized_tool, normalized_status)
+                self._runtime_tool_executions_by_tool_status[key] = (
+                    self._runtime_tool_executions_by_tool_status.get(key, 0)
+                    + max(0, int(count))
+                )
             self._runtime_approval_required_total += max(0, approval_required_count)
             if budget_exhausted:
                 self._runtime_failed_budget_exhaustions_total += 1
@@ -415,6 +428,9 @@ class ServiceMetrics:
                 ),
                 "runtime_observation_errors_by_code": _string_counts(
                     self._runtime_observation_errors_by_code
+                ),
+                "runtime_tool_executions_by_tool_status": _string_counts(
+                    self._runtime_tool_executions_by_tool_status
                 ),
                 "runtime_approval_required_total": str(
                     self._runtime_approval_required_total
@@ -1013,6 +1029,23 @@ def prometheus_metrics_text(snapshot: Mapping[str, Any]) -> str:
         )
     lines.extend(
         [
+            "# HELP kagent_runtime_tool_executions_total "
+            "Runtime tool observations by bounded tool and status labels.",
+            "# TYPE kagent_runtime_tool_executions_total counter",
+        ]
+    )
+    for tool_status, count in _mapping_value(
+        snapshot,
+        "runtime_tool_executions_by_tool_status",
+    ).items():
+        tool, status = _split_combined_metrics_key(tool_status)
+        lines.append(
+            "kagent_runtime_tool_executions_total"
+            f'{{tool="{_prometheus_label(tool)}",'
+            f'status="{_prometheus_label(status)}"}} {count}'
+        )
+    lines.extend(
+        [
             "# HELP kagent_runtime_progress_event_sink_failures_total "
             "Runtime progress event sink delivery failures.",
             "# TYPE kagent_runtime_progress_event_sink_failures_total counter",
@@ -1384,6 +1417,24 @@ def _split_combined_metrics_key(value: str) -> Tuple[str, str]:
     if not separator:
         return value, ""
     return left, right
+
+
+def _runtime_tool_metrics_label(value: str) -> str:
+    normalized = str(value).strip()
+    if not normalized:
+        return "unknown"
+    from kagent.runtime.tools import default_runtime_tools
+
+    if normalized in default_runtime_tools():
+        return normalized
+    return "unknown"
+
+
+def _runtime_observation_status_metrics_label(value: str) -> str:
+    normalized = str(value).strip()
+    if normalized in {"failed", "ok", "requires_approval"}:
+        return normalized
+    return "other"
 
 
 def _runtime_lifecycle_state(status: str) -> str:

@@ -376,6 +376,34 @@
       ],
       "title": "Runtime Lifecycle by Subject",
       "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 32
+      },
+      "id": 13,
+      "targets": [
+        {
+          "expr": "sum by (tool, status) (rate(kagent_runtime_tool_executions_total[5m]))",
+          "legendFormat": "{{tool}} {{status}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Runtime Tool Executions",
+      "type": "timeseries"
     }
   ],
   "refresh": "30s",
