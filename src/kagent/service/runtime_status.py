@@ -18,6 +18,15 @@ from kagent.utils.json_output import json_ready
 
 _TRACE_READ_ERRORS = (OSError, ValueError)
 _RUNTIME_STATUS_FILTER_VALUES = {"cancelled", "done", "failed", "requires_approval"}
+_RUNTIME_LIFECYCLE_STATE_FILTER_VALUES = {
+    "cancelled",
+    "failed",
+    "planning",
+    "running",
+    "succeeded",
+    "unknown",
+    "waiting_approval",
+}
 
 
 def execute_runtime_status_request(
@@ -1484,6 +1493,15 @@ def _runtime_list_filters(query: str) -> Dict[str, Any]:
         raise ValueError(
             "status must be one of: cancelled, done, failed, requires_approval"
         )
+    lifecycle_state = _single_query_value(values, "lifecycle_state")
+    if (
+        lifecycle_state is not None
+        and lifecycle_state not in _RUNTIME_LIFECYCLE_STATE_FILTER_VALUES
+    ):
+        raise ValueError(
+            "lifecycle_state must be one of: cancelled, failed, planning, "
+            "running, succeeded, unknown, waiting_approval"
+        )
     auth_subject = _single_query_value(values, "auth_subject")
     if auth_subject is not None and not auth_subject.strip():
         raise ValueError("auth_subject must be a non-empty string")
@@ -1586,6 +1604,7 @@ def _runtime_list_filters(query: str) -> Dict[str, Any]:
     )
     return {
         "status": status,
+        "lifecycle_state": lifecycle_state,
         "auth_subject": auth_subject,
         "tool": tool,
         "error_code": error_code,
@@ -1655,6 +1674,12 @@ def _runtime_summary_matches_filters(
 ) -> bool:
     status = filters["status"]
     if status is not None and summary.get("status") != status:
+        return False
+    lifecycle_state = filters["lifecycle_state"]
+    if (
+        lifecycle_state is not None
+        and summary.get("lifecycle_state") != lifecycle_state
+    ):
         return False
     auth_subject = filters["auth_subject"]
     if auth_subject is not None and summary.get("auth_subject") != auth_subject:

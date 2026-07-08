@@ -729,6 +729,9 @@ approval detail endpoint. Invalid filter values, including a blank
 `auth_subject`, return
 `400 invalid_request_body`. The
 endpoint also skips unreadable trace files instead of failing the whole list.
+Use `lifecycle_state=waiting_approval`, `lifecycle_state=running`, or
+`lifecycle_state=failed` when dashboards need operator-facing phase filters
+instead of raw terminal status filters.
 When diagnostic endpoints are protected, the primary token is treated as an
 operator/admin diagnostic token and can list all persisted runtime traces.
 Tokens from

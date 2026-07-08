@@ -217,6 +217,7 @@ The service intentionally keeps a narrow API:
   `latest_failed_error_code=invalid_tool_input`,
   `latest_failed_action_id=fetch-site`, `latest_failed_tool=planner`,
   `iteration_budget_remaining=0`,
+  `lifecycle_state=waiting_approval`,
   `artifact_kind=report`, `artifact_format=markdown`,
   `artifact_tag=release`, `tag=internal-smoke`,
   `metadata_key=workflow`, `metadata_value=internal`,

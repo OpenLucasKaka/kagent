@@ -78,6 +78,7 @@ def test_architecture_document_names_runtime_and_operational_boundaries():
     assert "failed_observation_count" in architecture
     assert "lifecycle_state" in architecture
     assert "lifecycle_state_counts" in architecture
+    assert "lifecycle_state=waiting_approval" in architecture
     assert "planner_failure_count" in architecture
     assert "tool_failure_count" in architecture
     assert "latest_failed_action_id" in architecture

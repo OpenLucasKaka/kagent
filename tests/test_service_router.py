@@ -4685,6 +4685,42 @@ def test_service_router_runtime_runs_list_filters_by_pending_approval_presence(
     assert [run["run_id"] for run in clear_payload["runs"]] == ["no-approval-run"]
 
 
+def test_service_router_runtime_runs_list_filters_by_lifecycle_state(tmp_path):
+    persist_trace(
+        {
+            "trace_type": "codex_runtime",
+            "run_id": "waiting-run",
+            "status": "requires_approval",
+            "goal": "needs approval",
+            "pending_approval": {"id": "step-1", "tool": "http_request"},
+            "observations": [],
+        },
+        str(tmp_path),
+    )
+    persist_trace(
+        {
+            "trace_type": "codex_runtime",
+            "run_id": "succeeded-run",
+            "status": "done",
+            "goal": "done",
+            "observations": [],
+        },
+        str(tmp_path),
+    )
+
+    status_code, payload = service_router.handle_request(
+        "GET",
+        "/runtime/runs?lifecycle_state=waiting_approval&limit=10",
+        b"",
+        config=ServiceConfig(trace_dir=str(tmp_path)),
+    )
+
+    assert status_code == 200
+    assert payload["count"] == "1"
+    assert [run["run_id"] for run in payload["runs"]] == ["waiting-run"]
+    assert payload["runs"][0]["lifecycle_state"] == "waiting_approval"
+
+
 def test_service_router_runtime_runs_list_filters_by_final_answer_guardrail_presence(
     tmp_path,
 ):
@@ -5314,6 +5350,21 @@ def test_service_router_runtime_runs_list_rejects_invalid_has_pending_approval_f
     assert status_code == 400
     assert payload["error_code"] == "invalid_request_body"
     assert "has_pending_approval" in payload["error"]
+
+
+def test_service_router_runtime_runs_list_rejects_invalid_lifecycle_state_filter(
+    tmp_path,
+):
+    status_code, payload = service_router.handle_request(
+        "GET",
+        "/runtime/runs?lifecycle_state=almost_done",
+        b"",
+        config=ServiceConfig(trace_dir=str(tmp_path)),
+    )
+
+    assert status_code == 400
+    assert payload["error_code"] == "invalid_request_body"
+    assert "lifecycle_state" in payload["error"]
 
 
 def test_service_router_runtime_runs_list_rejects_invalid_has_final_answer_guardrail_filter(

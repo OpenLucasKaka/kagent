@@ -299,6 +299,26 @@ def test_service_contract_documents_named_success_schemas():
             },
         },
         {
+            "name": "lifecycle_state",
+            "in": "query",
+            "required": False,
+            "description": (
+                "Filter persisted runtime runs by derived operator lifecycle state"
+            ),
+            "schema": {
+                "type": "string",
+                "enum": [
+                    "cancelled",
+                    "failed",
+                    "planning",
+                    "running",
+                    "succeeded",
+                    "unknown",
+                    "waiting_approval",
+                ],
+            },
+        },
+        {
             "name": "tool",
             "in": "query",
             "required": False,
