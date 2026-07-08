@@ -25,7 +25,6 @@ dist/
 # Local runtime outputs.
 *.log
 *.jsonl
-npm/build-info.json
 coverage.xml
 .coverage
 htmlcov/

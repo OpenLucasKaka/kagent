@@ -10,8 +10,6 @@ const readline = require("readline");
 
 const GITHUB_PACKAGE_JSON_URL = "https://raw.githubusercontent.com/OpenLucasKaka/Kagent/main/package.json";
 const GITHUB_HEAD_URL = "https://api.github.com/repos/OpenLucasKaka/Kagent/commits/main";
-const GITHUB_TREE_URL_PREFIX = "https://api.github.com/repos/OpenLucasKaka/Kagent/git/trees/";
-const GITHUB_COMPARE_URL_PREFIX = "https://api.github.com/repos/OpenLucasKaka/Kagent/compare/";
 const GITHUB_INSTALL_SPEC = "github:OpenLucasKaka/Kagent";
 const SELF_UPDATE_TIMEOUT_MS = 3000;
 
@@ -181,43 +179,6 @@ async function fetchLatestGitHubUpdateInfo() {
   return { version, headSha };
 }
 
-async function fetchLatestGitHubSourceFingerprint(headSha) {
-  const body = await fetchText(
-    `${GITHUB_TREE_URL_PREFIX}${headSha}?recursive=1`,
-    SELF_UPDATE_TIMEOUT_MS
-  );
-  const payload = JSON.parse(body);
-  if (!Array.isArray(payload.tree)) {
-    throw new Error("GitHub tree response does not declare files");
-  }
-  const entries = payload.tree
-    .filter((entry) => (
-      entry &&
-      entry.type === "blob" &&
-      typeof entry.path === "string" &&
-      typeof entry.sha === "string" &&
-      isPackageFingerprintPath(entry.path)
-    ))
-    .map((entry) => ({ path: entry.path, sha: entry.sha }));
-  return fingerprintBlobEntries(entries);
-}
-
-async function fetchGitHubAheadBy(baseSha, headSha) {
-  if (!baseSha || !headSha || baseSha === headSha) {
-    return 0;
-  }
-  const body = await fetchText(
-    `${GITHUB_COMPARE_URL_PREFIX}${baseSha}...${headSha}`,
-    SELF_UPDATE_TIMEOUT_MS
-  );
-  const payload = JSON.parse(body);
-  const aheadBy = Number(payload.ahead_by);
-  if (!Number.isInteger(aheadBy) || aheadBy < 0) {
-    throw new Error("GitHub compare response does not declare ahead_by");
-  }
-  return aheadBy;
-}
-
 function readSelfUpdateState() {
   const statePath = selfUpdateStatePath();
   if (!fs.existsSync(statePath)) {
@@ -248,20 +209,8 @@ function latestSelfUpdateState(latest, extra) {
   }, extra || {});
 }
 
-function hasSelfUpdate(latest, currentVersion, _state, currentSourceFingerprint) {
-  if (isNewerVersion(latest.version, currentVersion)) {
-    return true;
-  }
-  if (latest.version !== currentVersion) {
-    return false;
-  }
-  if (latest.isNewerSameVersion !== true) {
-    return false;
-  }
-  if (!latest.sourceFingerprint || !currentSourceFingerprint) {
-    return false;
-  }
-  return latest.sourceFingerprint !== currentSourceFingerprint;
+function hasSelfUpdate(latest, currentVersion, _state) {
+  return isNewerVersion(latest.version, currentVersion);
 }
 
 function promptForSelfUpdate(currentVersion, latest) {
@@ -301,27 +250,15 @@ async function maybeSelfUpdate(root, currentVersion, commandName, args) {
 
   let latest;
   let state;
-  let currentSourceFingerprint = "";
-  let currentHeadSha = "";
   try {
     latest = await fetchLatestGitHubUpdateInfo();
     state = readSelfUpdateState();
-    if (!isNewerVersion(latest.version, currentVersion)) {
-      currentHeadSha = readPackageHeadSha(root);
-      currentSourceFingerprint = localPackageFingerprint(root);
-      latest.sourceFingerprint = await fetchLatestGitHubSourceFingerprint(
-        latest.headSha
-      );
-      latest.isNewerSameVersion = (
-        await fetchGitHubAheadBy(currentHeadSha, latest.headSha)
-      ) > 0;
-    }
   } catch (error) {
     process.stderr.write(`kagent: update check skipped: ${error.message}\n`);
     return false;
   }
 
-  if (!hasSelfUpdate(latest, currentVersion, state, currentSourceFingerprint)) {
+  if (!hasSelfUpdate(latest, currentVersion, state)) {
     writeSelfUpdateState(latestSelfUpdateState(latest));
     return false;
   }
@@ -393,80 +330,11 @@ function sourceHash(root) {
   return hasher.digest("hex");
 }
 
-function readPackageHeadSha(root) {
-  const buildInfoPath = path.join(root, "npm", "build-info.json");
-  if (!fs.existsSync(buildInfoPath)) {
-    return "";
-  }
-  try {
-    const buildInfo = JSON.parse(fs.readFileSync(buildInfoPath, "utf8"));
-    const headSha = String(buildInfo.headSha || "").trim();
-    return /^[0-9a-f]{40}$/i.test(headSha) ? headSha : "";
-  } catch (_error) {
-    return "";
-  }
-}
-
-function localPackageFingerprint(root) {
-  const entries = [];
-  for (const relativePath of packageFingerprintPaths(root)) {
-    const absolutePath = path.join(root, relativePath);
-    if (!fs.existsSync(absolutePath)) {
-      continue;
-    }
-    entries.push({
-      path: relativePath,
-      sha: gitBlobSha(fs.readFileSync(absolutePath))
-    });
-  }
-  return fingerprintBlobEntries(entries);
-}
-
-function fingerprintBlobEntries(entries) {
-  const hasher = crypto.createHash("sha256");
-  const normalized = entries
-    .filter((entry) => entry.path && entry.sha)
-    .sort((left, right) => left.path.localeCompare(right.path));
-  for (const entry of normalized) {
-    hasher.update(entry.path);
-    hasher.update("\0");
-    hasher.update(entry.sha);
-    hasher.update("\0");
-  }
-  return hasher.digest("hex");
-}
-
-function gitBlobSha(buffer) {
-  return crypto
-    .createHash("sha1")
-    .update(`blob ${buffer.length}\0`)
-    .update(buffer)
-    .digest("hex");
-}
-
 function sourceFingerprintPaths(root) {
   const paths = ["package.json", "pyproject.toml"];
   collectRelativeFiles(path.join(root, "src"), "src", paths);
   paths.sort();
   return paths;
-}
-
-function packageFingerprintPaths(root) {
-  const paths = ["README.md", "package.json", "pyproject.toml"];
-  collectRelativeFiles(path.join(root, "npm"), "npm", paths);
-  collectRelativeFiles(path.join(root, "src"), "src", paths);
-  paths.sort();
-  return paths.filter(isPackageFingerprintPath);
-}
-
-function isPackageFingerprintPath(relativePath) {
-  return (
-    relativePath === "README.md" ||
-    relativePath === "package.json" ||
-    relativePath === "pyproject.toml" ||
-    (relativePath.startsWith("npm/") && relativePath !== "npm/build-info.json") ||
-    relativePath.startsWith("src/")
-  );
 }
 
 function collectRelativeFiles(directory, relativeDirectory, output) {
@@ -564,8 +432,6 @@ module.exports = {
   _internals: {
     hasSelfUpdate,
     isNewerVersion,
-    localPackageFingerprint,
-    readPackageHeadSha,
     shouldCheckSelfUpdate
   }
 };

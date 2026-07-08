@@ -20,7 +20,6 @@ def test_npm_package_ships_python_runtime_sources():
     assert "pyproject.toml" in package_json["files"]
     assert "src" in package_json["files"]
     assert "npm" in package_json["files"]
-    assert package_json["scripts"]["prepare"] == "node npm/scripts/write-build-info.js"
 
 
 def test_npm_bin_scripts_are_executable_node_wrappers():
@@ -55,8 +54,6 @@ def test_npm_runner_checks_github_for_interactive_self_update():
 
     assert "https://raw.githubusercontent.com/OpenLucasKaka/Kagent/main/package.json" in runner
     assert "https://api.github.com/repos/OpenLucasKaka/Kagent/commits/main" in runner
-    assert "https://api.github.com/repos/OpenLucasKaka/Kagent/git/trees/" in runner
-    assert "https://api.github.com/repos/OpenLucasKaka/Kagent/compare/" in runner
     assert "KAGENT_NO_SELF_UPDATE" in runner
     assert "process.stdin.isTTY" in runner
     assert "Update now? [Y/n]" in runner
@@ -65,10 +62,6 @@ def test_npm_runner_checks_github_for_interactive_self_update():
     assert 'const GITHUB_INSTALL_SPEC = "github:OpenLucasKaka/Kagent"' in runner
     assert '"npm", ["install", "-g", GITHUB_INSTALL_SPEC]' in runner
     assert "selfUpdateStatePath" in runner
-    assert "sourceFingerprint" in runner
-    assert "localPackageFingerprint(root)" in runner
-    assert "readPackageHeadSha(root)" in runner
-    assert "fetchGitHubAheadBy" in runner
     assert 'prompted: "true"' in runner
     assert runner.index('prompted: "true"') < runner.index(
         "if (!(await promptForSelfUpdate"
@@ -95,7 +88,7 @@ if (_internals.isNewerVersion("0.1.0", "0.1.0")) {
     subprocess.run([node, "-e", script], check=True)
 
 
-def test_npm_runner_detects_same_version_github_commit_updates():
+def test_npm_runner_does_not_prompt_for_same_version_github_updates():
     node = shutil.which("node")
     if node is None:
         return
@@ -103,25 +96,12 @@ def test_npm_runner_detects_same_version_github_commit_updates():
     script = """
 const { _internals } = require("./npm/lib/python-runner");
 if (_internals.hasSelfUpdate(
-  {version: "0.1.1", headSha: "new"},
+  {version: "0.1.1", headSha: "new", sourceFingerprint: "remote"},
   "0.1.1",
   {remoteHeadSha: "old", remoteVersion: "0.1.1"},
   "same"
 )) {
   throw new Error("same source fingerprint should not prompt even with old state");
-}
-if (!_internals.hasSelfUpdate(
-  {
-    version: "0.1.1",
-    headSha: "new",
-    sourceFingerprint: "remote",
-    isNewerSameVersion: true
-  },
-  "0.1.1",
-  {remoteHeadSha: "old", remoteVersion: "0.1.1"},
-  "local"
-)) {
-  throw new Error("changed source fingerprint should prompt when version is unchanged");
 }
 if (_internals.hasSelfUpdate(
   {
@@ -181,6 +161,5 @@ def test_npm_wrapper_javascript_syntax_is_valid_when_node_is_available():
         "npm/bin/kagent.js",
         "npm/bin/kagent-serve.js",
         "npm/lib/python-runner.js",
-        "npm/scripts/write-build-info.js",
     ):
         subprocess.run([node, "--check", script], check=True)
