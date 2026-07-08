@@ -273,8 +273,8 @@ configuration. The baseline rules include service availability, HTTP 5xx rate,
 `kagentSlowRuntimeRuns`,
 run timeout, failed-run, Codex-style runtime failed-run, runtime approval
 pressure, runtime budget exhaustion, rate-limit, idempotency conflict,
-per-subject runtime resume alerting, runtime tool failure/approval pressure,
-runtime tool execution timeout,
+per-subject runtime resume alerting, runtime planner failure alerting,
+runtime tool failure/approval pressure, runtime tool execution timeout,
 idempotency cache eviction, request body timeout,
 `kagentMalformedRunRequests`,
 `kagentOversizedRunRequests`, and unknown route or method alerts.

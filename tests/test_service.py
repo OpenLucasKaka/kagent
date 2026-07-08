@@ -482,6 +482,8 @@ def test_service_metrics_tracks_requests_by_path_and_status():
         "runtime_progress_event_sink_failures_total": "0",
         "runtime_observation_errors_by_code": {},
         "runtime_tool_executions_by_tool_status": {},
+        "runtime_planner_failures_total": "0",
+        "runtime_planner_failures_by_error_code": {},
         "runtime_approval_required_total": "0",
         "runtime_failed_budget_exhaustions_total": "0",
         "runtime_run_duration_seconds_bucket": {
@@ -749,6 +751,16 @@ def test_service_metrics_endpoint_reports_runtime_operational_outcomes():
         ),
         metrics=metrics,
     )
+    planner_failed_status, planner_failed_payload = handle_request(
+        "POST",
+        "/runtime/run",
+        (
+            b'{"goal":"bad plan","max_iterations":1,'
+            b'"plan":{"actions":[{"id":"step-1","tool":"note",'
+            b'"input":{"text":"hello"},"unexpected":"field"}]}}'
+        ),
+        metrics=metrics,
+    )
     metrics_status, metrics_payload = handle_request("GET", "/metrics", b"", metrics=metrics)
 
     assert approval_status == 200
@@ -756,19 +768,23 @@ def test_service_metrics_endpoint_reports_runtime_operational_outcomes():
     assert failed_status == 200
     assert failed_payload["status"] == "failed"
     assert failed_payload["iteration_budget_remaining"] == "0"
+    assert planner_failed_status == 200
+    assert planner_failed_payload["status"] == "failed"
+    assert planner_failed_payload["error_code"] == "invalid_plan"
     assert metrics_status == 200
-    assert metrics_payload["runtime_runs_total"] == "2"
+    assert metrics_payload["runtime_runs_total"] == "3"
     assert metrics_payload["runtime_runs_by_status"] == {
-        "failed": "1",
+        "failed": "2",
         "requires_approval": "1",
     }
     assert metrics_payload["runtime_runs_by_lifecycle_state"] == {
-        "failed": "1",
+        "failed": "2",
         "waiting_approval": "1",
     }
-    assert metrics_payload["runtime_failed_observations_total"] == "1"
+    assert metrics_payload["runtime_failed_observations_total"] == "2"
     assert metrics_payload["runtime_progress_event_sink_failures_total"] == "0"
     assert metrics_payload["runtime_observation_errors_by_code"] == {
+        "invalid_plan": "1",
         "invalid_tool_input": "1",
         "tool_not_allowed": "1",
     }
@@ -776,9 +792,13 @@ def test_service_metrics_endpoint_reports_runtime_operational_outcomes():
         "http_request:requires_approval": "1",
         "transform_text:failed": "1",
     }
+    assert metrics_payload["runtime_planner_failures_total"] == "1"
+    assert metrics_payload["runtime_planner_failures_by_error_code"] == {
+        "invalid_plan": "1"
+    }
     assert metrics_payload["runtime_approval_required_total"] == "1"
-    assert metrics_payload["runtime_failed_budget_exhaustions_total"] == "1"
-    assert metrics_payload["runtime_run_duration_seconds_count"] == "2"
+    assert metrics_payload["runtime_failed_budget_exhaustions_total"] == "2"
+    assert metrics_payload["runtime_run_duration_seconds_count"] == "3"
     assert float(metrics_payload["runtime_run_duration_seconds_sum"]) > 0
     assert float(metrics_payload["max_runtime_run_duration_seconds"]) > 0
 
@@ -942,12 +962,14 @@ def test_service_prometheus_metrics_endpoint_reports_text_exposition(monkeypatch
         auth_subject="team-a",
         resumed_by_auth_subject="team-a",
         progress_event_sink_failure_count=2,
-            error_code_counts={
-                "invalid_tool_input": 1,
-                "tool_execution_timeout": 1,
-            },
-            tool_status_counts={"transform_text:failed": 1},
-        )
+        error_code_counts={
+            "invalid_tool_input": 1,
+            "tool_execution_timeout": 1,
+        },
+        tool_status_counts={"transform_text:failed": 1},
+        planner_failure_count=1,
+        planner_error_code_counts={"invalid_plan": 1},
+    )
     limiter = ServiceConcurrencyLimiter(max_concurrent_runs=2)
     idempotency_cache = ServiceIdempotencyCache(max_entries=5)
     release = limiter.try_acquire()
@@ -1142,6 +1164,16 @@ def test_service_prometheus_metrics_endpoint_reports_text_exposition(monkeypatch
     assert (
         'kagent_runtime_tool_executions_total'
         '{tool="transform_text",status="failed"} 1'
+        in payload
+    )
+    assert "# HELP kagent_runtime_planner_failures_total" in payload
+    assert "# TYPE kagent_runtime_planner_failures_total counter" in payload
+    assert "kagent_runtime_planner_failures_total 1" in payload
+    assert "# HELP kagent_runtime_planner_failures_by_error_code_total" in payload
+    assert "# TYPE kagent_runtime_planner_failures_by_error_code_total counter" in payload
+    assert (
+        'kagent_runtime_planner_failures_by_error_code_total'
+        '{error_code="invalid_plan"} 1'
         in payload
     )
     assert "kagent_runtime_approval_required_total 1" in payload

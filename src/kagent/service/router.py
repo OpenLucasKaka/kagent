@@ -682,6 +682,8 @@ def _record_runtime_run_metrics(
         duration_seconds=_runtime_duration_seconds(payload),
         error_code_counts=_runtime_observation_error_code_counts(observations),
         tool_status_counts=_runtime_observation_tool_status_counts(observations),
+        planner_failure_count=_runtime_planner_failure_count(observations),
+        planner_error_code_counts=_runtime_planner_error_code_counts(observations),
         auth_subject=str(payload.get("auth_subject", "")),
         resumed_by_auth_subject=str(payload.get("resumed_by_auth_subject", "")),
         progress_event_sink_failure_count=_runtime_non_negative_int(
@@ -739,8 +741,42 @@ def _runtime_observation_tool_status_counts(value: Any) -> Dict[str, int]:
             continue
         tool = str(item.get("tool", "")).strip()
         status = str(item.get("status", "")).strip()
+        if tool == "planner":
+            continue
         if not tool or not status:
             continue
         key = f"{tool}:{status}"
         counts[key] = counts.get(key, 0) + 1
+    return counts
+
+
+def _runtime_planner_failure_count(value: Any) -> int:
+    if not isinstance(value, list):
+        return 0
+    return sum(
+        1
+        for item in value
+        if (
+            isinstance(item, dict)
+            and str(item.get("tool", "")) == "planner"
+            and str(item.get("status", "")) == "failed"
+        )
+    )
+
+
+def _runtime_planner_error_code_counts(value: Any) -> Dict[str, int]:
+    if not isinstance(value, list):
+        return {}
+    counts: Dict[str, int] = {}
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        if str(item.get("tool", "")) != "planner":
+            continue
+        if str(item.get("status", "")) != "failed":
+            continue
+        error_code = str(item.get("error_code", ""))
+        if not error_code:
+            continue
+        counts[error_code] = counts.get(error_code, 0) + 1
     return counts

@@ -208,6 +208,8 @@ class ServiceMetrics:
         self._runtime_progress_event_sink_failures_total = 0
         self._runtime_observation_errors_by_code: Dict[str, int] = {}
         self._runtime_tool_executions_by_tool_status: Dict[str, int] = {}
+        self._runtime_planner_failures_total = 0
+        self._runtime_planner_failures_by_error_code: Dict[str, int] = {}
         self._runtime_approval_required_total = 0
         self._runtime_failed_budget_exhaustions_total = 0
         self._runtime_run_duration_seconds = 0.0
@@ -271,6 +273,8 @@ class ServiceMetrics:
         duration_seconds: float = 0.0,
         error_code_counts: Optional[Mapping[str, int]] = None,
         tool_status_counts: Optional[Mapping[str, int]] = None,
+        planner_failure_count: int = 0,
+        planner_error_code_counts: Optional[Mapping[str, int]] = None,
         auth_subject: str = "",
         resumed_by_auth_subject: str = "",
         progress_event_sink_failure_count: int = 0,
@@ -356,6 +360,20 @@ class ServiceMetrics:
                     self._runtime_tool_executions_by_tool_status.get(key, 0)
                     + max(0, int(count))
                 )
+            self._runtime_planner_failures_total += max(0, planner_failure_count)
+            for error_code, count in (planner_error_code_counts or {}).items():
+                normalized_error_code = str(error_code)
+                if not normalized_error_code:
+                    continue
+                self._runtime_planner_failures_by_error_code[
+                    normalized_error_code
+                ] = (
+                    self._runtime_planner_failures_by_error_code.get(
+                        normalized_error_code,
+                        0,
+                    )
+                    + max(0, int(count))
+                )
             self._runtime_approval_required_total += max(0, approval_required_count)
             if budget_exhausted:
                 self._runtime_failed_budget_exhaustions_total += 1
@@ -431,6 +449,12 @@ class ServiceMetrics:
                 ),
                 "runtime_tool_executions_by_tool_status": _string_counts(
                     self._runtime_tool_executions_by_tool_status
+                ),
+                "runtime_planner_failures_total": str(
+                    self._runtime_planner_failures_total
+                ),
+                "runtime_planner_failures_by_error_code": _string_counts(
+                    self._runtime_planner_failures_by_error_code
                 ),
                 "runtime_approval_required_total": str(
                     self._runtime_approval_required_total
@@ -1043,6 +1067,26 @@ def prometheus_metrics_text(snapshot: Mapping[str, Any]) -> str:
             "kagent_runtime_tool_executions_total"
             f'{{tool="{_prometheus_label(tool)}",'
             f'status="{_prometheus_label(status)}"}} {count}'
+        )
+    lines.extend(
+        [
+            "# HELP kagent_runtime_planner_failures_total "
+            "Runtime planner failures before tool execution.",
+            "# TYPE kagent_runtime_planner_failures_total counter",
+            "kagent_runtime_planner_failures_total "
+            f"{snapshot.get('runtime_planner_failures_total', '0')}",
+            "# HELP kagent_runtime_planner_failures_by_error_code_total "
+            "Runtime planner failures by stable error code.",
+            "# TYPE kagent_runtime_planner_failures_by_error_code_total counter",
+        ]
+    )
+    for error_code, count in _mapping_value(
+        snapshot,
+        "runtime_planner_failures_by_error_code",
+    ).items():
+        lines.append(
+            "kagent_runtime_planner_failures_by_error_code_total"
+            f'{{error_code="{_prometheus_label(error_code)}"}} {count}'
         )
     lines.extend(
         [

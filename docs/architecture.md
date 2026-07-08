@@ -553,6 +553,10 @@ Metrics snapshots additionally expose
 `kagent_runtime_tool_executions_total`, so operators can identify which runtime
 tool is failing, succeeding, or stopping at the approval boundary without
 opening every full trace.
+Planner failures are tracked separately through
+`runtime_planner_failures_total`,
+`runtime_planner_failures_by_error_code`, and Prometheus planner failure
+counters, keeping provider/schema drift distinct from tool execution failures.
 Runtime run responses and compact persisted status summaries also carry
 run-level duration as `duration_seconds`, giving dashboards a low-cardinality
 sort key before operators open full traces.

@@ -396,6 +396,7 @@ ready for SRE review.
   HTTP error, high request latency, slow agent runs, timeout, failed-run,
   slow runtime run, per-subject runtime failure alerting,
   per-subject runtime resume alerting, stale pending approval alerting,
+  runtime planner failure alerting,
   runtime tool failure/approval pressure, runtime tool execution timeout,
   trace persistence failure,
   rate-limit, concurrency saturation,

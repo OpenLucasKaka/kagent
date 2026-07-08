@@ -363,7 +363,7 @@ def test_prometheus_alert_rules_cover_service_and_agent_health():
     )
     assert "groups:" in rules
     assert "  - name: kagent.rules" in rules
-    assert alert_count == 31
+    assert alert_count == 32
     assert "kagentServiceDown" in rules
     assert "kagentHighErrorRate" in rules
     assert "kagentHighRequestLatency" in rules
@@ -381,6 +381,7 @@ def test_prometheus_alert_rules_cover_service_and_agent_health():
     assert "kagentRuntimeSubjectResumes" in rules
     assert "kagentRuntimeBudgetExhausted" in rules
     assert "kagentRuntimeProgressSinkFailures" in rules
+    assert "kagentRuntimePlannerFailures" in rules
     assert "kagentRuntimeToolExecutionFailures" in rules
     assert "kagentRuntimeToolApprovalPressure" in rules
     assert "kagentRuntimeToolExecutionTimeouts" in rules
