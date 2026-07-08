@@ -54,6 +54,7 @@ def test_npm_runner_checks_github_for_interactive_self_update():
 
     assert "https://raw.githubusercontent.com/OpenLucasKaka/Kagent/main/package.json" in runner
     assert "https://api.github.com/repos/OpenLucasKaka/Kagent/commits/main" in runner
+    assert "https://api.github.com/repos/OpenLucasKaka/Kagent/git/trees/" in runner
     assert "KAGENT_NO_SELF_UPDATE" in runner
     assert "process.stdin.isTTY" in runner
     assert "Update now? [Y/n]" in runner
@@ -61,7 +62,8 @@ def test_npm_runner_checks_github_for_interactive_self_update():
     assert "fs.readSync(0" not in runner
     assert '"npm", ["install", "-g", "github:OpenLucasKaka/kagent"]' in runner
     assert "selfUpdateStatePath" in runner
-    assert "latest.headSha !== state.remoteHeadSha" in runner
+    assert "sourceFingerprint" in runner
+    assert "localPackageFingerprint(root)" in runner
     assert 'prompted: "true"' in runner
     assert runner.index('prompted: "true"') < runner.index(
         "if (!(await promptForSelfUpdate"
@@ -95,34 +97,51 @@ def test_npm_runner_detects_same_version_github_commit_updates():
 
     script = """
 const { _internals } = require("./npm/lib/python-runner");
-if (!_internals.hasSelfUpdate(
+if (_internals.hasSelfUpdate(
   {version: "0.1.1", headSha: "new"},
   "0.1.1",
-  {remoteHeadSha: "old", remoteVersion: "0.1.1"}
+  {remoteHeadSha: "old", remoteVersion: "0.1.1"},
+  "same"
 )) {
-  throw new Error("new GitHub head should prompt even when version is unchanged");
+  throw new Error("same source fingerprint should not prompt even with old state");
+}
+if (!_internals.hasSelfUpdate(
+  {version: "0.1.1", headSha: "new", sourceFingerprint: "remote"},
+  "0.1.1",
+  {remoteHeadSha: "old", remoteVersion: "0.1.1"},
+  "local"
+)) {
+  throw new Error("changed source fingerprint should prompt when version is unchanged");
 }
 if (_internals.hasSelfUpdate(
   {version: "0.1.1", headSha: "same"},
   "0.1.1",
-  {remoteHeadSha: "same"}
+  {remoteHeadSha: "same"},
+  "same"
 )) {
   throw new Error("same GitHub head should not prompt");
 }
-if (_internals.hasSelfUpdate({version: "0.1.1", headSha: "latest"}, "0.1.1", {})) {
+if (_internals.hasSelfUpdate(
+  {version: "0.1.1", headSha: "latest"},
+  "0.1.1",
+  {},
+  "local"
+)) {
   throw new Error("same version without prior state should not prompt");
 }
 if (!_internals.hasSelfUpdate(
   {version: "0.1.2", headSha: "same"},
   "0.1.1",
-  {remoteHeadSha: "same"}
+  {remoteHeadSha: "same"},
+  "same"
 )) {
   throw new Error("newer package version should prompt");
 }
 if (_internals.hasSelfUpdate(
   {version: "0.1.2", headSha: "new"},
   "0.1.2",
-  {remoteHeadSha: "old", remoteVersion: "0.1.1"}
+  {remoteHeadSha: "old", remoteVersion: "0.1.1"},
+  "same"
 )) {
   throw new Error("old version state should not force a same-version prompt after package update");
 }
