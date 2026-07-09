@@ -6584,6 +6584,7 @@ def test_service_router_metrics_snapshot_includes_redacted_runtime_info(
     assert payload["trace_probe_file_permissions"] == "0600"
     assert payload["llm_provider"] == "unconfigured"
     assert payload["llm_base_url"] == ""
+    assert payload["llm_base_url_configured"] == "false"
     assert payload["llm_model"] == ""
     assert payload["llm_api_key_configured"] == "false"
     assert payload["llm_timeout_seconds"] == "30.0"

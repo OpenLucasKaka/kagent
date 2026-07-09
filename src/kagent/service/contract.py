@@ -2052,6 +2052,10 @@ def _llm_provider_audit_properties() -> Dict[str, Dict[str, Any]]:
         },
         "llm_provider_display_name": {"type": "string"},
         "llm_base_url": {"type": "string"},
+        "llm_base_url_configured": {
+            "type": "string",
+            "enum": ["true", "false"],
+        },
         "llm_model": {"type": "string"},
         "llm_api_key_configured": {
             "type": "string",

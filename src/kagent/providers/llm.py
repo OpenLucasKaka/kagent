@@ -100,10 +100,12 @@ class LLMProviderConfig:
             if self.base_url and self.model
             else "Unconfigured"
         )
+        base_url_configured = bool(self.base_url)
         return {
             "llm_provider": provider,
             "llm_provider_display_name": display_name,
-            "llm_base_url": self.base_url,
+            "llm_base_url": "configured" if base_url_configured else "",
+            "llm_base_url_configured": str(base_url_configured).lower(),
             "llm_model": self.model,
             "llm_api_key_configured": str(bool(self.api_key)).lower(),
             "llm_timeout_seconds": str(self.timeout_seconds),

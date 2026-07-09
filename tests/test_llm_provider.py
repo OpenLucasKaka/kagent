@@ -40,7 +40,8 @@ def test_provider_config_reads_openai_compatible_environment_without_exposing_ke
     assert config.redacted_snapshot() == {
         "llm_provider": "deepseek",
         "llm_provider_display_name": "DeepSeek",
-        "llm_base_url": "https://llm.example/v1",
+        "llm_base_url": "configured",
+        "llm_base_url_configured": "true",
         "llm_model": "agent-model",
         "llm_api_key_configured": "true",
         "llm_timeout_seconds": "12.5",
@@ -48,6 +49,7 @@ def test_provider_config_reads_openai_compatible_environment_without_exposing_ke
         "llm_retry_backoff_seconds": "0.25",
     }
     assert "redactme" not in str(config.redacted_snapshot())
+    assert "https://llm.example/v1" not in str(config.redacted_snapshot())
 
 
 def test_provider_config_defaults_to_unconfigured_runtime():
@@ -57,6 +59,7 @@ def test_provider_config_defaults_to_unconfigured_runtime():
         "llm_provider": "unconfigured",
         "llm_provider_display_name": "Unconfigured",
         "llm_base_url": "",
+        "llm_base_url_configured": "false",
         "llm_model": "",
         "llm_api_key_configured": "false",
         "llm_timeout_seconds": "30.0",

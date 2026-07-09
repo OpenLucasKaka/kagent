@@ -88,6 +88,7 @@ def test_service_status_reports_readiness_and_redacted_config(
         "llm_provider": "unconfigured",
         "llm_provider_display_name": "Unconfigured",
         "llm_base_url": "",
+        "llm_base_url_configured": "false",
         "llm_model": "",
         "llm_api_key_configured": "false",
         "llm_timeout_seconds": "30.0",

@@ -1512,12 +1512,13 @@ def test_cli_runtime_provider_config_redacts_secret_values():
 
     assert "kagent provider" in message
     assert "provider   Qwen" in message
-    assert "base_url   https://llm.example.test/v1" in message
+    assert "base_url   configured" in message
     assert "model      qwen3.5-122b-a10b" in message
     assert "api_key    configured" in message
     assert "timeout    45s" in message
     assert "retries    3" in message
     assert "sk-secret-value" not in message
+    assert "https://llm.example.test/v1" not in message
 
 
 def test_cli_prompt_toolkit_reader_wraps_long_lines():

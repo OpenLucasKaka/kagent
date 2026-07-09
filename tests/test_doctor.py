@@ -280,6 +280,9 @@ def test_doctor_payload_runtime_provider_gate_passes_when_provider_is_configured
     assert payload["status"] == "ready"
     assert payload["policy"]["status"] == "ok"
     assert payload["policy"]["failures"] == []
+    assert payload["config"]["llm_base_url"] == "configured"
+    assert payload["config"]["llm_base_url_configured"] == "true"
+    assert "https://llm.example.test/v1" not in str(payload)
 
 
 def test_doctor_module_require_auth_exits_nonzero_when_auth_is_missing():

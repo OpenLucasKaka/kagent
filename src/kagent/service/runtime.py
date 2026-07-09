@@ -1556,6 +1556,10 @@ def prometheus_metrics_text(snapshot: Mapping[str, Any]) -> str:
                 "Unconfigured",
             ),
             "llm_base_url": snapshot.get("llm_base_url", ""),
+            "llm_base_url_configured": snapshot.get(
+                "llm_base_url_configured",
+                "false",
+            ),
             "llm_model": snapshot.get("llm_model", ""),
             "llm_api_key_configured": snapshot.get("llm_api_key_configured", "false"),
             "llm_timeout_seconds": snapshot.get("llm_timeout_seconds", "0"),

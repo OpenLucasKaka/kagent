@@ -176,6 +176,7 @@ def test_service_config_endpoint_reports_redacted_runtime_config(monkeypatch, tm
         "llm_provider": "unconfigured",
         "llm_provider_display_name": "Unconfigured",
         "llm_base_url": "",
+        "llm_base_url_configured": "false",
         "llm_model": "",
         "llm_api_key_configured": "false",
         "llm_timeout_seconds": "30.0",
@@ -1431,7 +1432,9 @@ def test_service_prometheus_metrics_endpoint_reports_text_exposition(monkeypatch
     assert 'security_response_headers="enabled"' in payload
     assert 'llm_provider="openai_compatible"' in payload
     assert 'llm_provider_display_name="OpenAI-compatible"' in payload
-    assert 'llm_base_url="https://llm.example.test/v1"' in payload
+    assert 'llm_base_url="configured"' in payload
+    assert 'llm_base_url_configured="true"' in payload
+    assert "https://llm.example.test/v1" not in payload
     assert 'llm_model="agent-runtime-model"' in payload
     assert 'llm_api_key_configured="true"' in payload
     assert 'llm_timeout_seconds="12.5"' in payload
