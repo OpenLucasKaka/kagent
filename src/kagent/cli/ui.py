@@ -38,7 +38,7 @@ def runtime_prompt(*, color: bool = False) -> str:
     if not color:
         return "› "
     return (
-        "\001\033[48;5;236m\033[36m\002"
+        "\001\033[36m\002"
         "› "
         "\001\033[97m\002"
     )

@@ -1195,12 +1195,12 @@ def test_cli_interactive_runtime_accepts_next_input_while_run_is_active(
     assert calls[1].endswith("Current user message:\n第二个任务")
 
 
-def test_cli_colored_runtime_prompt_marks_ansi_as_readline_invisible():
+def test_cli_colored_runtime_prompt_uses_stable_single_line_prefix():
     from kagent.cli.ui import runtime_prompt, runtime_prompt_reset
 
     prompt = runtime_prompt(color=True)
 
-    assert "\001\033[48;5;236m" in prompt
+    assert "\033[48;" not in prompt
     assert "\033[36m\002› " in prompt
     assert "\033[0m" not in prompt
     assert runtime_prompt_reset(color=True) == "\033[0m"
@@ -1611,12 +1611,13 @@ def test_cli_prompt_toolkit_session_uses_persistent_history(
     assert created_sessions[0]["complete_while_typing"] is True
     assert created_sessions[0]["completer"] is not None
     assert created_sessions[0]["style"] is not None
-    assert "('', 'bg:#303030 #ffffff')" in str(created_sessions[0]["style"].style_rules)
+    style_rules = str(created_sessions[0]["style"].style_rules)
+    assert "bg:" not in style_rules
     assert "bottom-toolbar" not in str(created_sessions[0]["style"].style_rules)
     assert "input-bar.blank" not in str(created_sessions[0]["style"].style_rules)
     assert "input-bar.prompt" in str(created_sessions[0]["style"].style_rules)
     assert "input-bar.progress" not in str(created_sessions[0]["style"].style_rules)
-    assert "#303030" in str(created_sessions[0]["style"].style_rules)
+    assert "#303030" not in style_rules
     assert set(created_sessions[0]["completer"].words) == set(
         runtime_interactive_completion_words()
     )

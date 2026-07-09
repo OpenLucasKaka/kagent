@@ -355,9 +355,9 @@ def _prompt_toolkit_session_for_tty(prompt_stream: Any) -> Any:
         history=runtime_prompt_history(default_runtime_history_path()),
         style=Style.from_dict(
             {
-                "": "bg:#303030 #ffffff",
-                "input-bar": "bg:#303030 #ffffff",
-                "input-bar.prompt": "bg:#303030 ansicyan bold",
+                "": "#ffffff",
+                "input-bar": "#ffffff",
+                "input-bar.prompt": "ansicyan bold",
             }
         ),
     )
