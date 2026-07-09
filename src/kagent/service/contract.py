@@ -1666,6 +1666,16 @@ def service_openapi() -> Dict[str, Any]:
                             "schema": {"type": "string", "minLength": 1},
                         },
                         {
+                            "name": "llm_provider_retryable_reason",
+                            "in": "query",
+                            "required": False,
+                            "description": (
+                                "Filter persisted runtime runs whose compact "
+                                "llm_provider_request_retryable_reason matches this reason"
+                            ),
+                            "schema": {"type": "string", "minLength": 1},
+                        },
+                        {
                             "name": "iteration_budget_remaining",
                             "in": "query",
                             "required": False,
@@ -1959,6 +1969,16 @@ def service_openapi() -> Dict[str, Any]:
                             "description": (
                                 "Filter summary by compact "
                                 "llm_provider_request_http_status"
+                            ),
+                            "schema": {"type": "string", "minLength": 1},
+                        },
+                        {
+                            "name": "llm_provider_retryable_reason",
+                            "in": "query",
+                            "required": False,
+                            "description": (
+                                "Filter summary by compact "
+                                "llm_provider_request_retryable_reason"
                             ),
                             "schema": {"type": "string", "minLength": 1},
                         },

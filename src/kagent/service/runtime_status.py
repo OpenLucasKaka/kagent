@@ -1605,6 +1605,15 @@ def _runtime_list_filters(query: str) -> Dict[str, Any]:
     llm_provider_http_status = _single_query_value(values, "llm_provider_http_status")
     if llm_provider_http_status is not None and not llm_provider_http_status.strip():
         raise ValueError("llm_provider_http_status must be a non-empty string")
+    llm_provider_retryable_reason = _single_query_value(
+        values,
+        "llm_provider_retryable_reason",
+    )
+    if (
+        llm_provider_retryable_reason is not None
+        and not llm_provider_retryable_reason.strip()
+    ):
+        raise ValueError("llm_provider_retryable_reason must be a non-empty string")
     iteration_budget_remaining = _single_query_value(
         values,
         "iteration_budget_remaining",
@@ -1706,6 +1715,7 @@ def _runtime_list_filters(query: str) -> Dict[str, Any]:
         "llm_provider_status": llm_provider_status,
         "llm_provider_error_type": llm_provider_error_type,
         "llm_provider_http_status": llm_provider_http_status,
+        "llm_provider_retryable_reason": llm_provider_retryable_reason,
         "iteration_budget_remaining": iteration_budget_remaining,
         "artifact_kind": artifact_kind,
         "artifact_format": artifact_format,
@@ -1831,6 +1841,13 @@ def _runtime_summary_matches_filters(
     if (
         llm_provider_http_status is not None
         and summary.get("llm_provider_request_http_status") != llm_provider_http_status
+    ):
+        return False
+    llm_provider_retryable_reason = filters["llm_provider_retryable_reason"]
+    if (
+        llm_provider_retryable_reason is not None
+        and summary.get("llm_provider_request_retryable_reason")
+        != llm_provider_retryable_reason
     ):
         return False
     iteration_budget_remaining = filters["iteration_budget_remaining"]

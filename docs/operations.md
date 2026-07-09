@@ -714,7 +714,9 @@ defaults to `50`, is bounded to `1..100`, and is applied after filtering for
 	`latest_failed_action_id=fetch-site`, `latest_failed_tool=planner`,
 	`iteration_budget_remaining=0`,
 	`llm_provider_status=failed`, `llm_provider_error_type=http_error`,
-	`llm_provider_http_status=429`, `has_llm_provider_retries=true`,
+	`llm_provider_http_status=429`,
+	`llm_provider_retryable_reason=model_unloaded`,
+	`has_llm_provider_retries=true`,
 	`artifact_kind=report`,
 `artifact_format=markdown`, `artifact_tag=release`, `has_artifacts=true`, and
 `tag=internal-smoke`, `metadata_key=workflow`, `metadata_value=internal`,
@@ -741,10 +743,12 @@ and interactive sessions attach those labels to each submitted goal.
 	Use
 	`llm_provider_status=failed` to list runs whose latest provider request failed,
 	`llm_provider_error_type=http_error` or `llm_provider_http_status=429` to isolate
-	rate-limit and gateway clusters, and `has_llm_provider_retries=true` to find
-	runs that consumed retry budget before completing or failing. These filters use
-	redacted scalar diagnostics only and never expose prompts, headers, API keys,
-provider base URLs, or response bodies.
+	rate-limit and gateway clusters,
+	`llm_provider_retryable_reason=model_unloaded` to isolate provider model unload
+	events, and `has_llm_provider_retries=true` to find runs that consumed retry
+	budget before completing or failing. These filters use redacted scalar
+	diagnostics only and never expose prompts, headers, API keys, provider base
+	URLs, or response bodies.
 Use
 `has_errors=true` to find runs with observation-level
 `error_code_counts` or a run-level `error_code` before narrowing to a specific
@@ -861,9 +865,11 @@ the original provider answer that triggered the correction. Add
 	when an operations dashboard needs to aggregate only corrected runs.
 	The same summary endpoint aggregates provider diagnostics through
 	`llm_provider_request_status_counts`,
-	`llm_provider_request_error_type_counts`, and
-	`llm_provider_request_http_status_counts`; add
-	`llm_provider_status=failed`, `llm_provider_error_type=http_error`, or
+	`llm_provider_request_error_type_counts`,
+	`llm_provider_request_http_status_counts`, and
+	`llm_provider_request_retryable_reason_counts`; add
+	`llm_provider_status=failed`, `llm_provider_error_type=http_error`,
+	`llm_provider_retryable_reason=model_unloaded`, or
 	`has_llm_provider_retries=true` when a dashboard should focus on provider-side
 	instability instead of tool or policy failures.
 	Artifact-producing runs also
@@ -1009,9 +1015,9 @@ error-code breakdown, `invalid_plan` means planner JSON/schema drift and
 	retry pressure, status-code clusters, retryable reason clusters, and provider
 	latency without using high cardinality labels or exposing provider payloads.
 	For trace-backed incident review, use
-	`GET /runtime/runs?llm_provider_status=failed&limit=20` and
-	`GET /runtime/runs/summary?has_llm_provider_retries=true` to line up the same
-	provider symptoms with persisted run IDs.
+	`GET /runtime/runs?llm_provider_retryable_reason=model_unloaded&limit=20`
+	and `GET /runtime/runs/summary?llm_provider_retryable_reason=model_unloaded`
+	to line up the same provider symptoms with persisted run IDs.
 Use `kagent_runtime_run_duration_seconds_bucket`,
 `kagent_runtime_run_duration_seconds_count`, and
 `kagent_runtime_run_duration_seconds_sum` for percentile and SLO

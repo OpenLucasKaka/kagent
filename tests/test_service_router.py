@@ -3522,6 +3522,7 @@ def test_service_router_runtime_runs_list_filters_by_llm_provider_diagnostics(
                 "retry_count": "2",
                 "error_type": "http_error",
                 "http_status": "429",
+                "retryable_reason": "model_unloaded",
             },
         },
         str(tmp_path),
@@ -3540,6 +3541,23 @@ def test_service_router_runtime_runs_list_filters_by_llm_provider_diagnostics(
         },
         str(tmp_path),
     )
+    persist_trace(
+        {
+            "trace_type": "codex_runtime",
+            "run_id": "provider-other-retryable",
+            "status": "failed",
+            "goal": "plan launch backup",
+            "llm_provider_request": {
+                "status": "failed",
+                "attempt_count": "2",
+                "retry_count": "1",
+                "error_type": "http_error",
+                "http_status": "429",
+                "retryable_reason": "other",
+            },
+        },
+        str(tmp_path),
+    )
 
     status_code, payload = service_router.handle_request(
         "GET",
@@ -3547,6 +3565,7 @@ def test_service_router_runtime_runs_list_filters_by_llm_provider_diagnostics(
             "/runtime/runs?llm_provider_status=failed"
             "&llm_provider_error_type=http_error"
             "&llm_provider_http_status=429"
+            "&llm_provider_retryable_reason=model_unloaded"
             "&has_llm_provider_retries=true&limit=10"
         ),
         b"",
@@ -3561,6 +3580,10 @@ def test_service_router_runtime_runs_list_filters_by_llm_provider_diagnostics(
     assert payload["runs"][0]["llm_provider_request_retry_count"] == "2"
     assert payload["runs"][0]["llm_provider_request_error_type"] == "http_error"
     assert payload["runs"][0]["llm_provider_request_http_status"] == "429"
+    assert (
+        payload["runs"][0]["llm_provider_request_retryable_reason"]
+        == "model_unloaded"
+    )
 
 
 def test_service_router_runtime_runs_summary_filters_by_llm_provider_diagnostics(
@@ -3578,6 +3601,7 @@ def test_service_router_runtime_runs_summary_filters_by_llm_provider_diagnostics
                 "retry_count": "2",
                 "error_type": "http_error",
                 "http_status": "429",
+                "retryable_reason": "model_unloaded",
             },
         },
         str(tmp_path),
@@ -3597,12 +3621,30 @@ def test_service_router_runtime_runs_summary_filters_by_llm_provider_diagnostics
         },
         str(tmp_path),
     )
+    persist_trace(
+        {
+            "trace_type": "codex_runtime",
+            "run_id": "provider-other-retryable",
+            "status": "failed",
+            "goal": "plan launch backup",
+            "llm_provider_request": {
+                "status": "failed",
+                "attempt_count": "2",
+                "retry_count": "1",
+                "error_type": "http_error",
+                "http_status": "429",
+                "retryable_reason": "other",
+            },
+        },
+        str(tmp_path),
+    )
 
     status_code, payload = service_router.handle_request(
         "GET",
         (
             "/runtime/runs/summary?llm_provider_status=failed"
             "&llm_provider_error_type=http_error"
+            "&llm_provider_retryable_reason=model_unloaded"
             "&has_llm_provider_retries=true"
         ),
         b"",
@@ -3617,6 +3659,9 @@ def test_service_router_runtime_runs_summary_filters_by_llm_provider_diagnostics
     assert payload["llm_provider_request_status_counts"] == {"failed": "1"}
     assert payload["llm_provider_request_error_type_counts"] == {"http_error": "1"}
     assert payload["llm_provider_request_http_status_counts"] == {"429": "1"}
+    assert payload["llm_provider_request_retryable_reason_counts"] == {
+        "model_unloaded": "1"
+    }
 
 
 def test_service_router_runtime_approvals_lists_pending_actions_without_inputs(tmp_path):
@@ -5594,6 +5639,7 @@ def test_service_router_runtime_runs_list_rejects_invalid_llm_provider_filters(
         ("llm_provider_status=", "llm_provider_status"),
         ("llm_provider_error_type=", "llm_provider_error_type"),
         ("llm_provider_http_status=", "llm_provider_http_status"),
+        ("llm_provider_retryable_reason=", "llm_provider_retryable_reason"),
         ("has_llm_provider_retries=yes", "has_llm_provider_retries"),
     ]:
         status_code, payload = service_router.handle_request(

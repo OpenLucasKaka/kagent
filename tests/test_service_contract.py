@@ -398,6 +398,16 @@ def test_service_contract_documents_named_success_schemas():
             "schema": {"type": "string", "minLength": 1},
         },
         {
+            "name": "llm_provider_retryable_reason",
+            "in": "query",
+            "required": False,
+            "description": (
+                "Filter persisted runtime runs whose compact "
+                "llm_provider_request_retryable_reason matches this reason"
+            ),
+            "schema": {"type": "string", "minLength": 1},
+        },
+        {
             "name": "iteration_budget_remaining",
             "in": "query",
             "required": False,
@@ -598,6 +608,13 @@ def test_service_contract_documents_named_success_schemas():
             "schema": {"type": "string", "minLength": 1},
         },
     ]
+    runtime_summary_parameter_names = [
+        parameter["name"]
+        for parameter in payload["paths"]["/runtime/runs/summary"]["get"][
+            "parameters"
+        ]
+    ]
+    assert "llm_provider_retryable_reason" in runtime_summary_parameter_names
     assert schemas["RunRequest"]["properties"]["goal"]["maxLength"] == 4096
     assert "disabled by default" in schemas["RunRequest"]["properties"]["full_trace"][
         "description"
