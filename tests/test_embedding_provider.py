@@ -29,7 +29,8 @@ def test_embedding_provider_config_reads_env_with_llm_fallback_without_key_leak(
     assert config.retry_backoff_seconds == 0.75
     assert config.redacted_snapshot() == {
         "embedding_provider": "openai_compatible",
-        "embedding_base_url": "https://llm.example/v1",
+        "embedding_base_url": "configured",
+        "embedding_base_url_configured": "true",
         "embedding_model": "text-embedding-model",
         "embedding_api_key_configured": "true",
         "embedding_timeout_seconds": "9.5",
@@ -37,6 +38,7 @@ def test_embedding_provider_config_reads_env_with_llm_fallback_without_key_leak(
         "embedding_retry_backoff_seconds": "0.75",
     }
     assert "llm-key" not in str(config.redacted_snapshot())
+    assert "https://llm.example/v1" not in str(config.redacted_snapshot())
 
 
 def test_embedding_provider_posts_openai_compatible_embedding_request():

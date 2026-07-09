@@ -2067,6 +2067,28 @@ def _llm_provider_audit_properties() -> Dict[str, Dict[str, Any]]:
     }
 
 
+def _embedding_provider_audit_properties() -> Dict[str, Dict[str, Any]]:
+    return {
+        "embedding_provider": {
+            "type": "string",
+            "enum": ["openai_compatible", "unconfigured"],
+        },
+        "embedding_base_url": {"type": "string"},
+        "embedding_base_url_configured": {
+            "type": "string",
+            "enum": ["true", "false"],
+        },
+        "embedding_model": {"type": "string"},
+        "embedding_api_key_configured": {
+            "type": "string",
+            "enum": ["true", "false"],
+        },
+        "embedding_timeout_seconds": {"type": "string"},
+        "embedding_max_retries": {"type": "string"},
+        "embedding_retry_backoff_seconds": {"type": "string"},
+    }
+
+
 def _diagnostic_audit_properties() -> Dict[str, Dict[str, Any]]:
     properties: Dict[str, Dict[str, Any]] = {
         "auth_subject_count": {"type": "string"},
@@ -2077,6 +2099,7 @@ def _diagnostic_audit_properties() -> Dict[str, Dict[str, Any]]:
         "runtime_pending_approval_stale_seconds": {"type": "string"},
     }
     properties.update(_trace_permission_policy_properties())
+    properties.update(_embedding_provider_audit_properties())
     properties.update(_llm_provider_audit_properties())
     return properties
 

@@ -53,9 +53,11 @@ class EmbeddingProviderConfig:
 
     def redacted_snapshot(self) -> Dict[str, str]:
         provider = "openai_compatible" if self.base_url and self.model else "unconfigured"
+        base_url_configured = bool(self.base_url)
         return {
             "embedding_provider": provider,
-            "embedding_base_url": self.base_url,
+            "embedding_base_url": "configured" if base_url_configured else "",
+            "embedding_base_url_configured": str(base_url_configured).lower(),
             "embedding_model": self.model,
             "embedding_api_key_configured": str(bool(self.api_key)).lower(),
             "embedding_timeout_seconds": str(self.timeout_seconds),

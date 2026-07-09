@@ -1550,6 +1550,23 @@ def prometheus_metrics_text(snapshot: Mapping[str, Any]) -> str:
                 "trace_probe_file_permissions",
                 "",
             ),
+            "embedding_provider": snapshot.get("embedding_provider", "unconfigured"),
+            "embedding_base_url": snapshot.get("embedding_base_url", ""),
+            "embedding_base_url_configured": snapshot.get(
+                "embedding_base_url_configured",
+                "false",
+            ),
+            "embedding_model": snapshot.get("embedding_model", ""),
+            "embedding_api_key_configured": snapshot.get(
+                "embedding_api_key_configured",
+                "false",
+            ),
+            "embedding_timeout_seconds": snapshot.get("embedding_timeout_seconds", "0"),
+            "embedding_max_retries": snapshot.get("embedding_max_retries", "0"),
+            "embedding_retry_backoff_seconds": snapshot.get(
+                "embedding_retry_backoff_seconds",
+                "0",
+            ),
             "llm_provider": snapshot.get("llm_provider", "unconfigured"),
             "llm_provider_display_name": snapshot.get(
                 "llm_provider_display_name",

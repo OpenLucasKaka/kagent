@@ -165,6 +165,7 @@ def test_service_config_endpoint_reports_redacted_runtime_config(monkeypatch, tm
         "external_backend_timeout_seconds": "2.0",
         "embedding_provider": "unconfigured",
         "embedding_base_url": "",
+        "embedding_base_url_configured": "false",
         "embedding_model": "",
         "embedding_api_key_configured": "false",
         "embedding_timeout_seconds": "30.0",
@@ -1430,6 +1431,11 @@ def test_service_prometheus_metrics_endpoint_reports_text_exposition(monkeypatch
         in payload
     )
     assert 'security_response_headers="enabled"' in payload
+    assert 'embedding_provider="unconfigured"' in payload
+    assert 'embedding_base_url=""' in payload
+    assert 'embedding_base_url_configured="false"' in payload
+    assert 'embedding_model=""' in payload
+    assert 'embedding_api_key_configured="false"' in payload
     assert 'llm_provider="openai_compatible"' in payload
     assert 'llm_provider_display_name="OpenAI-compatible"' in payload
     assert 'llm_base_url="configured"' in payload

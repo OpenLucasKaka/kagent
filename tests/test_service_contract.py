@@ -1506,6 +1506,36 @@ def test_service_contract_documents_llm_provider_audit_fields():
             assert schema_properties[property_name] == expected_schema
 
 
+def test_service_contract_documents_embedding_provider_audit_fields():
+    payload = service_openapi()
+    schemas = payload["components"]["schemas"]
+    expected_properties = {
+        "embedding_provider": {
+            "type": "string",
+            "enum": ["openai_compatible", "unconfigured"],
+        },
+        "embedding_base_url": {"type": "string"},
+        "embedding_base_url_configured": {
+            "type": "string",
+            "enum": ["true", "false"],
+        },
+        "embedding_model": {"type": "string"},
+        "embedding_api_key_configured": {
+            "type": "string",
+            "enum": ["true", "false"],
+        },
+        "embedding_timeout_seconds": {"type": "string"},
+        "embedding_max_retries": {"type": "string"},
+        "embedding_retry_backoff_seconds": {"type": "string"},
+    }
+
+    for schema_name in ["ConfigResponse", "MetricsResponse"]:
+        schema_properties = schemas[schema_name]["properties"]
+
+        for property_name, expected_schema in expected_properties.items():
+            assert schema_properties[property_name] == expected_schema
+
+
 def test_service_contract_documents_structured_readiness_failed_checks():
     payload = service_openapi()
     readiness_schema = payload["components"]["schemas"]["ReadinessResponse"]
