@@ -1521,6 +1521,33 @@ def test_cli_runtime_provider_config_redacts_secret_values():
     assert "https://llm.example.test/v1" not in message
 
 
+def test_cli_runtime_pending_approval_detail_is_user_facing_not_raw_json():
+    from kagent.cli.ui import format_runtime_pending_approval_detail
+
+    message = format_runtime_pending_approval_detail(
+        {
+            "id": "step-2",
+            "tool": "open_url",
+            "input": {"url": "https://github.com"},
+            "reason": "用户请求打开 GitHub。",
+        }
+    )
+
+    assert message == "\n".join(
+        [
+            "Approval detail",
+            "  action  Open URL",
+            "  target  https://github.com",
+            "  reason  用户请求打开 GitHub。",
+            "  reply   y approve, n skip",
+        ]
+    )
+    assert '"tool"' not in message
+    assert "open_url" not in message
+    assert "step-2" not in message
+    assert '"input"' not in message
+
+
 def test_cli_prompt_toolkit_reader_wraps_long_lines():
     from kagent.cli.interactive import (
         _PromptToolkitLineReader,
@@ -3610,9 +3637,13 @@ def test_cli_interactive_runtime_can_show_approval_detail_before_approve(
     assert len(calls) == 2
     assert calls[1]["approved_action_ids"] == {"step-2"}
     assert "Approval detail" in captured.out
-    assert '"id": "step-2"' in captured.out
-    assert '"tool": "open_url"' in captured.out
-    assert '"url": "https://github.com"' in captured.out
+    assert "action  Open URL" in captured.out
+    assert "target  https://github.com" in captured.out
+    assert "reason  open requested site" in captured.out
+    assert "reply   y approve, n skip" in captured.out
+    assert '"id": "step-2"' not in captured.out
+    assert '"tool": "open_url"' not in captured.out
+    assert '"url": "https://github.com"' not in captured.out
     assert captured.out.count("Approve this action? [y/N/d]") == 2
 
 

@@ -10,7 +10,7 @@ from typing import Any
 
 from kagent.cli.commands import runtime_interactive_commands
 from kagent.cli.memory import RuntimeSessionMemory, coerce_runtime_session_memory
-from kagent.utils.json_output import format_and_write_json, json_ready
+from kagent.utils.json_output import json_ready
 
 
 def runtime_ui_color_enabled() -> bool:
@@ -277,7 +277,8 @@ def format_runtime_pending_approval_detail(pending: dict) -> str:
     return "\n".join(
         [
             "Approval detail",
-            format_and_write_json(json_ready(pending), ""),
+            *_indented_lines(_format_pending_approval(pending), prefix="  "),
+            "  reply   y approve, n skip",
         ]
     )
 
