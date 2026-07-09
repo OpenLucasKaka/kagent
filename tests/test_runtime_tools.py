@@ -27,7 +27,7 @@ def test_note_tool_returns_structured_observation():
     assert observation.output == {"text": "remember this"}
 
 
-def test_workspace_tools_write_read_list_and_search_virtual_assets(
+def test_workspace_tools_write_read_list_search_and_history_virtual_assets(
     tmp_path,
     monkeypatch,
 ):
@@ -62,6 +62,22 @@ def test_workspace_tools_write_read_list_and_search_virtual_assets(
         {"kind": "reports", "query": "ready", "max_depth": 2},
         action_id="step-4",
     )
+    execute_runtime_tool(
+        default_runtime_tools(),
+        "workspace_write",
+        {
+            "kind": "reports",
+            "path": "pilot/summary.md",
+            "content": "# Summary\n\nready v2\n",
+        },
+        action_id="step-5",
+    )
+    history = execute_runtime_tool(
+        default_runtime_tools(),
+        "workspace_history",
+        {"kind": "reports", "path": "pilot/summary.md"},
+        action_id="step-6",
+    )
 
     assert written.status == "ok"
     assert written.output["kind"] == "reports"
@@ -75,6 +91,9 @@ def test_workspace_tools_write_read_list_and_search_virtual_assets(
     assert searched.status == "ok"
     assert searched.output["matches"][0]["path"] == "pilot/summary.md"
     assert searched.output["matches"][0]["line"] == "ready"
+    assert history.status == "ok"
+    assert history.output["revision_count"] == 1
+    assert history.output["revisions"][0]["content"] == "# Summary\n\nready\n"
 
 
 def test_workspace_tools_reject_virtual_directory_escape(tmp_path, monkeypatch):
@@ -1544,6 +1563,7 @@ def test_registered_runtime_tool_metadata_includes_input_schemas():
         "task_list",
         "task_transition",
         "transform_text",
+        "workspace_history",
         "workspace_list",
         "workspace_read",
         "workspace_search",
@@ -1594,6 +1614,8 @@ def test_registered_runtime_tool_metadata_includes_input_schemas():
         "updated_at",
         "metadata",
     ]
+    assert by_name["workspace_history"]["approval_required_by_default"] == "false"
+    assert by_name["workspace_history"]["input_schema"]["required"] == ["kind", "path"]
     assert by_name["workspace_read"]["approval_required_by_default"] == "false"
     assert by_name["workspace_read"]["input_schema"]["required"] == ["kind", "path"]
     assert by_name["workspace_list"]["approval_required_by_default"] == "false"
@@ -2382,6 +2404,10 @@ def test_default_policy_allows_workspace_read_tools():
     )
     assert (
         policy.authorize("workspace_read", {"kind": "reports", "path": "x.md"}).status
+        == "allowed"
+    )
+    assert (
+        policy.authorize("workspace_history", {"kind": "reports", "path": "x.md"}).status
         == "allowed"
     )
     assert policy.authorize("workspace_list", {"kind": "reports"}).status == "allowed"

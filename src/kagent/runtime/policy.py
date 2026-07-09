@@ -34,6 +34,7 @@ class RuntimePolicy:
                 "task_list",
                 "task_transition",
                 "transform_text",
+                "workspace_history",
                 "workspace_list",
                 "workspace_read",
                 "workspace_search",

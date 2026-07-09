@@ -135,7 +135,8 @@ The service reads these environment variables:
   `workspace`, `reports`, `logs`, `policies`, and `memories` directories.
   Use this for production deployments that need agent-generated reports,
   policy snapshots, logs, or memory assets to survive process restarts and be
-  searchable through the bounded `workspace_search` runtime tool.
+  searchable through `workspace_search`; overwritten assets keep previous
+  versions available through the bounded `workspace_history` runtime tool.
 - `KAGENT_REDIS_URL`: optional `redis://` endpoint for short-term memory.
   When set, `/ready` sends a real Redis `PING`, `/config` reports
   `redis_short_term_memory=enabled` without exposing the URL, and the runtime

@@ -135,6 +135,24 @@ def test_runtime_workspace_searches_text_assets_with_bounded_results(tmp_path):
     ]
 
 
+def test_runtime_workspace_preserves_previous_versions_on_overwrite(tmp_path):
+    workspace = RuntimeWorkspace(tmp_path / "runtime-workspace")
+    first = workspace.write_text("reports", "pilot/summary.md", "v1\n")
+    second = workspace.write_text("reports", "pilot/summary.md", "v2\n")
+
+    history = workspace.history("reports", "pilot/summary.md")
+
+    assert second["sha256"] != first["sha256"]
+    assert history["kind"] == "reports"
+    assert history["path"] == "pilot/summary.md"
+    assert history["revision_count"] == 1
+    assert history["revisions"][0]["sha256"] == first["sha256"]
+    assert history["revisions"][0]["bytes"] == 3
+    assert history["revisions"][0]["content"] == "v1\n"
+    assert history["revisions"][0]["revision_id"]
+    assert history["truncated"] is False
+
+
 def test_runtime_workspace_rejects_unknown_kind(tmp_path):
     workspace = RuntimeWorkspace(tmp_path / "runtime-workspace")
 

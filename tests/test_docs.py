@@ -66,6 +66,8 @@ def test_architecture_document_names_runtime_and_operational_boundaries():
     assert "artifact" in architecture
     assert "decision_matrix" in architecture
     assert "workspace_search" in architecture
+    assert "workspace_history" in architecture
+    assert "overwrite history" in architecture
     assert "virtual-workspace asset creation" in architecture
     assert "list_files" in architecture
     assert "symlink entries" in architecture

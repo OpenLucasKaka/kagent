@@ -516,6 +516,43 @@ _WORKSPACE_SEARCH_OUTPUT_SCHEMA = {
     "additionalProperties": False,
 }
 
+_WORKSPACE_HISTORY_REVISION_OUTPUT_SCHEMA = {
+    "type": "object",
+    "required": [
+        "revision_id",
+        "bytes",
+        "sha256",
+        "created_at",
+        "content",
+        "content_truncated",
+    ],
+    "properties": {
+        "revision_id": {"type": "string"},
+        "bytes": {"type": "number", "minimum": 0},
+        "sha256": {"type": "string"},
+        "created_at": {"type": "string"},
+        "content": {"type": "string"},
+        "content_truncated": {"type": "boolean"},
+    },
+    "additionalProperties": False,
+}
+
+_WORKSPACE_HISTORY_OUTPUT_SCHEMA = {
+    "type": "object",
+    "required": ["kind", "path", "revisions", "revision_count", "truncated"],
+    "properties": {
+        "kind": {"type": "string", "enum": list(VIRTUAL_WORKSPACE_KINDS)},
+        "path": {"type": "string"},
+        "revisions": {
+            "type": "array",
+            "items": _WORKSPACE_HISTORY_REVISION_OUTPUT_SCHEMA,
+        },
+        "revision_count": {"type": "number", "minimum": 0},
+        "truncated": {"type": "boolean"},
+    },
+    "additionalProperties": False,
+}
+
 _MEMORY_PUT_OUTPUT_SCHEMA = {
     "type": "object",
     "required": ["backend", "namespace", "key", "stored", "ttl_seconds"],
@@ -1050,6 +1087,36 @@ def default_runtime_tools(
                 "additionalProperties": False,
             },
             output_schema=_WORKSPACE_READ_OUTPUT_SCHEMA,
+        ),
+        "workspace_history": RuntimeToolSpec(
+            name="workspace_history",
+            description=(
+                "Read previous versions saved before overwriting a UTF-8 text "
+                "asset in the runtime virtual workspace."
+            ),
+            handler=lambda payload: _workspace_history(
+                payload,
+                runtime_workspace_dir=runtime_workspace_dir,
+            ),
+            input_schema={
+                "type": "object",
+                "required": ["kind", "path"],
+                "properties": {
+                    "kind": {
+                        "type": "string",
+                        "enum": list(VIRTUAL_WORKSPACE_KINDS),
+                    },
+                    "path": {"type": "string", "minLength": 1, "maxLength": 2048},
+                    "limit": {"type": "number", "minimum": 1, "maximum": 50},
+                    "max_bytes": {
+                        "type": "number",
+                        "minimum": 1,
+                        "maximum": _READ_FILE_MAX_BYTES,
+                    },
+                },
+                "additionalProperties": False,
+            },
+            output_schema=_WORKSPACE_HISTORY_OUTPUT_SCHEMA,
         ),
         "workspace_list": RuntimeToolSpec(
             name="workspace_list",
@@ -1743,6 +1810,25 @@ def _workspace_list(
         relative_path.strip(),
         max_depth=int(input_payload.get("max_depth", _LIST_FILES_MAX_DEPTH)),
         limit=int(input_payload.get("limit", _LIST_FILES_MAX_ENTRIES)),
+    )
+
+
+def _workspace_history(
+    input_payload: Dict[str, Any],
+    *,
+    runtime_workspace_dir: str = "",
+) -> Dict[str, Any]:
+    kind = input_payload.get("kind")
+    relative_path = input_payload.get("path")
+    if not isinstance(kind, str):
+        raise ValueError("kind must be a string")
+    if not isinstance(relative_path, str) or not relative_path.strip():
+        raise ValueError("path must be a non-empty string")
+    return _runtime_workspace(runtime_workspace_dir).history(
+        kind,
+        relative_path.strip(),
+        limit=int(input_payload.get("limit", 20)),
+        max_bytes=int(input_payload.get("max_bytes", _READ_FILE_MAX_BYTES)),
     )
 
 

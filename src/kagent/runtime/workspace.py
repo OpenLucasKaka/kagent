@@ -8,6 +8,7 @@ from pathlib import Path, PurePath
 from typing import Any, Dict
 
 VIRTUAL_WORKSPACE_KINDS = ("workspace", "reports", "logs", "policies", "memories")
+_VERSION_DIRECTORY_NAME = ".versions"
 _OWNER_ONLY_DIRECTORY_MODE = 0o700
 _OWNER_ONLY_FILE_MODE = 0o600
 _DEFAULT_MAX_READ_BYTES = 65536
@@ -23,10 +24,16 @@ class RuntimeWorkspace:
         root = self.root
         root.mkdir(parents=True, exist_ok=True)
         root.chmod(_OWNER_ONLY_DIRECTORY_MODE)
+        versions = root / _VERSION_DIRECTORY_NAME
+        versions.mkdir(parents=True, exist_ok=True)
+        versions.chmod(_OWNER_ONLY_DIRECTORY_MODE)
         for kind in VIRTUAL_WORKSPACE_KINDS:
             directory = root / kind
             directory.mkdir(parents=True, exist_ok=True)
             directory.chmod(_OWNER_ONLY_DIRECTORY_MODE)
+            version_directory = versions / kind
+            version_directory.mkdir(parents=True, exist_ok=True)
+            version_directory.chmod(_OWNER_ONLY_DIRECTORY_MODE)
         return {
             "root": str(root),
             "kinds": list(VIRTUAL_WORKSPACE_KINDS),
@@ -62,6 +69,8 @@ class RuntimeWorkspace:
         target.parent.mkdir(parents=True, exist_ok=True)
         _chmod_created_directories(self._kind_directory(kind), target.parent)
         _reject_symlink_traversal(self._kind_directory(kind), target)
+        if target.exists():
+            self._record_revision(kind, target)
         encoded = content.encode("utf-8")
         _write_owner_only_text_file(target, content)
         return _asset_metadata(
@@ -137,6 +146,57 @@ class RuntimeWorkspace:
             "truncated": truncated,
         }
 
+    def history(
+        self,
+        kind: str,
+        relative_path: str | Path,
+        *,
+        limit: int = 20,
+        max_bytes: int = _DEFAULT_MAX_READ_BYTES,
+    ) -> Dict[str, Any]:
+        if limit < 1:
+            raise ValueError("limit must be positive")
+        if max_bytes < 1:
+            raise ValueError("max_bytes must be positive")
+        self.ensure_layout()
+        target = self.resolve(kind, relative_path)
+        revision_directory = self._revision_directory(kind, target)
+        revisions = []
+        truncated = False
+        if revision_directory.exists():
+            files = sorted(
+                (
+                    path
+                    for path in revision_directory.iterdir()
+                    if path.is_file() and not path.is_symlink()
+                ),
+                key=lambda item: item.name,
+            )
+            for path in files:
+                if len(revisions) >= limit:
+                    truncated = True
+                    break
+                body = path.read_bytes()
+                visible = body[:max_bytes]
+                stat_result = path.stat()
+                revisions.append(
+                    {
+                        "revision_id": path.stem,
+                        "bytes": len(body),
+                        "sha256": hashlib.sha256(body).hexdigest(),
+                        "created_at": _timestamp(stat_result.st_mtime),
+                        "content": visible.decode("utf-8", errors="replace"),
+                        "content_truncated": len(body) > max_bytes,
+                    }
+                )
+        return {
+            "kind": kind,
+            "path": _relative_asset_path(self._kind_directory(kind), target),
+            "revisions": revisions,
+            "revision_count": len(revisions),
+            "truncated": truncated,
+        }
+
     def search(
         self,
         kind: str,
@@ -206,6 +266,30 @@ class RuntimeWorkspace:
         if kind not in VIRTUAL_WORKSPACE_KINDS:
             raise ValueError("unknown virtual directory kind")
         return self.root / kind
+
+    def _revision_directory(self, kind: str, target: Path) -> Path:
+        relative = target.relative_to(self._kind_directory(kind))
+        directory = self.root / _VERSION_DIRECTORY_NAME / kind
+        for part in relative.parts:
+            directory = directory / part
+        return directory
+
+    def _record_revision(self, kind: str, target: Path) -> None:
+        if target.is_symlink():
+            raise ValueError("path must not traverse symlinks")
+        body = target.read_bytes()
+        revision_directory = self._revision_directory(kind, target)
+        revision_directory.mkdir(parents=True, exist_ok=True)
+        _chmod_created_directories(self.root / _VERSION_DIRECTORY_NAME / kind, revision_directory)
+        revision_id = (
+            datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ")
+            + "-"
+            + hashlib.sha256(body).hexdigest()[:12]
+        )
+        _write_owner_only_text_file(
+            revision_directory / f"{revision_id}.txt",
+            body.decode("utf-8", errors="replace"),
+        )
 
 
 def _safe_relative_parts(relative_path: str | Path) -> tuple[str, ...]:
