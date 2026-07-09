@@ -96,6 +96,8 @@ class RuntimeGraphState(TypedDict, total=False):
     embedding_api_key: str
     embedding_model: str
     embedding_timeout_seconds: float
+    embedding_max_retries: int
+    embedding_retry_backoff_seconds: float
     external_backend_timeout_seconds: float
     stream_answers: bool
     result: Dict[str, Any]
@@ -180,6 +182,8 @@ def run_runtime_agent(
     embedding_api_key: str = "",
     embedding_model: str = "",
     embedding_timeout_seconds: float = 30.0,
+    embedding_max_retries: int = 2,
+    embedding_retry_backoff_seconds: float = 0.25,
     external_backend_timeout_seconds: float = 2.0,
     stream_answers: bool = False,
 ) -> Dict[str, Any]:
@@ -195,6 +199,8 @@ def run_runtime_agent(
         "embedding_api_key": embedding_api_key,
         "embedding_model": embedding_model,
         "embedding_timeout_seconds": embedding_timeout_seconds,
+        "embedding_max_retries": embedding_max_retries,
+        "embedding_retry_backoff_seconds": embedding_retry_backoff_seconds,
         "external_backend_timeout_seconds": external_backend_timeout_seconds,
         "stream_answers": stream_answers,
     }
@@ -255,6 +261,11 @@ def _runtime_loop_graph_node(state: RuntimeGraphState) -> RuntimeGraphState:
         embedding_api_key=state.get("embedding_api_key", ""),
         embedding_model=state.get("embedding_model", ""),
         embedding_timeout_seconds=state.get("embedding_timeout_seconds", 30.0),
+        embedding_max_retries=state.get("embedding_max_retries", 2),
+        embedding_retry_backoff_seconds=state.get(
+            "embedding_retry_backoff_seconds",
+            0.25,
+        ),
         external_backend_timeout_seconds=state.get(
             "external_backend_timeout_seconds",
             2.0,
@@ -323,6 +334,8 @@ def _run_runtime_agent_loop(
     embedding_api_key: str = "",
     embedding_model: str = "",
     embedding_timeout_seconds: float = 30.0,
+    embedding_max_retries: int = 2,
+    embedding_retry_backoff_seconds: float = 0.25,
     external_backend_timeout_seconds: float = 2.0,
     stream_answers: bool = False,
 ) -> Dict[str, Any]:
@@ -353,6 +366,8 @@ def _run_runtime_agent_loop(
                 embedding_api_key=embedding_api_key,
                 embedding_model=embedding_model,
                 embedding_timeout_seconds=embedding_timeout_seconds,
+                embedding_max_retries=embedding_max_retries,
+                embedding_retry_backoff_seconds=embedding_retry_backoff_seconds,
                 external_backend_timeout_seconds=external_backend_timeout_seconds,
                 include_delegate_tool=False,
             ),
@@ -366,6 +381,8 @@ def _run_runtime_agent_loop(
             embedding_api_key=embedding_api_key,
             embedding_model=embedding_model,
             embedding_timeout_seconds=embedding_timeout_seconds,
+            embedding_max_retries=embedding_max_retries,
+            embedding_retry_backoff_seconds=embedding_retry_backoff_seconds,
             external_backend_timeout_seconds=external_backend_timeout_seconds,
         )
 
@@ -377,6 +394,8 @@ def _run_runtime_agent_loop(
         embedding_api_key=embedding_api_key,
         embedding_model=embedding_model,
         embedding_timeout_seconds=embedding_timeout_seconds,
+        embedding_max_retries=embedding_max_retries,
+        embedding_retry_backoff_seconds=embedding_retry_backoff_seconds,
         external_backend_timeout_seconds=external_backend_timeout_seconds,
         delegate_runner=delegate_child,
     )

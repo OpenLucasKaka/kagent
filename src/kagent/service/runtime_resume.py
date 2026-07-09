@@ -153,6 +153,10 @@ def execute_runtime_resume_request(
                 embedding_api_key=service_config.embedding_api_key,
                 embedding_model=service_config.embedding_model,
                 embedding_timeout_seconds=service_config.embedding_timeout_seconds,
+                embedding_max_retries=service_config.embedding_max_retries,
+                embedding_retry_backoff_seconds=(
+                    service_config.embedding_retry_backoff_seconds
+                ),
                 external_backend_timeout_seconds=(
                     service_config.external_backend_timeout_seconds
                 ),

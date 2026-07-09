@@ -25,6 +25,8 @@ from kagent.service import (
 from kagent.service import cli as service_module
 from kagent.service import router as service_router
 from kagent.service import runtime as service_runtime
+from kagent.service import runtime_resume as service_runtime_resume
+from kagent.service import runtime_run as service_runtime_run
 from kagent.service import safety as service_safety
 from kagent.service.trace_store import persist_trace
 
@@ -158,15 +160,17 @@ def test_service_config_endpoint_reports_redacted_runtime_config(monkeypatch, tm
         "runtime_workspace_kinds": "workspace,reports,logs,policies,memories",
         "redis_short_term_memory": "disabled",
         "milvus_long_term_memory": "disabled",
-            "kafka_audit_sink": "disabled",
-            "kafka_audit_topic_configured": "false",
-            "external_backend_timeout_seconds": "2.0",
-            "embedding_provider": "unconfigured",
-            "embedding_base_url": "",
-            "embedding_model": "",
-            "embedding_api_key_configured": "false",
-            "embedding_timeout_seconds": "30.0",
-            "trace_directory_permissions": "0700",
+        "kafka_audit_sink": "disabled",
+        "kafka_audit_topic_configured": "false",
+        "external_backend_timeout_seconds": "2.0",
+        "embedding_provider": "unconfigured",
+        "embedding_base_url": "",
+        "embedding_model": "",
+        "embedding_api_key_configured": "false",
+        "embedding_timeout_seconds": "30.0",
+        "embedding_max_retries": "2",
+        "embedding_retry_backoff_seconds": "0.25",
+        "trace_directory_permissions": "0700",
         "trace_file_permissions": "0600",
         "trace_probe_file_permissions": "0600",
         "llm_provider": "unconfigured",
@@ -2024,6 +2028,8 @@ def test_service_config_reads_environment_defaults():
             "KAGENT_EMBEDDING_API_KEY": "embedding-key",
             "KAGENT_EMBEDDING_MODEL": "text-embedding-model",
             "KAGENT_EMBEDDING_TIMEOUT_SECONDS": "6.5",
+            "KAGENT_EMBEDDING_MAX_RETRIES": "4",
+            "KAGENT_EMBEDDING_RETRY_BACKOFF_SECONDS": "0.75",
             "KAGENT_KAFKA_AUDIT_URL": "http://kafka-rest.internal/topics/audit",
             "KAGENT_KAFKA_AUDIT_TOPIC": "kagent-audit",
             "KAGENT_EXTERNAL_BACKEND_TIMEOUT_SECONDS": "1.5",
@@ -2059,11 +2065,107 @@ def test_service_config_reads_environment_defaults():
     assert config.embedding_api_key == "embedding-key"
     assert config.embedding_model == "text-embedding-model"
     assert config.embedding_timeout_seconds == 6.5
+    assert config.embedding_max_retries == 4
+    assert config.embedding_retry_backoff_seconds == 0.75
     assert config.kafka_audit_url == "http://kafka-rest.internal/topics/audit"
     assert config.kafka_audit_topic == "kagent-audit"
     assert config.external_backend_timeout_seconds == 1.5
     assert config.run_timeout_seconds == 9.5
     assert config.request_timeout_seconds == 4.5
+
+
+def test_runtime_run_passes_embedding_retry_config(monkeypatch):
+    calls = []
+
+    def fake_run_runtime_agent(goal, **kwargs):
+        calls.append({"goal": goal, **kwargs})
+        return {"status": "done", "run_id": "run-123"}
+
+    monkeypatch.setattr(service_runtime_run, "run_runtime_agent", fake_run_runtime_agent)
+
+    status_code, payload = service_runtime_run.execute_runtime_run_request(
+        json.dumps(
+            {
+                "goal": "remember this",
+                "plan": {"actions": [], "final_answer": "done"},
+            }
+        ).encode("utf-8"),
+        ServiceConfig(
+            embedding_base_url="https://embedding.example/v1",
+            embedding_api_key="embedding-key",
+            embedding_model="text-embedding-model",
+            embedding_timeout_seconds=6.5,
+            embedding_max_retries=4,
+            embedding_retry_backoff_seconds=0.75,
+        ),
+    )
+
+    assert status_code == 200
+    assert payload["status"] == "done"
+    assert calls[0]["embedding_base_url"] == "https://embedding.example/v1"
+    assert calls[0]["embedding_api_key"] == "embedding-key"
+    assert calls[0]["embedding_model"] == "text-embedding-model"
+    assert calls[0]["embedding_timeout_seconds"] == 6.5
+    assert calls[0]["embedding_max_retries"] == 4
+    assert calls[0]["embedding_retry_backoff_seconds"] == 0.75
+
+
+def test_runtime_resume_passes_embedding_retry_config(tmp_path, monkeypatch):
+    calls = []
+    pending_action = {
+        "id": "step-1",
+        "tool": "note",
+        "input": {"text": "approved"},
+        "reason": "record approval",
+    }
+
+    def fake_run_runtime_agent(goal, **kwargs):
+        calls.append({"goal": goal, **kwargs})
+        return {"status": "done", "run_id": "resumed-123"}
+
+    service_module._persist_trace(
+        {
+            "trace_type": "codex_runtime",
+            "run_id": "pending-123",
+            "status": "requires_approval",
+            "goal": "record approved note",
+            "plan": {"actions": [pending_action], "final_answer": "done"},
+            "pending_approval": pending_action,
+        },
+        str(tmp_path),
+    )
+    monkeypatch.setattr(
+        service_runtime_resume,
+        "run_runtime_agent",
+        fake_run_runtime_agent,
+    )
+
+    status_code, payload = service_runtime_resume.execute_runtime_resume_request(
+        json.dumps(
+            {
+                "run_id": "pending-123",
+                "approved_action_ids": ["step-1"],
+            }
+        ).encode("utf-8"),
+        ServiceConfig(
+            trace_dir=str(tmp_path),
+            embedding_base_url="https://embedding.example/v1",
+            embedding_api_key="embedding-key",
+            embedding_model="text-embedding-model",
+            embedding_timeout_seconds=6.5,
+            embedding_max_retries=4,
+            embedding_retry_backoff_seconds=0.75,
+        ),
+    )
+
+    assert status_code == 200
+    assert payload["status"] == "done"
+    assert calls[0]["embedding_base_url"] == "https://embedding.example/v1"
+    assert calls[0]["embedding_api_key"] == "embedding-key"
+    assert calls[0]["embedding_model"] == "text-embedding-model"
+    assert calls[0]["embedding_timeout_seconds"] == 6.5
+    assert calls[0]["embedding_max_retries"] == 4
+    assert calls[0]["embedding_retry_backoff_seconds"] == 0.75
 
 
 def test_service_config_rejects_protected_diagnostics_without_auth_token():

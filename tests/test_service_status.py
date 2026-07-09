@@ -80,6 +80,8 @@ def test_service_status_reports_readiness_and_redacted_config(
         "embedding_model": "",
         "embedding_api_key_configured": "false",
         "embedding_timeout_seconds": "30.0",
+        "embedding_max_retries": "2",
+        "embedding_retry_backoff_seconds": "0.25",
         "trace_directory_permissions": "0700",
         "trace_file_permissions": "0600",
         "trace_probe_file_permissions": "0600",
@@ -158,6 +160,8 @@ def test_service_status_reports_configured_external_backend_snapshot():
             embedding_api_key="embedding-key",
             embedding_model="text-embedding-model",
             embedding_timeout_seconds=6.5,
+            embedding_max_retries=4,
+            embedding_retry_backoff_seconds=0.75,
             kafka_audit_url="http://kafka-rest.internal/topics/kagent-audit",
             kafka_audit_topic="kagent-audit",
             external_backend_timeout_seconds=1.5,
@@ -171,6 +175,8 @@ def test_service_status_reports_configured_external_backend_snapshot():
     assert snapshot["embedding_model"] == "text-embedding-model"
     assert snapshot["embedding_api_key_configured"] == "true"
     assert snapshot["embedding_timeout_seconds"] == "6.5"
+    assert snapshot["embedding_max_retries"] == "4"
+    assert snapshot["embedding_retry_backoff_seconds"] == "0.75"
     assert "embedding-key" not in str(snapshot)
     assert snapshot["kafka_audit_sink"] == "enabled"
     assert snapshot["kafka_audit_topic_configured"] == "true"

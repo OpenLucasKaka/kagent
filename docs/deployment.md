@@ -153,6 +153,10 @@ The service reads these environment variables:
 - `KAGENT_EMBEDDING_MODEL`: embedding model name used by `memory_remember` and
   `memory_recall`, for example `text-embedding-nomic-embed-text-v1.5`.
 - `KAGENT_EMBEDDING_TIMEOUT_SECONDS`: embedding request timeout, default `30`.
+- `KAGENT_EMBEDDING_MAX_RETRIES`: retry count for retryable embedding HTTP
+  failures (`429` and `5xx`) and network timeouts, default `2`.
+- `KAGENT_EMBEDDING_RETRY_BACKOFF_SECONDS`: fixed delay between embedding
+  retry attempts, default `0.25`.
   When any embedding setting is configured, `/ready` validates that both the
   embedding base URL and model are present before accepting traffic.
 - `KAGENT_KAFKA_AUDIT_URL`: optional HTTP health endpoint for the Kafka audit

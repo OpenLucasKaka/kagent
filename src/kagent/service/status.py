@@ -127,6 +127,8 @@ def _embedding_provider_snapshot(config: ServiceConfig) -> Dict[str, str]:
         api_key=config.embedding_api_key,
         model=config.embedding_model,
         timeout_seconds=config.embedding_timeout_seconds,
+        max_retries=config.embedding_max_retries,
+        retry_backoff_seconds=config.embedding_retry_backoff_seconds,
     ).redacted_snapshot()
 
 
@@ -210,6 +212,8 @@ def _check_embedding_provider_config(config: ServiceConfig) -> None:
         api_key=config.embedding_api_key,
         model=config.embedding_model,
         timeout_seconds=config.embedding_timeout_seconds,
+        max_retries=config.embedding_max_retries,
+        retry_backoff_seconds=config.embedding_retry_backoff_seconds,
     )
 
 

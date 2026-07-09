@@ -49,6 +49,8 @@ class ServiceConfig:
     embedding_api_key: str = ""
     embedding_model: str = ""
     embedding_timeout_seconds: float = 30.0
+    embedding_max_retries: int = 2
+    embedding_retry_backoff_seconds: float = 0.25
     kafka_audit_url: str = ""
     kafka_audit_topic: str = ""
     external_backend_timeout_seconds: float = 2.0
@@ -152,6 +154,16 @@ class ServiceConfig:
                 "KAGENT_EMBEDDING_TIMEOUT_SECONDS",
                 cls.embedding_timeout_seconds,
             ),
+            embedding_max_retries=_env_int(
+                source,
+                "KAGENT_EMBEDDING_MAX_RETRIES",
+                cls.embedding_max_retries,
+            ),
+            embedding_retry_backoff_seconds=_env_float(
+                source,
+                "KAGENT_EMBEDDING_RETRY_BACKOFF_SECONDS",
+                cls.embedding_retry_backoff_seconds,
+            ),
             kafka_audit_url=source.get(
                 "KAGENT_KAFKA_AUDIT_URL",
                 cls.kafka_audit_url,
@@ -213,6 +225,12 @@ class ServiceConfig:
             raise ValueError("external_backend_timeout_seconds must be positive")
         if self.embedding_timeout_seconds <= 0:
             raise ValueError("embedding_timeout_seconds must be positive")
+        if self.embedding_max_retries < 0:
+            raise ValueError("embedding_max_retries must be non-negative")
+        if self.embedding_retry_backoff_seconds < 0:
+            raise ValueError(
+                "embedding_retry_backoff_seconds must be non-negative"
+            )
 
     @property
     def auth_required(self) -> bool:

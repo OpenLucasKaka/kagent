@@ -106,6 +106,8 @@ _MILVUS_URL_ENV_VARS = ("KAGENT_MILVUS_URL",)
 _EMBEDDING_BASE_URL_ENV_VARS = ("KAGENT_EMBEDDING_BASE_URL", "KAGENT_LLM_BASE_URL")
 _EMBEDDING_API_KEY_ENV_VARS = ("KAGENT_EMBEDDING_API_KEY", "KAGENT_LLM_API_KEY")
 _EMBEDDING_MODEL_ENV_VARS = ("KAGENT_EMBEDDING_MODEL",)
+_EMBEDDING_MAX_RETRIES_ENV_VAR = "KAGENT_EMBEDDING_MAX_RETRIES"
+_EMBEDDING_RETRY_BACKOFF_ENV_VAR = "KAGENT_EMBEDDING_RETRY_BACKOFF_SECONDS"
 _EXTERNAL_BACKEND_TIMEOUT_ENV_VAR = "KAGENT_EXTERNAL_BACKEND_TIMEOUT_SECONDS"
 _APP_NAME_MAX_LENGTH = 120
 _APP_NAME_ALLOWED_PATTERN = re.compile(r"^[\w .+()#&-]+$", re.UNICODE)
@@ -677,6 +679,8 @@ def default_runtime_tools(
     embedding_api_key: str = "",
     embedding_model: str = "",
     embedding_timeout_seconds: float = 30.0,
+    embedding_max_retries: int = 2,
+    embedding_retry_backoff_seconds: float = 0.25,
     external_backend_timeout_seconds: float = 2.0,
     delegate_runner: Callable[[str, int], Dict[str, Any]] | None = None,
     include_delegate_tool: bool = True,
@@ -688,6 +692,8 @@ def default_runtime_tools(
         api_key=embedding_api_key,
         model=embedding_model,
         timeout_seconds=embedding_timeout_seconds,
+        max_retries=embedding_max_retries,
+        retry_backoff_seconds=embedding_retry_backoff_seconds,
     )
     active_backend_timeout = _backend_timeout_seconds(external_backend_timeout_seconds)
     tools = {
@@ -1888,12 +1894,18 @@ def _embedding_config(
     api_key: str,
     model: str,
     timeout_seconds: float,
+    max_retries: int,
+    retry_backoff_seconds: float,
 ) -> EmbeddingProviderConfig:
     return EmbeddingProviderConfig(
         base_url=base_url.strip() or _first_env_value(_EMBEDDING_BASE_URL_ENV_VARS),
         api_key=api_key.strip() or _first_env_value(_EMBEDDING_API_KEY_ENV_VARS),
         model=model.strip() or _first_env_value(_EMBEDDING_MODEL_ENV_VARS),
         timeout_seconds=_embedding_timeout_seconds(timeout_seconds),
+        max_retries=_embedding_max_retries(max_retries),
+        retry_backoff_seconds=_embedding_retry_backoff_seconds(
+            retry_backoff_seconds
+        ),
     )
 
 
@@ -1907,6 +1919,30 @@ def _embedding_timeout_seconds(default_value: float) -> float:
     if timeout <= 0:
         raise ValueError("embedding timeout must be positive")
     return timeout
+
+
+def _embedding_max_retries(default_value: int) -> int:
+    env_value = os.environ.get(_EMBEDDING_MAX_RETRIES_ENV_VAR, "").strip()
+    value = env_value or str(default_value)
+    try:
+        retries = int(value)
+    except ValueError as exc:
+        raise ValueError("embedding max_retries must be an integer") from exc
+    if retries < 0:
+        raise ValueError("embedding max_retries must be non-negative")
+    return retries
+
+
+def _embedding_retry_backoff_seconds(default_value: float) -> float:
+    env_value = os.environ.get(_EMBEDDING_RETRY_BACKOFF_ENV_VAR, "").strip()
+    value = env_value or str(default_value)
+    try:
+        backoff = float(value)
+    except ValueError as exc:
+        raise ValueError("embedding retry_backoff_seconds must be a float") from exc
+    if backoff < 0:
+        raise ValueError("embedding retry_backoff_seconds must be non-negative")
+    return backoff
 
 
 def _backend_timeout_seconds(default_value: float) -> float:
