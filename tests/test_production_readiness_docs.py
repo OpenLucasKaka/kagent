@@ -18,6 +18,7 @@ def test_production_readiness_checklist_documents_release_gates():
     assert "Kubernetes" in readiness
     assert "deploy/kubernetes/kagent.yaml" in readiness
     assert "deploy/prometheus/kagent-rules.yaml" in readiness
+    assert "kagent_runtime_hook_failures_total" in readiness
     assert "deploy/prometheus/kagent-servicemonitor.yaml" in readiness
     assert "ServiceMonitor" in readiness
     assert "idempotency conflict" in readiness

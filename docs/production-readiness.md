@@ -109,7 +109,8 @@ service, runtime latency, approval, stale pending approval gauges,
 progress sink failure counters, per-subject usage, per-subject outcome, resume,
 and tool-error metrics, including
 `kagent_runtime_stale_pending_approvals_current` and
-`kagent_runtime_progress_event_sink_failures_total`.
+`kagent_runtime_progress_event_sink_failures_total` plus
+`kagent_runtime_hook_failures_total`.
 It also runs a Prometheus alert rules semantic check that records
 `required_alerts_present`, `required_metrics_present`, alert count, missing
 alert names, missing metric names, and rules file `sha256`. This keeps service

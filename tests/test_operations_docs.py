@@ -381,6 +381,7 @@ def test_operations_runbook_documents_continuous_iteration_and_failure_triage():
     assert "kagent_runtime_approvals_by_auth_subject_total" in runbook
     assert "kagent_runtime_failed_observations_total" in runbook
     assert "kagent_runtime_progress_event_sink_failures_total" in runbook
+    assert "kagent_runtime_hook_failures_total" in runbook
     assert "kagent_runtime_observation_errors_total" in runbook
     assert "kagent_runtime_approval_required_total" in runbook
     assert "kagent_runtime_final_answer_guardrails_total" in runbook

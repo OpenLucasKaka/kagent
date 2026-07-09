@@ -449,6 +449,9 @@ def runtime_status_summary(
         "progress_event_sink_failure_count": str(
             _parse_non_negative_int(trace.get("progress_event_sink_failure_count"))
         ),
+        "hook_failure_count": str(
+            _parse_non_negative_int(trace.get("hook_failure_count"))
+        ),
         "failed_observation_count": str(
             _observation_status_count(observations, "failed")
         ),
@@ -626,6 +629,7 @@ def _empty_runtime_summary_aggregate() -> Dict[str, Any]:
         "graph_phase_count": "0",
         "graph_phase_node_counts": {},
         "progress_event_sink_failure_count": "0",
+        "hook_failure_count": "0",
         "llm_provider_request_count": "0",
         "llm_provider_request_attempt_count": "0",
         "llm_provider_request_retry_count": "0",
@@ -695,6 +699,10 @@ def _add_runtime_summary_to_aggregate(
     aggregate["progress_event_sink_failure_count"] = str(
         int(aggregate["progress_event_sink_failure_count"])
         + _parse_non_negative_int(summary.get("progress_event_sink_failure_count"))
+    )
+    aggregate["hook_failure_count"] = str(
+        int(aggregate["hook_failure_count"])
+        + _parse_non_negative_int(summary.get("hook_failure_count"))
     )
     if str(summary.get("llm_provider_request_status", "")).strip():
         aggregate["llm_provider_request_count"] = str(

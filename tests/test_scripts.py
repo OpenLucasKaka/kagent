@@ -540,6 +540,7 @@ def test_observability_acceptance_script_is_secret_safe_and_documented():
     assert "/metrics.prom" in script
     assert "kagent_runtime_stale_pending_approvals_current" in script
     assert "kagent_runtime_progress_event_sink_failures_total" in script
+    assert "kagent_runtime_hook_failures_total" in script
     assert "kagent_runtime_planner_attempts_total" in script
     assert "kagent_runtime_planner_failures_total" in script
     assert "kagent_runtime_llm_provider_requests_total" in script

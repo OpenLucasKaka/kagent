@@ -275,6 +275,7 @@ class ServiceMetrics:
         self._runtime_approvals_by_auth_subject: Dict[str, int] = {}
         self._runtime_failed_observations_total = 0
         self._runtime_progress_event_sink_failures_total = 0
+        self._runtime_hook_failures_total = 0
         self._runtime_observation_errors_by_code: Dict[str, int] = {}
         self._runtime_tool_executions_by_tool_status: Dict[str, int] = {}
         self._runtime_planner_attempts_by_status: Dict[str, int] = {}
@@ -362,6 +363,7 @@ class ServiceMetrics:
         resumed_by_auth_subject: str = "",
         approved_by_auth_subject: str = "",
         progress_event_sink_failure_count: int = 0,
+        hook_failure_count: int = 0,
     ) -> None:
         with self._lock:
             self._runtime_runs_total += 1
@@ -430,6 +432,7 @@ class ServiceMetrics:
                 0,
                 progress_event_sink_failure_count,
             )
+            self._runtime_hook_failures_total += max(0, hook_failure_count)
             for error_code, count in (error_code_counts or {}).items():
                 normalized_error_code = str(error_code)
                 if not normalized_error_code:
@@ -613,6 +616,9 @@ class ServiceMetrics:
                 ),
                 "runtime_progress_event_sink_failures_total": str(
                     self._runtime_progress_event_sink_failures_total
+                ),
+                "runtime_hook_failures_total": str(
+                    self._runtime_hook_failures_total
                 ),
                 "runtime_observation_errors_by_code": _string_counts(
                     self._runtime_observation_errors_by_code
@@ -1418,6 +1424,11 @@ def prometheus_metrics_text(snapshot: Mapping[str, Any]) -> str:
             "# TYPE kagent_runtime_progress_event_sink_failures_total counter",
             "kagent_runtime_progress_event_sink_failures_total "
             f"{snapshot.get('runtime_progress_event_sink_failures_total', '0')}",
+            "# HELP kagent_runtime_hook_failures_total "
+            "Runtime hook callback failures.",
+            "# TYPE kagent_runtime_hook_failures_total counter",
+            "kagent_runtime_hook_failures_total "
+            f"{snapshot.get('runtime_hook_failures_total', '0')}",
             "# HELP kagent_runtime_approval_required_total "
             "Approval-required observations produced by Codex-style runtime runs.",
             "# TYPE kagent_runtime_approval_required_total counter",

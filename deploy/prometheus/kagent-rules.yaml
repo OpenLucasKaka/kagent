@@ -198,6 +198,15 @@ groups:
           summary: Codex-style runtime progress event sinks are failing
           description: Runtime progress events could not be delivered to an operator UI, webhook, or streaming sink.
 
+      - alert: kagentRuntimeHookFailures
+        expr: sum(rate(kagent_runtime_hook_failures_total[5m])) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Codex-style runtime hooks are failing
+          description: Runtime hook callbacks failed; inspect hook failure events before trusting audit or middleware side effects.
+
       - alert: kagentRuntimePlannerFailures
         expr: |
           sum(rate(kagent_runtime_planner_failures_total[5m]))

@@ -32,6 +32,17 @@ class DenyNoteHook:
         return RuntimeHookDecision.allow()
 
 
+class FailingLifecycleHook:
+    def on_run_start(self, _context: Dict[str, Any]) -> None:
+        raise RuntimeError("audit start unavailable")
+
+    def after_tool(self, _context: Dict[str, Any]) -> None:
+        raise RuntimeError("audit after unavailable")
+
+    def on_run_end(self, _context: Dict[str, Any]) -> None:
+        raise RuntimeError("audit end unavailable")
+
+
 def test_runtime_hooks_observe_run_and_tool_lifecycle():
     hook = RecordingHook()
     provider = FakeLLMProvider(
@@ -79,3 +90,31 @@ def test_runtime_hook_can_deny_tool_before_execution():
     assert result["observations"][0]["error_code"] == "runtime_hook_denied"
     assert result["events"][2]["node"] == "hook"
     assert result["events"][2]["status"] == "denied"
+
+
+def test_runtime_lifecycle_hook_failures_are_observable_without_failing_run():
+    provider = FakeLLMProvider(
+        '{"actions":[{"id":"step-1","tool":"note","input":{"text":"hello"},'
+        '"reason":"capture"}],"final_answer":"captured hello"}'
+    )
+
+    result = run_runtime_agent(
+        "capture hello",
+        provider=provider,
+        hooks=[FailingLifecycleHook()],
+    )
+
+    assert result["status"] == "done"
+    assert result["answer"] == "captured hello"
+    assert result["hook_failure_count"] == "3"
+    hook_failures = [
+        event
+        for event in result["events"]
+        if event.get("node") == "hook" and event.get("status") == "failed"
+    ]
+    assert [event["stage"] for event in hook_failures] == [
+        "on_run_start",
+        "after_tool",
+        "on_run_end",
+    ]
+    assert all(event["error_code"] == "runtime_hook_failed" for event in hook_failures)

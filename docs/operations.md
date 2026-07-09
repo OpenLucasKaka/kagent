@@ -884,7 +884,10 @@ response. If an in-process progress event sink fails, the runtime continues the
 run and reports `progress_event_sink_failure_count` in the response for
 operator triage; persisted runtime status, list, and summary responses surface
 the same count so dashboards can alert on broken event delivery without opening
-full traces.
+full traces. Runtime hook callback failures are isolated the same way through
+`hook_failure_count` and `kagent_runtime_hook_failures_total`, so audit,
+middleware, or notification hook outages stay visible without crashing the
+primary run.
 Use
 `GET /runtime/runs/{run_id}/artifacts` to list artifact metadata without
 content before selecting a specific deliverable. The listing normalizes tags to
@@ -954,6 +957,7 @@ consumed pending approvals. Use
 failure pressure,
 `kagent_runtime_progress_event_sink_failures_total` for progress
 event delivery failures in streaming, webhook, or operator UI sinks,
+`kagent_runtime_hook_failures_total` for runtime hook callback failures,
 `kagent_runtime_approval_required_total` for human approval queue
 pressure, and
 `kagent_runtime_failed_budget_exhaustions_total` to alert on

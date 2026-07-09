@@ -773,6 +773,9 @@ def test_service_contract_documents_named_success_schemas():
     assert schemas["RuntimeRunResponse"]["properties"][
         "progress_event_sink_failure_count"
     ] == {"type": "string"}
+    assert schemas["RuntimeRunResponse"]["properties"]["hook_failure_count"] == {
+        "type": "string"
+    }
     assert schemas["RuntimeGraphPhase"] == {
         "type": "object",
         "required": ["node", "status", "started_at", "completed_at", "duration_seconds"],
@@ -909,9 +912,15 @@ def test_service_contract_documents_named_success_schemas():
     assert schemas["RuntimeRunStatusResponse"]["properties"][
         "progress_event_sink_failure_count"
     ] == {"type": "string"}
+    assert schemas["RuntimeRunStatusResponse"]["properties"]["hook_failure_count"] == {
+        "type": "string"
+    }
     assert schemas["RuntimeRunListItemResponse"]["properties"][
         "progress_event_sink_failure_count"
     ] == {"type": "string"}
+    assert schemas["RuntimeRunListItemResponse"]["properties"]["hook_failure_count"] == {
+        "type": "string"
+    }
     for field_name in [
         "llm_provider_request_status",
         "llm_provider_request_attempt_count",
@@ -1101,6 +1110,7 @@ def test_service_contract_documents_named_success_schemas():
         "graph_phase_count",
         "graph_phase_node_counts",
         "progress_event_sink_failure_count",
+        "hook_failure_count",
         "llm_provider_request_count",
         "llm_provider_request_attempt_count",
         "llm_provider_request_retry_count",
@@ -1136,6 +1146,9 @@ def test_service_contract_documents_named_success_schemas():
     assert schemas["RuntimeRunSummaryResponse"]["properties"][
         "progress_event_sink_failure_count"
     ] == {"type": "string"}
+    assert schemas["RuntimeRunSummaryResponse"]["properties"]["hook_failure_count"] == {
+        "type": "string"
+    }
     assert schemas["RuntimeRunSummaryResponse"]["properties"][
         "llm_provider_request_count"
     ] == {"type": "string"}
@@ -1463,8 +1476,13 @@ def test_service_contract_documents_runtime_progress_sink_failure_metric():
     assert schema_properties["runtime_progress_event_sink_failures_total"] == {
         "type": "string"
     }
+    assert schema_properties["runtime_hook_failures_total"] == {"type": "string"}
     assert (
         "runtime_progress_event_sink_failures_total"
+        not in payload["components"]["schemas"]["ConfigResponse"]["properties"]
+    )
+    assert (
+        "runtime_hook_failures_total"
         not in payload["components"]["schemas"]["ConfigResponse"]["properties"]
     )
 

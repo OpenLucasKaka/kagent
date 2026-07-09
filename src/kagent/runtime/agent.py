@@ -413,6 +413,7 @@ def _run_runtime_agent_loop(
     iteration_count = 0
     progress_events: List[Dict[str, Any]] = []
     progress_event_sink_failure_count = 0
+    hook_failure_count = 0
     answer_streamed = False
     hook_chain = RuntimeHookChain(hooks or [])
     context_manager = RuntimeContextManager(
@@ -429,16 +430,57 @@ def _run_runtime_agent_loop(
             except Exception:
                 progress_event_sink_failure_count += 1
 
+    def record_hook_failure(
+        *,
+        stage: str,
+        exc: Exception,
+        started_at: str,
+        timer: float,
+        iteration: str = "",
+        action_id: str = "",
+        tool: str = "",
+        dependency_metadata: Dict[str, str] | None = None,
+    ) -> None:
+        nonlocal hook_failure_count
+        hook_failure_count += 1
+        event: Dict[str, Any] = {
+            "node": "hook",
+            "stage": stage,
+            "status": "failed",
+            "error_code": "runtime_hook_failed",
+            "error": str(exc),
+            **_timing_fields(started_at, timer),
+        }
+        if iteration:
+            event["iteration"] = iteration
+        if action_id:
+            event["action_id"] = action_id
+        if tool:
+            event["tool"] = tool
+        if dependency_metadata:
+            event.update(dependency_metadata)
+        events.append(event)
+
     if hook_chain:
-        hook_chain.on_run_start(
-            {
-                "run_id": run_id,
-                "goal": goal,
-                "started_at": started_at,
-                "metadata": normalized_metadata,
-                "tags": normalized_tags,
-            }
-        )
+        hook_started_at = _utc_timestamp()
+        hook_timer = time.perf_counter()
+        try:
+            hook_chain.on_run_start(
+                {
+                    "run_id": run_id,
+                    "goal": goal,
+                    "started_at": started_at,
+                    "metadata": normalized_metadata,
+                    "tags": normalized_tags,
+                }
+            )
+        except Exception as exc:
+            record_hook_failure(
+                stage="on_run_start",
+                exc=exc,
+                started_at=hook_started_at,
+                timer=hook_timer,
+            )
 
     for iteration in range(1, max_iterations + 1):
         iteration_count = iteration
@@ -680,18 +722,32 @@ def _run_runtime_agent_loop(
             observations.append(observation)
             iteration_observations[action.id] = observation
             if hook_chain:
-                hook_chain.after_tool(
-                    {
-                        "run_id": run_id,
-                        "goal": goal,
-                        "iteration": iteration_label,
-                        "action_id": action.id,
-                        "tool": action.tool,
-                        "input": action.input,
-                        "observation": observation.to_dict(),
-                        **dependency_metadata,
-                    }
-                )
+                hook_started_at = _utc_timestamp()
+                hook_timer = time.perf_counter()
+                try:
+                    hook_chain.after_tool(
+                        {
+                            "run_id": run_id,
+                            "goal": goal,
+                            "iteration": iteration_label,
+                            "action_id": action.id,
+                            "tool": action.tool,
+                            "input": action.input,
+                            "observation": observation.to_dict(),
+                            **dependency_metadata,
+                        }
+                    )
+                except Exception as exc:
+                    record_hook_failure(
+                        stage="after_tool",
+                        exc=exc,
+                        started_at=hook_started_at,
+                        timer=hook_timer,
+                        iteration=iteration_label,
+                        action_id=action.id,
+                        tool=action.tool,
+                        dependency_metadata=dependency_metadata,
+                    )
             events.append(
                 {
                     "node": "executor",
@@ -796,16 +852,28 @@ def _run_runtime_agent_loop(
             progress_event_sink_failure_count
         )
     if hook_chain:
-        hook_chain.on_run_end(
-            {
-                "run_id": run_id,
-                "goal": goal,
-                "status": status,
-                "completed_at": result["completed_at"],
-                "duration_seconds": result["duration_seconds"],
-                "iteration_count": result["iteration_count"],
-            }
-        )
+        hook_started_at = _utc_timestamp()
+        hook_timer = time.perf_counter()
+        try:
+            hook_chain.on_run_end(
+                {
+                    "run_id": run_id,
+                    "goal": goal,
+                    "status": status,
+                    "completed_at": result["completed_at"],
+                    "duration_seconds": result["duration_seconds"],
+                    "iteration_count": result["iteration_count"],
+                }
+            )
+        except Exception as exc:
+            record_hook_failure(
+                stage="on_run_end",
+                exc=exc,
+                started_at=hook_started_at,
+                timer=hook_timer,
+            )
+    if hook_failure_count:
+        result["hook_failure_count"] = str(hook_failure_count)
     return redact_runtime_payload(result)
 
 

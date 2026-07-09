@@ -3246,6 +3246,7 @@ def test_service_router_runtime_runs_list_reports_persisted_summaries(tmp_path):
     assert all("observation_count" in run for run in payload["runs"])
     assert all("event_count" in run for run in payload["runs"])
     assert all("progress_event_sink_failure_count" in run for run in payload["runs"])
+    assert all("hook_failure_count" in run for run in payload["runs"])
     assert all("lifecycle_state" in run for run in payload["runs"])
     assert all("duration_seconds" in run for run in payload["runs"])
     assert all("failed_observation_count" in run for run in payload["runs"])
@@ -3291,6 +3292,7 @@ def test_service_router_runtime_runs_summary_aggregates_visible_traces(tmp_path)
                 {"node": "runtime_loop", "status": "ok"},
             ],
             "progress_event_sink_failure_count": "3",
+            "hook_failure_count": "2",
             "llm_provider_request": {
                 "status": "failed",
                 "attempt_count": "3",
@@ -3346,6 +3348,7 @@ def test_service_router_runtime_runs_summary_aggregates_visible_traces(tmp_path)
                 {"node": "finalize", "status": "ok"},
             ],
             "progress_event_sink_failure_count": "2",
+            "hook_failure_count": "4",
             "llm_provider_request": {
                 "status": "ok",
                 "attempt_count": "1",
@@ -3392,6 +3395,7 @@ def test_service_router_runtime_runs_summary_aggregates_visible_traces(tmp_path)
             "runtime_loop": "2",
         },
         "progress_event_sink_failure_count": "5",
+        "hook_failure_count": "6",
         "llm_provider_request_count": "2",
         "llm_provider_request_attempt_count": "4",
         "llm_provider_request_retry_count": "2",

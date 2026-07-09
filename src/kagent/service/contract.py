@@ -398,6 +398,7 @@ def service_openapi() -> Dict[str, Any]:
                             "items": {"$ref": "#/components/schemas/RuntimeGraphPhase"},
                         },
                         "progress_event_sink_failure_count": {"type": "string"},
+                        "hook_failure_count": {"type": "string"},
                         "error_code": {"type": "string"},
                         "error": {"type": "string"},
                     },
@@ -633,6 +634,7 @@ def service_openapi() -> Dict[str, Any]:
                         "graph_phase_count",
                         "graph_phase_node_counts",
                         "progress_event_sink_failure_count",
+                        "hook_failure_count",
                         "llm_provider_request_count",
                         "llm_provider_request_attempt_count",
                         "llm_provider_request_retry_count",
@@ -690,6 +692,7 @@ def service_openapi() -> Dict[str, Any]:
                             "additionalProperties": {"type": "string"},
                         },
                         "progress_event_sink_failure_count": {"type": "string"},
+                        "hook_failure_count": {"type": "string"},
                         "llm_provider_request_count": {"type": "string"},
                         "llm_provider_request_attempt_count": {"type": "string"},
                         "llm_provider_request_retry_count": {"type": "string"},
@@ -2107,6 +2110,7 @@ def _diagnostic_audit_properties() -> Dict[str, Dict[str, Any]]:
 def _metrics_response_properties() -> Dict[str, Dict[str, Any]]:
     properties = _diagnostic_audit_properties()
     properties["runtime_progress_event_sink_failures_total"] = {"type": "string"}
+    properties["runtime_hook_failures_total"] = {"type": "string"}
     return properties
 
 
@@ -2220,6 +2224,7 @@ def _runtime_run_status_properties(
         "progress_event_count": {"type": "string"},
         "graph_phase_count": {"type": "string"},
         "progress_event_sink_failure_count": {"type": "string"},
+        "hook_failure_count": {"type": "string"},
         "llm_provider_request_status": {"type": "string"},
         "llm_provider_request_attempt_count": {"type": "string"},
         "llm_provider_request_retry_count": {"type": "string"},

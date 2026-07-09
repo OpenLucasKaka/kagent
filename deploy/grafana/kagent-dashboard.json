@@ -171,6 +171,11 @@
           "expr": "sum(rate(kagent_runtime_progress_event_sink_failures_total[5m]))",
           "legendFormat": "sink failures",
           "refId": "A"
+        },
+        {
+          "expr": "sum(rate(kagent_runtime_hook_failures_total[5m]))",
+          "legendFormat": "hook failures",
+          "refId": "B"
         }
       ],
       "title": "Runtime Progress Sink Failures",

@@ -499,6 +499,7 @@ def test_service_metrics_tracks_requests_by_path_and_status():
         "runtime_approvals_by_auth_subject": {},
         "runtime_failed_observations_total": "0",
         "runtime_progress_event_sink_failures_total": "0",
+        "runtime_hook_failures_total": "0",
         "runtime_observation_errors_by_code": {},
         "runtime_tool_executions_by_tool_status": {},
         "runtime_planner_attempts_by_status": {},
@@ -615,6 +616,7 @@ def test_service_metrics_tracks_runtime_operational_counters():
         duration_seconds=0.2,
         auth_subject="team-a",
         progress_event_sink_failure_count=1,
+        hook_failure_count=1,
         llm_provider_request={
             "attempt_count": "1",
             "retry_count": "0",
@@ -633,6 +635,7 @@ def test_service_metrics_tracks_runtime_operational_counters():
         resumed_by_auth_subject="default",
         approved_by_auth_subject="default",
         progress_event_sink_failure_count=2,
+        hook_failure_count=2,
         error_code_counts={
             "invalid_tool_input": 1,
             "tool_execution_timeout": 1,
@@ -687,6 +690,7 @@ def test_service_metrics_tracks_runtime_operational_counters():
     assert snapshot["runtime_approvals_by_auth_subject"] == {"default": "1"}
     assert snapshot["runtime_failed_observations_total"] == "2"
     assert snapshot["runtime_progress_event_sink_failures_total"] == "3"
+    assert snapshot["runtime_hook_failures_total"] == "3"
     assert snapshot["runtime_observation_errors_by_code"] == {
         "invalid_tool_input": "1",
         "tool_execution_timeout": "1",
@@ -902,6 +906,7 @@ def test_service_metrics_endpoint_records_runtime_progress_sink_failures(monkeyp
             "duration_seconds": "0.25",
             "observations": [],
             "progress_event_sink_failure_count": "4",
+            "hook_failure_count": "5",
         }
 
     monkeypatch.setattr(
@@ -920,9 +925,11 @@ def test_service_metrics_endpoint_records_runtime_progress_sink_failures(monkeyp
 
     assert run_status == 200
     assert run_payload["progress_event_sink_failure_count"] == "4"
+    assert run_payload["hook_failure_count"] == "5"
     assert metrics_status == 200
     assert metrics_payload["runtime_runs_total"] == "1"
     assert metrics_payload["runtime_progress_event_sink_failures_total"] == "4"
+    assert metrics_payload["runtime_hook_failures_total"] == "5"
 
 
 def test_service_metrics_endpoint_records_runtime_llm_provider_request(monkeypatch):
@@ -1101,6 +1108,7 @@ def test_service_prometheus_metrics_endpoint_reports_text_exposition(monkeypatch
         resumed_by_auth_subject="default",
         approved_by_auth_subject="default",
         progress_event_sink_failure_count=1,
+        hook_failure_count=1,
         tool_status_counts={"http_request:requires_approval": 1},
         planner_attempt_status_counts={"ok": 1},
         llm_provider_request={
@@ -1120,6 +1128,7 @@ def test_service_prometheus_metrics_endpoint_reports_text_exposition(monkeypatch
         auth_subject="team-a",
         resumed_by_auth_subject="team-a",
         progress_event_sink_failure_count=2,
+        hook_failure_count=2,
         error_code_counts={
             "invalid_tool_input": 1,
             "tool_execution_timeout": 1,
@@ -1218,6 +1227,8 @@ def test_service_prometheus_metrics_endpoint_reports_text_exposition(monkeypatch
         "# TYPE kagent_runtime_progress_event_sink_failures_total counter"
         in payload
     )
+    assert "# HELP kagent_runtime_hook_failures_total" in payload
+    assert "# TYPE kagent_runtime_hook_failures_total counter" in payload
     assert "# HELP kagent_runtime_final_answer_guardrails_total" in payload
     assert "# TYPE kagent_runtime_final_answer_guardrails_total counter" in payload
     assert (
@@ -1399,6 +1410,7 @@ def test_service_prometheus_metrics_endpoint_reports_text_exposition(monkeypatch
     )
     assert "kagent_runtime_approval_required_total 1" in payload
     assert "kagent_runtime_progress_event_sink_failures_total 3" in payload
+    assert "kagent_runtime_hook_failures_total 3" in payload
     assert "kagent_runtime_final_answer_guardrails_total 0" in payload
     assert "kagent_runtime_pending_approvals_current 0" in payload
     assert "kagent_runtime_stale_pending_approvals_current 0" in payload

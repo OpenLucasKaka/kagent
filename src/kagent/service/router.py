@@ -693,6 +693,9 @@ def _record_runtime_run_metrics(
         progress_event_sink_failure_count=_runtime_non_negative_int(
             payload.get("progress_event_sink_failure_count", 0)
         ),
+        hook_failure_count=_runtime_non_negative_int(
+            payload.get("hook_failure_count", 0)
+        ),
     )
 
 
