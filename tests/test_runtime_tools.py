@@ -27,7 +27,10 @@ def test_note_tool_returns_structured_observation():
     assert observation.output == {"text": "remember this"}
 
 
-def test_workspace_tools_write_read_and_list_virtual_assets(tmp_path, monkeypatch):
+def test_workspace_tools_write_read_list_and_search_virtual_assets(
+    tmp_path,
+    monkeypatch,
+):
     monkeypatch.setenv("KAGENT_RUNTIME_WORKSPACE_DIR", str(tmp_path / "runtime-assets"))
 
     written = execute_runtime_tool(
@@ -53,6 +56,12 @@ def test_workspace_tools_write_read_and_list_virtual_assets(tmp_path, monkeypatc
         {"kind": "reports", "max_depth": 2},
         action_id="step-3",
     )
+    searched = execute_runtime_tool(
+        default_runtime_tools(),
+        "workspace_search",
+        {"kind": "reports", "query": "ready", "max_depth": 2},
+        action_id="step-4",
+    )
 
     assert written.status == "ok"
     assert written.output["kind"] == "reports"
@@ -63,6 +72,9 @@ def test_workspace_tools_write_read_and_list_virtual_assets(tmp_path, monkeypatc
     assert listed.status == "ok"
     assert listed.output["entries"][0]["path"] == "pilot"
     assert listed.output["entries"][1]["path"] == "pilot/summary.md"
+    assert searched.status == "ok"
+    assert searched.output["matches"][0]["path"] == "pilot/summary.md"
+    assert searched.output["matches"][0]["line"] == "ready"
 
 
 def test_workspace_tools_reject_virtual_directory_escape(tmp_path, monkeypatch):
@@ -1534,6 +1546,7 @@ def test_registered_runtime_tool_metadata_includes_input_schemas():
         "transform_text",
         "workspace_list",
         "workspace_read",
+        "workspace_search",
         "workspace_write",
     ]
     assert by_name["apply_patch"]["approval_required_by_default"] == "false"
@@ -1585,6 +1598,16 @@ def test_registered_runtime_tool_metadata_includes_input_schemas():
     assert by_name["workspace_read"]["input_schema"]["required"] == ["kind", "path"]
     assert by_name["workspace_list"]["approval_required_by_default"] == "false"
     assert by_name["workspace_list"]["input_schema"]["required"] == ["kind"]
+    assert by_name["workspace_search"]["approval_required_by_default"] == "false"
+    assert by_name["workspace_search"]["input_schema"]["required"] == ["kind", "query"]
+    assert by_name["workspace_search"]["output_schema"]["required"] == [
+        "kind",
+        "root",
+        "query",
+        "matches",
+        "match_count",
+        "truncated",
+    ]
     assert by_name["decision_matrix"]["input_schema"]["required"] == [
         "question",
         "criteria",
@@ -2362,6 +2385,10 @@ def test_default_policy_allows_workspace_read_tools():
         == "allowed"
     )
     assert policy.authorize("workspace_list", {"kind": "reports"}).status == "allowed"
+    assert (
+        policy.authorize("workspace_search", {"kind": "reports", "query": "risk"}).status
+        == "allowed"
+    )
 
 
 def test_default_policy_gates_shell_command_tool():

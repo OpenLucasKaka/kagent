@@ -36,6 +36,7 @@ class RuntimePolicy:
                 "transform_text",
                 "workspace_list",
                 "workspace_read",
+                "workspace_search",
                 "workspace_write",
             }
         )

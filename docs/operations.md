@@ -673,7 +673,10 @@ structured reports, plans, decisions, data, or messages with a stable
 Workspace file tools keep execution local: `read_file` and `apply_patch` resolve
 paths inside the current workspace and reject symlink paths, while `list_files`
 skips symlink entries so external file metadata is not exposed through directory
-listings. `apply_patch` supports audited add, update, move, and delete
+listings. Runtime virtual-workspace tools `workspace_write`, `workspace_read`,
+`workspace_list`, and `workspace_search` keep generated reports, logs, policies,
+and memory assets under the configured runtime workspace with bounded reads,
+bounded listings, and bounded text search. `apply_patch` supports audited add, update, move, and delete
 operations; move operations use `*** Move to: PATH` and report
 `operation=move`, changed-file `path`, `previous_path`, `bytes`, and `sha256`
 in observations.

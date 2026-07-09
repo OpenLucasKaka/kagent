@@ -134,7 +134,8 @@ The service reads these environment variables:
   virtual workspace. When set, `/ready` creates and validates owner-only
   `workspace`, `reports`, `logs`, `policies`, and `memories` directories.
   Use this for production deployments that need agent-generated reports,
-  policy snapshots, logs, or memory assets to survive process restarts.
+  policy snapshots, logs, or memory assets to survive process restarts and be
+  searchable through the bounded `workspace_search` runtime tool.
 - `KAGENT_REDIS_URL`: optional `redis://` endpoint for short-term memory.
   When set, `/ready` sends a real Redis `PING`, `/config` reports
   `redis_short_term_memory=enabled` without exposing the URL, and the runtime

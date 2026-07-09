@@ -137,6 +137,71 @@ class RuntimeWorkspace:
             "truncated": truncated,
         }
 
+    def search(
+        self,
+        kind: str,
+        query: str,
+        relative_path: str | Path = ".",
+        *,
+        max_depth: int = _DEFAULT_MAX_LIST_DEPTH,
+        limit: int = 50,
+        max_bytes: int = _DEFAULT_MAX_READ_BYTES,
+    ) -> Dict[str, Any]:
+        normalized_query = str(query)
+        if not normalized_query:
+            raise ValueError("query must be non-empty")
+        if max_depth < 0:
+            raise ValueError("max_depth must be non-negative")
+        if limit < 1:
+            raise ValueError("limit must be positive")
+        if max_bytes < 1:
+            raise ValueError("max_bytes must be positive")
+        self.ensure_layout()
+        root = self.resolve(kind, relative_path)
+        if not root.exists():
+            raise ValueError("path does not exist")
+        matches = []
+        truncated = False
+        for path in _iter_entries(root, max_depth=max_depth):
+            if path.is_symlink() or not path.is_file():
+                continue
+            body = path.read_bytes()
+            visible = body[:max_bytes]
+            text = visible.decode("utf-8", errors="replace")
+            lines = text.splitlines()
+            for line_number, line in enumerate(lines, start=1):
+                column = line.find(normalized_query)
+                if column < 0:
+                    continue
+                if len(matches) >= limit:
+                    truncated = True
+                    break
+                previous_text = "\n".join(lines[: line_number - 1])
+                if previous_text:
+                    previous_text += "\n"
+                byte_offset = len((previous_text + line[:column]).encode("utf-8"))
+                matches.append(
+                    {
+                        "path": _relative_asset_path(self._kind_directory(kind), path),
+                        "line_number": line_number,
+                        "line": line,
+                        "byte_offset": byte_offset,
+                        "sha256": hashlib.sha256(body).hexdigest(),
+                    }
+                )
+            if truncated:
+                break
+        return {
+            "kind": kind,
+            "root": _relative_asset_path(self._kind_directory(kind), root)
+            if root != self._kind_directory(kind)
+            else kind,
+            "query": normalized_query,
+            "matches": matches,
+            "match_count": len(matches),
+            "truncated": truncated,
+        }
+
     def _kind_directory(self, kind: str) -> Path:
         if kind not in VIRTUAL_WORKSPACE_KINDS:
             raise ValueError("unknown virtual directory kind")

@@ -284,6 +284,7 @@ def test_service_router_runtime_policy_reports_admin_audit_view_without_tokens()
         },
         {"name": "workspace_list", "allowed": "false", "approval_required": "true"},
         {"name": "workspace_read", "allowed": "false", "approval_required": "true"},
+        {"name": "workspace_search", "allowed": "false", "approval_required": "true"},
         {"name": "workspace_write", "allowed": "false", "approval_required": "true"},
     ]
     assert "admin-token" not in json.dumps(payload)
@@ -356,6 +357,7 @@ def test_service_router_runtime_policy_scopes_subject_audit_view():
         },
         {"name": "workspace_list", "allowed": "false", "approval_required": "true"},
         {"name": "workspace_read", "allowed": "false", "approval_required": "true"},
+        {"name": "workspace_search", "allowed": "false", "approval_required": "true"},
         {"name": "workspace_write", "allowed": "false", "approval_required": "true"},
     ]
     assert payload["effective_tool_policy_sha256"] != ""

@@ -343,6 +343,8 @@ def test_operations_runbook_documents_continuous_iteration_and_failure_triage():
     assert "final_answer_guardrail" in runbook
     assert "unresolved_failure_boundary" in runbook
     assert "raw API keys and raw provider endpoints are never exposed" in runbook
+    assert "workspace_search" in runbook
+    assert "bounded text search" in runbook
     assert "bind_host" in runbook
     assert "bind_port" in runbook
     assert "max_request_bytes" in runbook

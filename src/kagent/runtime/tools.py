@@ -486,6 +486,36 @@ _WORKSPACE_LIST_OUTPUT_SCHEMA = {
     "additionalProperties": False,
 }
 
+_WORKSPACE_SEARCH_MATCH_OUTPUT_SCHEMA = {
+    "type": "object",
+    "required": ["path", "line_number", "line", "byte_offset", "sha256"],
+    "properties": {
+        "path": {"type": "string"},
+        "line_number": {"type": "number", "minimum": 1},
+        "line": {"type": "string"},
+        "byte_offset": {"type": "number", "minimum": 0},
+        "sha256": {"type": "string"},
+    },
+    "additionalProperties": False,
+}
+
+_WORKSPACE_SEARCH_OUTPUT_SCHEMA = {
+    "type": "object",
+    "required": ["kind", "root", "query", "matches", "match_count", "truncated"],
+    "properties": {
+        "kind": {"type": "string", "enum": list(VIRTUAL_WORKSPACE_KINDS)},
+        "root": {"type": "string"},
+        "query": {"type": "string"},
+        "matches": {
+            "type": "array",
+            "items": _WORKSPACE_SEARCH_MATCH_OUTPUT_SCHEMA,
+        },
+        "match_count": {"type": "number", "minimum": 0},
+        "truncated": {"type": "boolean"},
+    },
+    "additionalProperties": False,
+}
+
 _MEMORY_PUT_OUTPUT_SCHEMA = {
     "type": "object",
     "required": ["backend", "namespace", "key", "stored", "ttl_seconds"],
@@ -1054,6 +1084,42 @@ def default_runtime_tools(
                 "additionalProperties": False,
             },
             output_schema=_WORKSPACE_LIST_OUTPUT_SCHEMA,
+        ),
+        "workspace_search": RuntimeToolSpec(
+            name="workspace_search",
+            description=(
+                "Search UTF-8 text assets inside a runtime virtual workspace "
+                "directory with bounded depth, byte, and result limits."
+            ),
+            handler=lambda payload: _workspace_search(
+                payload,
+                runtime_workspace_dir=runtime_workspace_dir,
+            ),
+            input_schema={
+                "type": "object",
+                "required": ["kind", "query"],
+                "properties": {
+                    "kind": {
+                        "type": "string",
+                        "enum": list(VIRTUAL_WORKSPACE_KINDS),
+                    },
+                    "query": {"type": "string", "minLength": 1, "maxLength": 500},
+                    "path": {"type": "string", "maxLength": 2048},
+                    "max_depth": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": _LIST_FILES_MAX_DEPTH,
+                    },
+                    "limit": {"type": "number", "minimum": 1, "maximum": 50},
+                    "max_bytes": {
+                        "type": "number",
+                        "minimum": 1,
+                        "maximum": _READ_FILE_MAX_BYTES,
+                    },
+                },
+                "additionalProperties": False,
+            },
+            output_schema=_WORKSPACE_SEARCH_OUTPUT_SCHEMA,
         ),
         "memory_put": RuntimeToolSpec(
             name="memory_put",
@@ -1677,6 +1743,30 @@ def _workspace_list(
         relative_path.strip(),
         max_depth=int(input_payload.get("max_depth", _LIST_FILES_MAX_DEPTH)),
         limit=int(input_payload.get("limit", _LIST_FILES_MAX_ENTRIES)),
+    )
+
+
+def _workspace_search(
+    input_payload: Dict[str, Any],
+    *,
+    runtime_workspace_dir: str = "",
+) -> Dict[str, Any]:
+    kind = input_payload.get("kind")
+    query = input_payload.get("query")
+    relative_path = input_payload.get("path", ".")
+    if not isinstance(kind, str):
+        raise ValueError("kind must be a string")
+    if not isinstance(query, str) or not query:
+        raise ValueError("query must be a non-empty string")
+    if not isinstance(relative_path, str) or not relative_path.strip():
+        raise ValueError("path must be a non-empty string")
+    return _runtime_workspace(runtime_workspace_dir).search(
+        kind,
+        query,
+        relative_path.strip(),
+        max_depth=int(input_payload.get("max_depth", _LIST_FILES_MAX_DEPTH)),
+        limit=int(input_payload.get("limit", 50)),
+        max_bytes=int(input_payload.get("max_bytes", _READ_FILE_MAX_BYTES)),
     )
 
 

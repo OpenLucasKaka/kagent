@@ -89,7 +89,10 @@ tradeoff-heavy planning. `rubric_score` gives the runtime a structured
 self-review primitive for pass/fail criteria, score percentages, failed
 criteria, and blocking failures. `task_list` gives the runtime a structured
 planning artifact with normalized statuses, priorities, owners, due labels, and
-status counts. `http_request` returns bounded response metadata and body text
+status counts. `workspace_write`, `workspace_read`, `workspace_list`, and
+`workspace_search` provide bounded virtual-workspace asset creation, retrieval,
+listing, and text search for reports, logs, policies, and memory snapshots.
+`http_request` returns bounded response metadata and body text
 only after the policy layer has produced explicit approval for the action.
 It also applies SSRF defense in depth by rejecting private, loopback, and link-local
 URL targets before opening a socket, including literal IPs,

@@ -82,6 +82,7 @@ def test_deployment_documentation_is_linked_from_readme():
     assert "ReadWriteMany" in deployment
     assert "KAGENT_SERVICE_RUNTIME_ALLOWED_TOOLS" in deployment
     assert "KAGENT_SERVICE_RUNTIME_ALLOWED_TOOLS_BY_SUBJECT" in deployment
+    assert "workspace_search" in deployment
     assert "Unknown runtime tool names fail" in deployment
     assert "KAGENT_SERVICE_REQUEST_TIMEOUT_SECONDS" in deployment
     assert "SIGTERM" in deployment

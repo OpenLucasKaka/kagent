@@ -104,6 +104,37 @@ def test_runtime_workspace_lists_assets_with_metadata(tmp_path):
     ]
 
 
+def test_runtime_workspace_searches_text_assets_with_bounded_results(tmp_path):
+    workspace = RuntimeWorkspace(tmp_path / "runtime-workspace")
+    workspace.write_text("reports", "pilot/summary.md", "上线风险：低\n下一步：灰度\n")
+    workspace.write_text("reports", "pilot/raw.md", "原始反馈：体验风险需要跟进\n")
+    workspace.write_text("logs", "events.log", "风险 should stay in logs\n")
+
+    search = workspace.search("reports", "风险", max_depth=2, limit=2)
+
+    assert search["kind"] == "reports"
+    assert search["root"] == "reports"
+    assert search["query"] == "风险"
+    assert search["match_count"] == 2
+    assert search["truncated"] is False
+    assert search["matches"] == [
+        {
+            "path": "pilot/raw.md",
+            "line_number": 1,
+            "line": "原始反馈：体验风险需要跟进",
+            "byte_offset": len("原始反馈：体验".encode("utf-8")),
+            "sha256": workspace.read_text("reports", "pilot/raw.md")["sha256"],
+        },
+        {
+            "path": "pilot/summary.md",
+            "line_number": 1,
+            "line": "上线风险：低",
+            "byte_offset": len("上线".encode("utf-8")),
+            "sha256": workspace.read_text("reports", "pilot/summary.md")["sha256"],
+        },
+    ]
+
+
 def test_runtime_workspace_rejects_unknown_kind(tmp_path):
     workspace = RuntimeWorkspace(tmp_path / "runtime-workspace")
 
