@@ -202,6 +202,13 @@ def test_readme_documents_console_script_entrypoints():
     assert "JSON integers" in readme
 
 
+def test_readme_positions_deterministic_graph_as_smoke_not_demo():
+    readme = Path("README.md").read_text()
+
+    assert "deterministic graph runs for local tests, smoke checks, and regression checks" in readme
+    assert "local tests, demos, and regression checks" not in readme
+
+
 def test_architecture_document_names_service_boundary():
     architecture = Path("docs/architecture.md").read_text()
 

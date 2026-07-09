@@ -4,7 +4,7 @@ Production-shaped LangGraph agent runtime for internal, non-coding workflows.
 
 It provides two execution paths:
 
-- deterministic graph runs for local tests, demos, and regression checks;
+- deterministic graph runs for local tests, smoke checks, and regression checks;
 - an agent runtime that plans with a configured LLM provider,
   executes policy-gated tools, records structured observations, and can replan
   after failures.
