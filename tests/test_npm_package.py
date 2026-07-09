@@ -97,6 +97,48 @@ def test_npm_kagent_version_does_not_bootstrap_python_runtime(tmp_path):
     assert completed.stderr == ""
 
 
+def test_npm_kagent_version_output_file_does_not_bootstrap_python_runtime(tmp_path):
+    node = shutil.which("node")
+    if node is None:
+        return
+    package_json = json.loads(Path("package.json").read_text(encoding="utf-8"))
+    output_path = tmp_path / "version.json"
+
+    completed = subprocess.run(
+        [node, "npm/bin/kagent.js", "--version", "--output", str(output_path)],
+        check=True,
+        capture_output=True,
+        text=True,
+        env={
+            "KAGENT_NODE_VENV": str(tmp_path / "empty-cache"),
+            "KAGENT_NO_SELF_UPDATE": "1",
+            "PATH": "",
+        },
+    )
+
+    assert completed.stdout == ""
+    assert completed.stderr == ""
+    assert json.loads(output_path.read_text(encoding="utf-8")) == {
+        "version": package_json["version"]
+    }
+
+    reversed_output_path = tmp_path / "version-reversed.json"
+    subprocess.run(
+        [node, "npm/bin/kagent.js", "--output", str(reversed_output_path), "--version"],
+        check=True,
+        capture_output=True,
+        text=True,
+        env={
+            "KAGENT_NODE_VENV": str(tmp_path / "empty-cache"),
+            "KAGENT_NO_SELF_UPDATE": "1",
+            "PATH": "",
+        },
+    )
+    assert json.loads(reversed_output_path.read_text(encoding="utf-8")) == {
+        "version": package_json["version"]
+    }
+
+
 def test_npm_runner_semver_comparison_handles_multi_digit_segments():
     node = shutil.which("node")
     if node is None:

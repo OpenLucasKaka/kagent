@@ -24,11 +24,33 @@ function readPackageVersion(root) {
 }
 
 function maybePrintNodeHandledOutput(commandName, args, version) {
-  if (commandName === "kagent" && args.length === 1 && args[0] === "--version") {
-    process.stdout.write(`${JSON.stringify({ version }, null, 2)}\n`);
-    return true;
+  if (commandName !== "kagent") {
+    return false;
   }
-  return false;
+  const versionOutput = versionOutputTarget(args);
+  if (versionOutput === null) {
+    return false;
+  }
+  const body = `${JSON.stringify({ version }, null, 2)}\n`;
+  if (versionOutput) {
+    fs.writeFileSync(versionOutput, body, { encoding: "utf8" });
+  } else {
+    process.stdout.write(body);
+  }
+  return true;
+}
+
+function versionOutputTarget(args) {
+  if (args.length === 1 && args[0] === "--version") {
+    return "";
+  }
+  if (args.length === 3 && args[0] === "--version" && args[1] === "--output") {
+    return args[2];
+  }
+  if (args.length === 3 && args[0] === "--output" && args[2] === "--version") {
+    return args[1];
+  }
+  return null;
 }
 
 function cacheRoot() {
