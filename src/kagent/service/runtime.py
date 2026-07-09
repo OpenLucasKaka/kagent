@@ -287,6 +287,7 @@ class ServiceMetrics:
         self._runtime_llm_provider_requests_by_status: Dict[str, int] = {}
         self._runtime_llm_provider_request_errors_by_type: Dict[str, int] = {}
         self._runtime_llm_provider_request_http_status: Dict[str, int] = {}
+        self._runtime_llm_provider_request_retryable_reason: Dict[str, int] = {}
         self._runtime_llm_provider_request_duration_seconds = 0.0
         self._max_runtime_llm_provider_request_duration_seconds = 0.0
         self._runtime_llm_provider_request_duration_buckets: Dict[str, int] = (
@@ -499,6 +500,11 @@ class ServiceMetrics:
                 provider_http_status = _runtime_llm_provider_http_status_metrics_label(
                     str(llm_provider_request.get("http_status", ""))
                 )
+                provider_retryable_reason = (
+                    _runtime_llm_provider_retryable_reason_metrics_label(
+                        str(llm_provider_request.get("retryable_reason", ""))
+                    )
+                )
                 self._runtime_llm_provider_requests_total += 1
                 self._runtime_llm_provider_request_attempts_total += attempt_count
                 self._runtime_llm_provider_request_retries_total += retry_count
@@ -525,6 +531,16 @@ class ServiceMetrics:
                     ] = (
                         self._runtime_llm_provider_request_http_status.get(
                             provider_http_status,
+                            0,
+                        )
+                        + 1
+                    )
+                if provider_retryable_reason:
+                    self._runtime_llm_provider_request_retryable_reason[
+                        provider_retryable_reason
+                    ] = (
+                        self._runtime_llm_provider_request_retryable_reason.get(
+                            provider_retryable_reason,
                             0,
                         )
                         + 1
@@ -652,6 +668,9 @@ class ServiceMetrics:
                 ),
                 "runtime_llm_provider_request_http_status": _string_counts(
                     self._runtime_llm_provider_request_http_status
+                ),
+                "runtime_llm_provider_request_retryable_reason": _string_counts(
+                    self._runtime_llm_provider_request_retryable_reason
                 ),
                 "runtime_llm_provider_request_duration_seconds_bucket": _string_counts(
                     self._runtime_llm_provider_request_duration_buckets
@@ -1396,6 +1415,21 @@ def prometheus_metrics_text(snapshot: Mapping[str, Any]) -> str:
         )
     lines.extend(
         [
+            "# HELP kagent_runtime_llm_provider_request_retryable_reason_total "
+            "Runtime LLM provider retryable failures by bounded reason.",
+            "# TYPE kagent_runtime_llm_provider_request_retryable_reason_total counter",
+        ]
+    )
+    for reason, count in _mapping_value(
+        snapshot,
+        "runtime_llm_provider_request_retryable_reason",
+    ).items():
+        lines.append(
+            "kagent_runtime_llm_provider_request_retryable_reason_total"
+            f'{{retryable_reason="{_prometheus_label(reason)}"}} {count}'
+        )
+    lines.extend(
+        [
             "# HELP kagent_runtime_llm_provider_request_duration_seconds "
             "Runtime LLM provider request duration in seconds.",
             "# TYPE kagent_runtime_llm_provider_request_duration_seconds histogram",
@@ -1870,6 +1904,15 @@ def _runtime_llm_provider_http_status_metrics_label(value: str) -> str:
     normalized = str(value).strip()
     if len(normalized) == 3 and normalized.isdigit():
         return normalized
+    return ""
+
+
+def _runtime_llm_provider_retryable_reason_metrics_label(value: str) -> str:
+    normalized = str(value).strip()
+    if normalized in {"model_unloaded"}:
+        return normalized
+    if normalized:
+        return "other"
     return ""
 
 

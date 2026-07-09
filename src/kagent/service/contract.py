@@ -641,6 +641,7 @@ def service_openapi() -> Dict[str, Any]:
                         "llm_provider_request_status_counts",
                         "llm_provider_request_error_type_counts",
                         "llm_provider_request_http_status_counts",
+                        "llm_provider_request_retryable_reason_counts",
                         "approval_required_count",
                         "approved_tool_counts",
                         "pending_approval_count",
@@ -705,6 +706,10 @@ def service_openapi() -> Dict[str, Any]:
                             "additionalProperties": {"type": "string"},
                         },
                         "llm_provider_request_http_status_counts": {
+                            "type": "object",
+                            "additionalProperties": {"type": "string"},
+                        },
+                        "llm_provider_request_retryable_reason_counts": {
                             "type": "object",
                             "additionalProperties": {"type": "string"},
                         },
@@ -2230,6 +2235,7 @@ def _runtime_run_status_properties(
         "llm_provider_request_retry_count": {"type": "string"},
         "llm_provider_request_error_type": {"type": "string"},
         "llm_provider_request_http_status": {"type": "string"},
+        "llm_provider_request_retryable_reason": {"type": "string"},
         "llm_provider_request_duration_seconds": {"type": "string"},
         "failed_observation_count": {"type": "string"},
         "planner_failure_count": {"type": "string"},
@@ -2437,6 +2443,7 @@ def _llm_provider_request_schema() -> Dict[str, Any]:
             "duration_seconds": {"type": "string", "pattern": r"^\d+\.\d{4}$"},
             "error_type": {"type": "string"},
             "http_status": {"type": "string"},
+            "retryable_reason": {"type": "string"},
         },
         "additionalProperties": False,
     }

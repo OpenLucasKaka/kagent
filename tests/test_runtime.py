@@ -621,6 +621,7 @@ def test_runtime_agent_includes_provider_request_diagnostics_when_available():
                 "status": "ok",
                 "stream": "false",
                 "duration_seconds": "0.1234",
+                "retryable_reason": "model_unloaded",
                 "api_key": "secret",
             }
 
@@ -633,6 +634,7 @@ def test_runtime_agent_includes_provider_request_diagnostics_when_available():
         "status": "ok",
         "stream": "false",
         "duration_seconds": "0.1234",
+        "retryable_reason": "model_unloaded",
     }
 
 

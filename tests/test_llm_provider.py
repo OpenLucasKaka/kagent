@@ -403,6 +403,39 @@ def test_openai_compatible_provider_retries_model_unloaded_http_errors():
     assert float(provider.request_diagnostics()["duration_seconds"]) >= 0
 
 
+def test_openai_compatible_provider_classifies_exhausted_model_unloaded_errors():
+    def open_url(_request, *, timeout):
+        raise urllib.error.HTTPError(
+            url="https://llm.example/v1/chat/completions",
+            code=400,
+            msg="bad request",
+            hdrs={},
+            fp=io.BytesIO(b'{"error":"Model unloaded."}'),
+        )
+
+    provider = OpenAICompatibleProvider(
+        LLMProviderConfig(
+            base_url="https://llm.example/v1",
+            api_key="x",
+            model="agent-model",
+            max_retries=0,
+        ),
+        urlopen=open_url,
+        sleep=lambda seconds: None,
+    )
+
+    try:
+        provider.complete("system", "user")
+    except RuntimeError as exc:
+        assert "Model unloaded" in str(exc)
+    else:
+        raise AssertionError("expected exhausted model unloaded provider error")
+    assert provider.request_diagnostics()["status"] == "failed"
+    assert provider.request_diagnostics()["error_type"] == "http_error"
+    assert provider.request_diagnostics()["http_status"] == "400"
+    assert provider.request_diagnostics()["retryable_reason"] == "model_unloaded"
+
+
 def test_openai_compatible_provider_uses_numeric_retry_after_header():
     calls = []
     sleeps = []

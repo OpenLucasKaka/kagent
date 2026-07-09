@@ -405,6 +405,7 @@ class OpenAICompatibleProvider:
                         status="failed",
                         error_type=_provider_error_type(exc),
                         http_status=str(exc.code),
+                        retryable_reason=_provider_retryable_reason(exc, body),
                     )
                     raise RuntimeError(
                         _provider_failure_message(exc, self.config.api_key, body)
@@ -486,6 +487,7 @@ class OpenAICompatibleProvider:
                         status="failed",
                         error_type=_provider_error_type(exc),
                         http_status=str(exc.code),
+                        retryable_reason=_provider_retryable_reason(exc, body),
                     )
                     raise RuntimeError(
                         _provider_failure_message(exc, self.config.api_key, body)
@@ -530,6 +532,7 @@ class OpenAICompatibleProvider:
         status: str,
         error_type: str = "",
         http_status: str = "",
+        retryable_reason: str = "",
     ) -> None:
         diagnostics = {
             "attempt_count": str(max(0, attempt_count)),
@@ -542,6 +545,8 @@ class OpenAICompatibleProvider:
             diagnostics["error_type"] = error_type
         if http_status:
             diagnostics["http_status"] = http_status
+        if retryable_reason:
+            diagnostics["retryable_reason"] = retryable_reason
         self._last_request_diagnostics = diagnostics
 
     def _mark_request_diagnostics_failed(self, error_type: str) -> None:
@@ -611,9 +616,19 @@ def _is_retryable_provider_error(exc: BaseException, body: str = "") -> bool:
         return (
             exc.code == 429
             or 500 <= exc.code <= 599
-            or (exc.code == 400 and "model unloaded" in body.lower())
+            or _provider_retryable_reason(exc, body) == "model_unloaded"
         )
     return isinstance(exc, (urllib.error.URLError, TimeoutError))
+
+
+def _provider_retryable_reason(exc: BaseException, body: str = "") -> str:
+    if (
+        isinstance(exc, urllib.error.HTTPError)
+        and exc.code == 400
+        and "model unloaded" in body.lower()
+    ):
+        return "model_unloaded"
+    return ""
 
 
 def _provider_retry_delay_seconds(

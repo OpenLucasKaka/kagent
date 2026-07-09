@@ -187,8 +187,8 @@ The service reads these environment variables:
 - `KAGENT_LLM_MODEL`: chat-completions model name.
 - `KAGENT_LLM_TIMEOUT_SECONDS`: provider request timeout, default
   `30`.
-- `KAGENT_LLM_MAX_RETRIES`: transient 429 and 5xx provider retry
-  count, default `2`.
+- `KAGENT_LLM_MAX_RETRIES`: transient 429, 5xx, and known retryable
+  provider conditions such as `model_unloaded` retry count, default `2`.
 - `KAGENT_LLM_RETRY_BACKOFF_SECONDS`: fixed sleep between provider
   retry attempts, default `0.25`. Numeric provider `Retry-After` response
   headers take precedence for retryable HTTP failures.

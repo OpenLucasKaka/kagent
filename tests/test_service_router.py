@@ -3299,6 +3299,7 @@ def test_service_router_runtime_runs_summary_aggregates_visible_traces(tmp_path)
                 "retry_count": "2",
                 "error_type": "http_error",
                 "http_status": "429",
+                "retryable_reason": "model_unloaded",
                 "duration_seconds": "1.2345",
             },
             "events": [
@@ -3402,6 +3403,7 @@ def test_service_router_runtime_runs_summary_aggregates_visible_traces(tmp_path)
         "llm_provider_request_status_counts": {"failed": "1", "ok": "1"},
         "llm_provider_request_error_type_counts": {"http_error": "1"},
         "llm_provider_request_http_status_counts": {"429": "1"},
+        "llm_provider_request_retryable_reason_counts": {"model_unloaded": "1"},
         "approval_required_count": "1",
         "approved_tool_counts": {"http_request": "1"},
         "approved_by_auth_subject_counts": {"default": "1", "ops": "1"},

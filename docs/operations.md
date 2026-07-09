@@ -358,8 +358,9 @@ another planner iteration while budget remains, but the split lets operators
 separate prompt/schema drift from provider instability.
 When the provider exposes diagnostics, runtime responses include
 `llm_provider_request` with redacted request metadata: attempt count, retry count,
-status, stream mode, duration, error type, and HTTP status. It intentionally omits
-prompts, headers, API keys, and provider response bodies.
+status, stream mode, duration, error type, HTTP status, and retryable reason
+such as `model_unloaded`. It intentionally omits prompts, headers, API keys,
+and provider response bodies.
 Artifact observations are compacted before they are included in replanning
 prompts: metadata is retained and `content_omitted=true` is set, but the
 artifact body is not sent back to the provider. Persisted traces and artifact
@@ -780,7 +781,8 @@ approval queue badge without loading individual runs. It applies subject
 	`llm_provider_request_attempt_count`, `llm_provider_request_retry_count`,
 	`llm_provider_request_status_counts`,
 	`llm_provider_request_error_type_counts`,
-	`llm_provider_request_http_status_counts`, `approval_required_count`,
+	`llm_provider_request_http_status_counts`,
+	`llm_provider_request_retryable_reason_counts`, `approval_required_count`,
 	`pending_approval_count`, `artifact_count`, `artifact_total_bytes`,
 	`tag_counts`, and `metadata_key_counts`.
 Subject tokens see only their own runtime traces; the primary token can inspect
@@ -834,13 +836,13 @@ available for operator review before resume. They also include
 	`artifact_total_bytes`, `artifact_bytes_by_kind`,
 	`llm_provider_request_status`, `llm_provider_request_attempt_count`,
 	`llm_provider_request_retry_count`, `llm_provider_request_error_type`,
-	`llm_provider_request_http_status`, and
+	`llm_provider_request_http_status`, `llm_provider_request_retryable_reason`, and
 	`llm_provider_request_duration_seconds` so
 	operators can separate planner failures, tool failures, approval queues,
 	error-code clusters, latest plan shape, dependency-heavy plans, tool-specific
 	clusters, final-answer guardrail corrections, artifact categories, artifact
 	formats, artifact tags, artifact byte volume, provider retry pressure, and
-	provider HTTP/error-type clusters before opening full traces.
+	provider HTTP/error-type/retry-reason clusters before opening full traces.
 summary scalar metadata is limited to strings and non-boolean numbers for run,
 plan, observation, and artifact index fields; nested objects and arrays are
 omitted from dashboard summaries instead of being stringified.
@@ -1001,10 +1003,11 @@ error-code breakdown, `invalid_plan` means planner JSON/schema drift and
 	`runtime_llm_provider_request_retries_total`,
 	`runtime_llm_provider_requests_by_status`,
 	`runtime_llm_provider_request_errors_by_type`,
-	`runtime_llm_provider_request_http_status`, and the Prometheus
+	`runtime_llm_provider_request_http_status`,
+	`runtime_llm_provider_request_retryable_reason`, and the Prometheus
 	`kagent_runtime_llm_provider_*` metrics to monitor provider instability,
-	retry pressure, status-code clusters, and provider latency without using high
-	cardinality labels or exposing provider payloads.
+	retry pressure, status-code clusters, retryable reason clusters, and provider
+	latency without using high cardinality labels or exposing provider payloads.
 	For trace-backed incident review, use
 	`GET /runtime/runs?llm_provider_status=failed&limit=20` and
 	`GET /runtime/runs/summary?has_llm_provider_retries=true` to line up the same

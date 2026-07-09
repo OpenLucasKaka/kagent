@@ -636,6 +636,7 @@ def _empty_runtime_summary_aggregate() -> Dict[str, Any]:
         "llm_provider_request_status_counts": {},
         "llm_provider_request_error_type_counts": {},
         "llm_provider_request_http_status_counts": {},
+        "llm_provider_request_retryable_reason_counts": {},
         "approval_required_count": "0",
         "approved_tool_counts": {},
         "pending_approval_count": "0",
@@ -730,6 +731,10 @@ def _add_runtime_summary_to_aggregate(
             aggregate["llm_provider_request_http_status_counts"],
             str(summary.get("llm_provider_request_http_status", "")),
         )
+        _increment_count(
+            aggregate["llm_provider_request_retryable_reason_counts"],
+            str(summary.get("llm_provider_request_retryable_reason", "")),
+        )
     aggregate["approval_required_count"] = str(
         int(aggregate["approval_required_count"])
         + _parse_non_negative_int(summary.get("approval_required_count"))
@@ -817,6 +822,7 @@ def _trace_llm_provider_request(trace: Dict[str, Any]) -> Dict[str, str]:
         "llm_provider_request_retry_count": "retry_count",
         "llm_provider_request_error_type": "error_type",
         "llm_provider_request_http_status": "http_status",
+        "llm_provider_request_retryable_reason": "retryable_reason",
         "llm_provider_request_duration_seconds": "duration_seconds",
     }
     summary = {}

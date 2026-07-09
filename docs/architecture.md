@@ -271,6 +271,7 @@ The service intentionally keeps a narrow API:
 	  `llm_provider_request_retry_count`, `llm_provider_request_status_counts`,
 	  `llm_provider_request_error_type_counts`,
 	  `llm_provider_request_http_status_counts`,
+	  `llm_provider_request_retryable_reason_counts`,
 	  `approval_required_count`,
   `pending_approval_count`, `final_answer_guardrail_applied_count`,
   `final_answer_guardrail_reason_counts`, `artifact_count`, `artifact_total_bytes`,
@@ -595,9 +596,11 @@ counters, keeping provider/schema drift distinct from tool execution failures.
 	Persisted runtime status and list summaries expose the same request diagnostics
 	as scalar fields such as `llm_provider_request_status`,
 	`llm_provider_request_retry_count`, `llm_provider_request_error_type`, and
-	`llm_provider_request_http_status`; `/runtime/runs/summary` aggregates them so
-	operators can separate provider rate limits, retries, and response-shape
-	failures without reading full traces.
+	`llm_provider_request_http_status`, plus bounded retryable reasons such as
+	`llm_provider_request_retryable_reason=model_unloaded`;
+	`/runtime/runs/summary` aggregates them so operators can separate provider
+	rate limits, retries, model unloads, and response-shape failures without
+	reading full traces.
 	Runtime run responses and compact persisted status summaries also carry
 run-level duration as `duration_seconds`, giving dashboards a low-cardinality
 sort key before operators open full traces.

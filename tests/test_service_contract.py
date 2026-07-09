@@ -726,6 +726,7 @@ def test_service_contract_documents_named_success_schemas():
             "duration_seconds": {"type": "string", "pattern": r"^\d+\.\d{4}$"},
             "error_type": {"type": "string"},
             "http_status": {"type": "string"},
+            "retryable_reason": {"type": "string"},
         },
         "additionalProperties": False,
     }
@@ -927,6 +928,7 @@ def test_service_contract_documents_named_success_schemas():
         "llm_provider_request_retry_count",
         "llm_provider_request_error_type",
         "llm_provider_request_http_status",
+        "llm_provider_request_retryable_reason",
         "llm_provider_request_duration_seconds",
     ]:
         assert schemas["RuntimeRunStatusResponse"]["properties"][field_name] == {
@@ -1117,6 +1119,7 @@ def test_service_contract_documents_named_success_schemas():
         "llm_provider_request_status_counts",
         "llm_provider_request_error_type_counts",
         "llm_provider_request_http_status_counts",
+        "llm_provider_request_retryable_reason_counts",
         "approval_required_count",
         "approved_tool_counts",
         "pending_approval_count",

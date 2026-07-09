@@ -511,6 +511,7 @@ def test_service_metrics_tracks_requests_by_path_and_status():
         "runtime_llm_provider_requests_by_status": {},
         "runtime_llm_provider_request_errors_by_type": {},
         "runtime_llm_provider_request_http_status": {},
+        "runtime_llm_provider_request_retryable_reason": {},
         "runtime_llm_provider_request_duration_seconds_bucket": {
             "0.05": "0",
             "0.1": "0",
@@ -648,6 +649,7 @@ def test_service_metrics_tracks_runtime_operational_counters():
             "duration_seconds": "1.2000",
             "error_type": "http_error",
             "http_status": "429",
+            "retryable_reason": "model_unloaded",
         },
     )
     metrics.record_runtime_run(
@@ -706,6 +708,9 @@ def test_service_metrics_tracks_runtime_operational_counters():
         "http_error": "1"
     }
     assert snapshot["runtime_llm_provider_request_http_status"] == {"429": "1"}
+    assert snapshot["runtime_llm_provider_request_retryable_reason"] == {
+        "model_unloaded": "1"
+    }
     assert snapshot["runtime_llm_provider_request_duration_seconds_bucket"] == {
         "0.05": "0",
         "0.1": "0",
@@ -1145,6 +1150,7 @@ def test_service_prometheus_metrics_endpoint_reports_text_exposition(monkeypatch
             "duration_seconds": "1.2000",
             "error_type": "http_error",
             "http_status": "429",
+            "retryable_reason": "model_unloaded",
         },
     )
     limiter = ServiceConcurrencyLimiter(max_concurrent_runs=2)
@@ -1390,6 +1396,11 @@ def test_service_prometheus_metrics_endpoint_reports_text_exposition(monkeypatch
     assert (
         'kagent_runtime_llm_provider_request_http_status_total'
         '{http_status="429"} 1'
+        in payload
+    )
+    assert (
+        'kagent_runtime_llm_provider_request_retryable_reason_total'
+        '{retryable_reason="model_unloaded"} 1'
         in payload
     )
     assert (
