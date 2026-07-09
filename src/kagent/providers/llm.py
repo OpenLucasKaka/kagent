@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import os
-import re
 import stat
 import time
 import urllib.error
@@ -12,6 +11,8 @@ from enum import Enum
 from os import environ
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterator, List, Mapping, Optional
+
+from kagent.runtime.redaction import REDACTED_VALUE, redact_runtime_text
 
 DEFAULT_LLM_MODEL = "qwen3.5-122b-a10b"
 PROVIDER_CONFIG_SCHEMA_VERSION = "1"
@@ -680,5 +681,5 @@ def _read_http_error_body(exc: urllib.error.HTTPError) -> str:
 def _redact_provider_text(text: str, api_key: str) -> str:
     redacted = text
     if api_key:
-        redacted = redacted.replace(api_key, "[redacted]")
-    return re.sub(r"sk-[A-Za-z0-9:_-]{8,}", "[redacted]", redacted)
+        redacted = redacted.replace(api_key, REDACTED_VALUE)
+    return redact_runtime_text(redacted)

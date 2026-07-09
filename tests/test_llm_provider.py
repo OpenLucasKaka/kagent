@@ -469,7 +469,7 @@ def test_openai_compatible_provider_redacts_secret_like_error_body_values():
         message = str(exc)
         assert "http_status=401" in message
         assert api_key not in message
-        assert "[redacted]" in message
+        assert "[REDACTED]" in message
     else:
         raise AssertionError("expected provider error")
     assert provider.request_diagnostics()["attempt_count"] == "1"
@@ -478,6 +478,42 @@ def test_openai_compatible_provider_redacts_secret_like_error_body_values():
     assert provider.request_diagnostics()["error_type"] == "http_error"
     assert provider.request_diagnostics()["http_status"] == "401"
     assert api_key not in str(provider.request_diagnostics())
+
+
+def test_openai_compatible_provider_redacts_bearer_and_url_credentials_from_errors():
+    def open_url(request, *, timeout):
+        raise urllib.error.HTTPError(
+            url="https://llm.example/v1/chat/completions",
+            code=500,
+            msg="server error",
+            hdrs={},
+            fp=io.BytesIO(
+                b"upstream echoed Authorization: Bearer provider-secret-token "
+                b"and callback https://user:password@example.test/path?token=abc123"
+            ),
+        )
+
+    provider = OpenAICompatibleProvider(
+        LLMProviderConfig(
+            base_url="https://llm.example/v1",
+            api_key="configured-key",
+            model="agent-model",
+            max_retries=0,
+        ),
+        urlopen=open_url,
+    )
+
+    try:
+        provider.complete("system", "user")
+    except RuntimeError as exc:
+        message = str(exc)
+        assert "http_status=500" in message
+        assert "provider-secret-token" not in message
+        assert "user:password" not in message
+        assert "token=abc123" not in message
+        assert "[REDACTED]" in message
+    else:
+        raise AssertionError("expected provider error")
 
 
 class _FakeHTTPResponse:
