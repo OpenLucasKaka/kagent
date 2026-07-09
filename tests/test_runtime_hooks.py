@@ -43,6 +43,11 @@ class FailingLifecycleHook:
         raise RuntimeError("audit end unavailable")
 
 
+class FailingBeforeToolHook:
+    def before_tool(self, _context: Dict[str, Any]) -> RuntimeHookDecision:
+        raise RuntimeError("permission hook unavailable")
+
+
 def test_runtime_hooks_observe_run_and_tool_lifecycle():
     hook = RecordingHook()
     provider = FakeLLMProvider(
@@ -118,3 +123,26 @@ def test_runtime_lifecycle_hook_failures_are_observable_without_failing_run():
         "on_run_end",
     ]
     assert all(event["error_code"] == "runtime_hook_failed" for event in hook_failures)
+
+
+def test_runtime_before_tool_hook_failure_is_structured_and_fail_closed():
+    provider = FakeLLMProvider(
+        '{"actions":[{"id":"step-1","tool":"note","input":{"text":"hello"},'
+        '"reason":"capture"}],"final_answer":"captured hello"}'
+    )
+
+    result = run_runtime_agent(
+        "capture hello",
+        provider=provider,
+        hooks=[FailingBeforeToolHook()],
+    )
+
+    assert result["status"] == "failed"
+    assert result["error_code"] == "runtime_hook_failed"
+    assert result["hook_failure_count"] == "1"
+    assert result["observations"][0]["tool"] == "note"
+    assert result["observations"][0]["status"] == "failed"
+    assert result["observations"][0]["error_code"] == "runtime_hook_failed"
+    assert result["events"][2]["node"] == "hook"
+    assert result["events"][2]["stage"] == "before_tool"
+    assert result["events"][2]["status"] == "failed"

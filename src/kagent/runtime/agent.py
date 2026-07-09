@@ -663,18 +663,46 @@ def _run_runtime_agent_loop(
             if hook_chain:
                 hook_started_at = _utc_timestamp()
                 hook_timer = time.perf_counter()
-                hook_decision = hook_chain.before_tool(
-                    {
-                        "run_id": run_id,
-                        "goal": goal,
-                        "iteration": iteration_label,
-                        "action_id": action.id,
-                        "tool": action.tool,
-                        "input": action.input,
-                        "reason": action.reason,
-                        **dependency_metadata,
-                    }
-                )
+                try:
+                    hook_decision = hook_chain.before_tool(
+                        {
+                            "run_id": run_id,
+                            "goal": goal,
+                            "iteration": iteration_label,
+                            "action_id": action.id,
+                            "tool": action.tool,
+                            "input": action.input,
+                            "reason": action.reason,
+                            **dependency_metadata,
+                        }
+                    )
+                except Exception as exc:
+                    hook_timing = _timing_fields(hook_started_at, hook_timer)
+                    record_hook_failure(
+                        stage="before_tool",
+                        exc=exc,
+                        started_at=hook_started_at,
+                        timer=hook_timer,
+                        iteration=iteration_label,
+                        action_id=action.id,
+                        tool=action.tool,
+                        dependency_metadata=dependency_metadata,
+                    )
+                    observations.append(
+                        AgentObservation(
+                            action_id=action.id,
+                            tool=action.tool,
+                            status="failed",
+                            output={},
+                            error_code="runtime_hook_failed",
+                            error=str(exc),
+                            started_at=hook_started_at,
+                            completed_at=hook_timing["completed_at"],
+                            duration_seconds=hook_timing["duration_seconds"],
+                        )
+                    )
+                    status = "failed"
+                    break
                 hook_timing = _timing_fields(hook_started_at, hook_timer)
                 events.append(
                     {
