@@ -42,7 +42,7 @@ def service_openapi() -> Dict[str, Any]:
         "openapi": "3.1.0",
         "info": {
             "title": "kagent API",
-            "version": "0.1.5",
+            "version": "0.1.6",
         },
         "components": {
             "securitySchemes": {

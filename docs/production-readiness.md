@@ -314,9 +314,11 @@ ready for SRE review.
 - Runtime shell sandboxing for approved `shell_command` actions: command cwd is
   confined to the workspace, network-capable shell clients and common inline
   interpreter network APIs are rejected, host process environment variables are
-  replaced with a minimal sandbox environment, and shell observations expose
-  `sandbox.enabled`, `sandbox.filesystem`,
-  `sandbox.network`, and `sandbox.env_policy` for audit.
+  replaced with a minimal sandbox environment, and shell commands run through
+  the OS-aware sandbox launcher (`sandbox-exec` on macOS, `bubblewrap` on Linux,
+  declared soft fallback elsewhere). Shell observations expose
+  `sandbox.enabled`, `sandbox.backend`, `sandbox.enforced`,
+  `sandbox.filesystem`, `sandbox.network`, and `sandbox.env_policy` for audit.
 - Optional diagnostic endpoint bearer protection, required by production doctor
   gates while leaving health/readiness/version probes public.
 - Request body size limit before agent execution.

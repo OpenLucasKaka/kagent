@@ -26,4 +26,4 @@ def test_makefile_wheel_target_matches_release_gate():
     makefile = Path("Makefile").read_text()
 
     assert "--no-build-isolation" in makefile
-    assert "kagent-0.1.5-*.whl" in makefile
+    assert "kagent-0.1.6-*.whl" in makefile

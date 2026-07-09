@@ -16,6 +16,8 @@ def test_internal_rollout_guide_is_linked_and_actionable():
     assert "KAGENT_SERVICE_RUNTIME_ALLOWED_TOOLS_BY_SUBJECT" in guide
     assert "Runtime Tool Policy" in guide
     assert "shell_command" in guide
+    assert "sandbox.backend" in guide
+    assert "sandbox.enforced" in guide
     assert "sandbox.env_policy=minimal" in guide
     assert "pipe-to-shell" in guide
     assert "Provider Smoke" in guide

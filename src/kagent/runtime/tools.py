@@ -23,6 +23,7 @@ from kagent.providers.embeddings import (
 )
 from kagent.runtime.policy import RuntimePolicy
 from kagent.runtime.redaction import redact_runtime_payload
+from kagent.runtime.sandbox import run_shell_sandboxed
 from kagent.runtime.skills import RuntimeSkillRegistry
 from kagent.runtime.task_state import TASK_EVENTS, TASK_STATES, TaskStateMachine
 from kagent.runtime.types import AgentObservation
@@ -728,12 +729,25 @@ _SHELL_COMMAND_OUTPUT_SCHEMA = {
         "cwd": {"type": "string"},
         "sandbox": {
             "type": "object",
-            "required": ["enabled", "filesystem", "network", "env_policy"],
+            "required": [
+                "enabled",
+                "backend",
+                "enforced",
+                "filesystem",
+                "network",
+                "env_policy",
+            ],
             "properties": {
                 "enabled": {"type": "string", "enum": ["true"]},
+                "backend": {
+                    "type": "string",
+                    "enum": ["linux-bwrap", "macos-seatbelt", "soft", "windows-soft"],
+                },
+                "enforced": {"type": "string", "enum": ["true", "false"]},
                 "filesystem": {"type": "string", "enum": ["workspace"]},
                 "network": {"type": "string", "enum": ["disabled"]},
                 "env_policy": {"type": "string", "enum": ["minimal"]},
+                "fallback_reason": {"type": "string"},
             },
             "additionalProperties": False,
         },
@@ -2160,21 +2174,20 @@ def _shell_command(input_payload: Dict[str, Any]) -> Dict[str, Any]:
     )
     workspace_root = Path.cwd().resolve()
     cwd = _resolve_shell_cwd(workspace_root, input_payload.get("cwd", "."))
+    sandbox_env = _shell_sandbox_env(workspace_root, cwd)
     sandbox = _shell_sandbox_metadata()
     started = time.perf_counter()
     timed_out = False
     try:
-        completed = subprocess.run(
+        sandbox_result = run_shell_sandboxed(
             normalized_command,
-            shell=True,
-            cwd=str(cwd),
-            env=_shell_sandbox_env(workspace_root, cwd),
-            stdin=subprocess.DEVNULL,
-            capture_output=True,
-            text=False,
-            timeout=timeout_seconds,
-            start_new_session=True,
+            workspace_root=workspace_root,
+            cwd=cwd,
+            env=sandbox_env,
+            timeout_seconds=timeout_seconds,
         )
+        sandbox = sandbox_result.metadata
+        completed = sandbox_result.completed
         exit_code = completed.returncode
         stdout = completed.stdout or b""
         stderr = completed.stderr or b""
@@ -2229,6 +2242,8 @@ def _validate_shell_command(command: str) -> None:
 def _shell_sandbox_metadata() -> Dict[str, str]:
     return {
         "enabled": "true",
+        "backend": "soft",
+        "enforced": "false",
         "filesystem": "workspace",
         "network": "disabled",
         "env_policy": "minimal",

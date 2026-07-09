@@ -65,11 +65,15 @@ can register behind the same metadata, input, output, and error-code contract.
 local commands, secret-exposing environment reads, pipe-to-shell installers, and
 network-capable shell clients plus common inline interpreter network APIs; use
 `http_request` for approved HTTP fetches
-instead. Approved shell commands execute with workspace-confined cwd, bounded
-timeout/output, and a minimal sandbox environment that does not inherit provider
-keys or host process secrets. Shell observations expose `sandbox.enabled`,
-`sandbox.filesystem`, `sandbox.network`, and `sandbox.env_policy` so operators
-can audit whether the command ran under the runtime sandbox boundary.
+instead. Approved shell commands execute through an OS-aware sandbox launcher:
+macOS uses Seatbelt via `sandbox-exec` when available, Linux uses `bubblewrap`
+when available, and unsupported or unavailable native backends fall back to a
+declared soft sandbox. Every path keeps workspace-confined cwd, bounded
+timeout/output, and a minimal environment that does not inherit provider keys or
+host process secrets. Shell observations expose `sandbox.backend`,
+`sandbox.enforced`, `sandbox.filesystem`, `sandbox.network`, and
+`sandbox.env_policy` so operators can audit whether the command ran under a
+kernel-enforced backend or the soft fallback.
 Tool `input_schema` metadata includes
 planner-visible shape and validation constraints such as `required`, `enum`,
 `minItems`, `maxItems`, `minLength`, and `maxLength`, and the executor enforces

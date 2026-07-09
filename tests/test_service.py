@@ -199,7 +199,7 @@ def test_service_version_endpoint_reports_package_version():
     status_code, payload = handle_request("GET", "/version", b"")
 
     assert status_code == 200
-    assert payload == {"version": "0.1.5"}
+    assert payload == {"version": "0.1.6"}
 
 
 def test_service_tools_endpoint_reports_registered_tool_metadata():

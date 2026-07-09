@@ -267,8 +267,12 @@ policy-gated tools such as `http_request` and `shell_command` should report
 If a rollout enables `shell_command`, verify its guardrails still reject
 destructive local commands, environment/secret exposure, pipe-to-shell
 installers, and network-capable shell clients. Approved shell observations
-must include `sandbox.enabled=true`, `sandbox.env_policy=minimal`,
-`sandbox.filesystem=workspace`, and `sandbox.network=disabled`.
+must include `sandbox.enabled=true`, `sandbox.backend`,
+`sandbox.enforced`, `sandbox.env_policy=minimal`,
+`sandbox.filesystem=workspace`, and `sandbox.network=disabled`. Treat
+`sandbox.enforced=false` as a soft fallback signal and verify the host either
+has a native backend (`sandbox-exec` on macOS, `bubblewrap` on Linux) or has
+explicitly accepted soft isolation for that rollout.
 Also verify
 `/runtime/policy` for each team token and confirm `effective_tool_policy`
 matches the intended execution boundary: allowed tools report

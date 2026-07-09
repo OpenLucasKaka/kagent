@@ -43,7 +43,7 @@ def test_release_evidence_requires_lifecycle_observability_metrics():
 
 
 def test_release_evidence_cli_builds_verified_bundle(tmp_path):
-    wheel = tmp_path / "kagent-0.1.5-py3-none-any.whl"
+    wheel = tmp_path / "kagent-0.1.6-py3-none-any.whl"
     wheel.write_text("wheel-bytes\n")
     manifest_path = tmp_path / "release-manifest.json"
     subprocess.run(
@@ -159,14 +159,14 @@ def test_release_evidence_cli_builds_verified_bundle(tmp_path):
                 "evidence_schema_version": "1",
                 "status": "passed",
                 "rollout_id": "rollout-2026-06-28",
-                "release_version": "0.1.5",
+                "release_version": "0.1.6",
                 "environment": "internal-production",
                 "signed_off_at_utc": "2026-06-28T00:00:00+00:00",
                 "runtime_effective_tool_policy_sha256": "a" * 64,
                 "required_roles_present": "true",
                 "required_checks_passed": "true",
                 "approver_role_count": "4",
-                "expected_release_version": "0.1.5",
+                "expected_release_version": "0.1.6",
                 "version_matches": "true",
                 "expected_environment": "internal-production",
                 "environment_matches": "true",
@@ -280,14 +280,14 @@ def test_release_evidence_cli_builds_verified_bundle(tmp_path):
         "evidence_schema_version": "1",
         "status": "passed",
         "rollout_id": "rollout-2026-06-28",
-        "release_version": "0.1.5",
+        "release_version": "0.1.6",
         "environment": "internal-production",
         "signed_off_at_utc": "2026-06-28T00:00:00+00:00",
         "runtime_effective_tool_policy_sha256": "a" * 64,
         "required_roles_present": "true",
         "required_checks_passed": "true",
         "approver_role_count": "4",
-        "expected_release_version": "0.1.5",
+        "expected_release_version": "0.1.6",
         "version_matches": "true",
         "expected_environment": "internal-production",
         "environment_matches": "true",
@@ -923,14 +923,14 @@ def test_release_evidence_cli_rejects_mismatched_runtime_policy_evidence(
                 "evidence_schema_version": "1",
                 "status": "passed",
                 "rollout_id": "rollout-2026-06-28",
-                "release_version": "0.1.5",
+                "release_version": "0.1.6",
                 "environment": "internal-production",
                 "signed_off_at_utc": "2026-06-28T00:00:00+00:00",
                 "runtime_effective_tool_policy_sha256": "a" * 64,
                 "required_roles_present": "true",
                 "required_checks_passed": "true",
                 "approver_role_count": "4",
-                "expected_release_version": "0.1.5",
+                "expected_release_version": "0.1.6",
                 "version_matches": "true",
                 "expected_environment": "internal-production",
                 "environment_matches": "true",

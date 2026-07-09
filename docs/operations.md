@@ -652,9 +652,13 @@ uses Google Chrome automation first, falls back to macOS `open`, and does not
 fetch page content into the runtime trace. `shell_command` executes only after
 policy approval, uses workspace-confined cwd, strips host secrets by replacing
 the inherited environment with a minimal sandbox environment, rejects
-network-capable shell clients and common inline interpreter network APIs, and returns `sandbox.enabled`,
-`sandbox.filesystem`, `sandbox.network`, and `sandbox.env_policy` in the
-observation output. Approval does not bypass SSRF
+network-capable shell clients and common inline interpreter network APIs, and
+runs through an OS-aware sandbox backend. macOS uses Seatbelt via
+`sandbox-exec` when available, Linux uses `bubblewrap` when available, and
+other platforms or missing native tools fall back to a declared soft sandbox.
+The observation output includes `sandbox.backend`, `sandbox.enforced`,
+`sandbox.filesystem`, `sandbox.network`, and `sandbox.env_policy`. Approval does
+not bypass SSRF
 protection: `http_request` rejects private, loopback, and link-local URL
 targets before opening a socket, including `localhost`, literal private IPs,
 link-local metadata addresses, and hostnames that resolve to blocked

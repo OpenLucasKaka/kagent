@@ -15,7 +15,7 @@ def test_build_release_manifest_records_artifact_hashes_and_sizes(tmp_path):
     manifest = build_release_manifest([artifact])
 
     assert manifest["package"] == "kagent"
-    assert manifest["version"] == "0.1.5"
+    assert manifest["version"] == "0.1.6"
     assert manifest["artifact_count"] == "1"
     assert manifest["artifacts"] == [
         {
@@ -145,7 +145,7 @@ def test_verify_release_manifest_reports_invalid_artifacts_schema(tmp_path):
         json.dumps(
             {
                 "package": "kagent",
-                "version": "0.1.5",
+                "version": "0.1.6",
                 "artifact_count": "1",
                 "artifacts": "not-a-list",
             }
@@ -173,7 +173,7 @@ def test_verify_release_manifest_reports_invalid_artifact_entry_schema(tmp_path)
         json.dumps(
             {
                 "package": "kagent",
-                "version": "0.1.5",
+                "version": "0.1.6",
                 "artifact_count": "1",
                 "artifacts": ["not-an-object"],
             }
@@ -201,7 +201,7 @@ def test_verify_release_manifest_reports_missing_artifact_path(tmp_path):
         json.dumps(
             {
                 "package": "kagent",
-                "version": "0.1.5",
+                "version": "0.1.6",
                 "artifact_count": "1",
                 "artifacts": [{"sha256": "abc", "size_bytes": "123"}],
             }
@@ -231,7 +231,7 @@ def test_verify_release_manifest_reports_directory_artifact_path(tmp_path):
         json.dumps(
             {
                 "package": "kagent",
-                "version": "0.1.5",
+                "version": "0.1.6",
                 "artifact_count": "1",
                 "artifacts": [
                     {
@@ -265,7 +265,7 @@ def test_verify_release_manifest_reports_invalid_artifact_path(tmp_path):
         json.dumps(
             {
                 "package": "kagent",
-                "version": "0.1.5",
+                "version": "0.1.6",
                 "artifact_count": "1",
                 "artifacts": [
                     {

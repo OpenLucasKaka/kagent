@@ -295,6 +295,13 @@ def test_shell_command_tool_runs_with_minimal_sandbox_environment(
     assert observation.output["sandbox"]["env_policy"] == "minimal"
     assert observation.output["sandbox"]["network"] == "disabled"
     assert observation.output["sandbox"]["filesystem"] == "workspace"
+    assert observation.output["sandbox"]["backend"] in {
+        "linux-bwrap",
+        "macos-seatbelt",
+        "soft",
+        "windows-soft",
+    }
+    assert observation.output["sandbox"]["enforced"] in {"true", "false"}
 
 
 def test_shell_command_tool_reports_nonzero_exit_without_failing_tool(
@@ -1754,7 +1761,7 @@ def test_registered_runtime_tool_metadata_includes_input_schemas():
     ]
     assert by_name["shell_command"]["output_schema"]["properties"]["sandbox"][
         "required"
-    ] == ["enabled", "filesystem", "network", "env_policy"]
+    ] == ["enabled", "backend", "enforced", "filesystem", "network", "env_policy"]
     assert by_name["rubric_score"]["output_schema"]["required"] == [
         "criteria",
         "passed",

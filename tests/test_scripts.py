@@ -731,7 +731,7 @@ def test_internal_rollout_acceptance_script_validates_redacted_signoff(tmp_path)
         json.dumps(
             {
                 "rollout_id": "rollout-2026-06-28",
-                "release_version": "0.1.5",
+                "release_version": "0.1.6",
                 "environment": "internal-production",
                 "signed_off_at_utc": "2026-06-28T12:00:00Z",
                 "runtime_effective_tool_policy_sha256": "a" * 64,
@@ -775,11 +775,11 @@ def test_internal_rollout_acceptance_script_validates_redacted_signoff(tmp_path)
     assert payload["evidence_schema_version"] == "1"
     assert payload["status"] == "passed"
     assert payload["rollout_id"] == "rollout-2026-06-28"
-    assert payload["release_version"] == "0.1.5"
+    assert payload["release_version"] == "0.1.6"
     assert payload["environment"] == "internal-production"
     assert payload["required_roles_present"] == "true"
     assert payload["required_checks_passed"] == "true"
-    assert payload["expected_release_version"] == "0.1.5"
+    assert payload["expected_release_version"] == "0.1.6"
     assert payload["version_matches"] == "true"
     assert payload["expected_environment"] == "internal-production"
     assert payload["environment_matches"] == "true"
@@ -802,7 +802,7 @@ def test_internal_rollout_acceptance_script_blocks_incomplete_signoff(tmp_path):
         json.dumps(
             {
                 "rollout_id": "rollout-2026-06-28",
-                "release_version": "0.1.5",
+                "release_version": "0.1.6",
                 "environment": "internal-production",
                 "signed_off_at_utc": "2026-06-28T12:00:00Z",
                 "approvers": [{"role": "tech_lead", "email": "tl@example.test"}],
@@ -877,7 +877,7 @@ def test_internal_rollout_acceptance_script_blocks_stale_version_or_wrong_enviro
 
     assert completed.returncode == 1
     assert payload["status"] == "failed"
-    assert payload["expected_release_version"] == "0.1.5"
+    assert payload["expected_release_version"] == "0.1.6"
     assert payload["version_matches"] == "false"
     assert payload["expected_environment"] == "internal-production"
     assert payload["environment_matches"] == "false"
@@ -893,7 +893,7 @@ def test_internal_rollout_acceptance_script_allows_explicit_expected_metadata(
         json.dumps(
             {
                 "rollout_id": "rollout-2026-06-28",
-                "release_version": "0.1.5-rc.1",
+                "release_version": "0.1.6-rc.1",
                 "environment": "staging",
                 "signed_off_at_utc": "2026-06-28T12:00:00Z",
                 "runtime_effective_tool_policy_sha256": "a" * 64,
@@ -924,7 +924,7 @@ def test_internal_rollout_acceptance_script_allows_explicit_expected_metadata(
             "--signoff",
             str(signoff_path),
             "--expected-version",
-            "0.1.5-rc.1",
+            "0.1.6-rc.1",
             "--expected-environment",
             "staging",
         ],
@@ -935,7 +935,7 @@ def test_internal_rollout_acceptance_script_allows_explicit_expected_metadata(
     payload = json.loads(completed.stdout)
 
     assert payload["status"] == "passed"
-    assert payload["expected_release_version"] == "0.1.5-rc.1"
+    assert payload["expected_release_version"] == "0.1.6-rc.1"
     assert payload["version_matches"] == "true"
     assert payload["expected_environment"] == "staging"
     assert payload["environment_matches"] == "true"
@@ -1086,14 +1086,14 @@ def test_production_approval_bundle_script_builds_strict_release_evidence(tmp_pa
                 "evidence_schema_version": "1",
                 "status": "passed",
                 "rollout_id": "rollout-2026-06-28",
-                "release_version": "0.1.5",
+                "release_version": "0.1.6",
                 "environment": "internal-production",
                 "signed_off_at_utc": "2026-06-28T00:00:00+00:00",
                 "runtime_effective_tool_policy_sha256": "a" * 64,
                 "required_roles_present": "true",
                 "required_checks_passed": "true",
                 "approver_role_count": "4",
-                "expected_release_version": "0.1.5",
+                "expected_release_version": "0.1.6",
                 "version_matches": "true",
                 "expected_environment": "internal-production",
                 "environment_matches": "true",
@@ -1102,7 +1102,7 @@ def test_production_approval_bundle_script_builds_strict_release_evidence(tmp_pa
         )
         + "\n"
     )
-    wheel = tmp_path / "kagent-0.1.5-py3-none-any.whl"
+    wheel = tmp_path / "kagent-0.1.6-py3-none-any.whl"
     wheel.write_text("wheel-bytes\n")
     manifest = tmp_path / "release-manifest.json"
     subprocess.run(
@@ -1369,7 +1369,7 @@ def test_production_approval_bundle_script_reports_blocked_release_evidence(
     observability_acceptance.write_text(json.dumps({"status": "passed"}) + "\n")
     internal_rollout = tmp_path / "internal-rollout.json"
     internal_rollout.write_text(json.dumps({"status": "passed"}) + "\n")
-    wheel = tmp_path / "kagent-0.1.5-py3-none-any.whl"
+    wheel = tmp_path / "kagent-0.1.6-py3-none-any.whl"
     wheel.write_text("wheel-bytes\n")
     manifest = tmp_path / "release-manifest.json"
     subprocess.run(
@@ -2068,14 +2068,14 @@ def test_production_readiness_audit_accepts_internal_rollout_evidence(tmp_path):
                 "evidence_schema_version": "1",
                 "status": "passed",
                 "rollout_id": "rollout-2026-06-28",
-                "release_version": "0.1.5",
+                "release_version": "0.1.6",
                 "environment": "internal-production",
                 "signed_off_at_utc": "2026-06-28T00:00:00+00:00",
                 "runtime_effective_tool_policy_sha256": "a" * 64,
                 "required_roles_present": "true",
                 "required_checks_passed": "true",
                 "approver_role_count": "4",
-                "expected_release_version": "0.1.5",
+                "expected_release_version": "0.1.6",
                 "version_matches": "true",
                 "expected_environment": "internal-production",
                 "environment_matches": "true",
@@ -2106,7 +2106,7 @@ def test_production_readiness_audit_accepts_internal_rollout_evidence(tmp_path):
     assert payload["internal_rollout"]["rollout_id"] == "rollout-2026-06-28"
     assert payload["internal_rollout"]["required_roles_present"] == "true"
     assert payload["internal_rollout"]["required_checks_passed"] == "true"
-    assert payload["internal_rollout"]["expected_release_version"] == "0.1.5"
+    assert payload["internal_rollout"]["expected_release_version"] == "0.1.6"
     assert payload["internal_rollout"]["version_matches"] == "true"
     assert payload["internal_rollout"]["expected_environment"] == "internal-production"
     assert payload["internal_rollout"]["environment_matches"] == "true"
@@ -2177,14 +2177,14 @@ def test_production_readiness_audit_rejects_mismatched_runtime_policy_evidence(
                 "evidence_schema_version": "1",
                 "status": "passed",
                 "rollout_id": "rollout-2026-06-28",
-                "release_version": "0.1.5",
+                "release_version": "0.1.6",
                 "environment": "internal-production",
                 "signed_off_at_utc": "2026-06-28T00:00:00+00:00",
                 "runtime_effective_tool_policy_sha256": "a" * 64,
                 "required_roles_present": "true",
                 "required_checks_passed": "true",
                 "approver_role_count": "4",
-                "expected_release_version": "0.1.5",
+                "expected_release_version": "0.1.6",
                 "version_matches": "true",
                 "expected_environment": "internal-production",
                 "environment_matches": "true",
@@ -2480,7 +2480,7 @@ def test_run_checks_builds_release_wheel():
     assert "--no-deps" in run_checks
     assert "--no-build-isolation" in run_checks
     assert "/tmp/kagent-wheelhouse" in run_checks
-    assert "kagent-0.1.5-*.whl" in run_checks
+    assert "kagent-0.1.6-*.whl" in run_checks
     assert "kagent-release-manifest" in run_checks
     assert "kagent-release-evidence" in run_checks
     assert "/tmp/kagent-release-manifest.json" in run_checks

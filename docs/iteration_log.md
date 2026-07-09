@@ -213,7 +213,7 @@
   CLI `--list-cases`, with standard smoke coverage in `scripts/run_checks.sh`.
 - Added pytest warning configuration and `PYTHONWARNINGS=ignore` Makefile
   entries for known local SSL/dependency warning noise.
-- Added `CHANGELOG.md` and README linkage documenting the current 0.1.5
+- Added `CHANGELOG.md` and README linkage documenting the current 0.1.6
   production-oriented LangGraph agent capabilities.
 - Added `make clean` as an explicit developer cleanup target for caches,
   bytecode, and egg-info build artifacts.
