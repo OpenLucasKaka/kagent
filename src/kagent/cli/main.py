@@ -179,8 +179,10 @@ def main() -> None:
         parser.error("--max-retries must be non-negative")
     if args.max_iterations is not None and args.max_iterations < 1:
         parser.error("--max-iterations must be at least 1")
-    if args.deterministic and (args.runtime or args.runtime_plan):
-        parser.error("--deterministic cannot be combined with runtime options")
+    if args.deterministic and args.runtime_plan:
+        parser.error("--deterministic cannot be combined with --runtime-plan")
+    if args.deterministic:
+        args.runtime = False
     if args.deterministic and args.interactive:
         parser.error("--deterministic cannot be combined with --interactive")
     if args.runtime and args.plan:

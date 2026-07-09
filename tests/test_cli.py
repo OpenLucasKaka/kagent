@@ -4,6 +4,7 @@ import os
 import subprocess
 import sys
 import threading
+import time
 from argparse import Namespace
 from pathlib import Path
 
@@ -71,6 +72,27 @@ def test_cli_deterministic_flag_keeps_goal_on_legacy_graph():
     assert args.interactive is False
 
 
+def test_cli_accepts_legacy_runtime_deterministic_mix_for_local_smoke_tests():
+    completed = subprocess.run(
+        [
+            ".venv/bin/python",
+            "-m",
+            "kagent.cli",
+            "--runtime",
+            "--deterministic",
+            "calculate 2 + 3",
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    assert completed.returncode == 0
+    payload = json.loads(completed.stdout)
+    assert payload["status"] == "done"
+    assert payload["answer"] == "5"
+    assert completed.stderr == ""
+
+
 def test_cli_rejects_deterministic_runtime_plan_mix():
     completed = subprocess.run(
         [
@@ -87,7 +109,7 @@ def test_cli_rejects_deterministic_runtime_plan_mix():
     )
 
     assert completed.returncode == 2
-    assert "--deterministic cannot be combined with runtime options" in completed.stderr
+    assert "--deterministic cannot be combined with --runtime-plan" in completed.stderr
 
 
 def test_cli_runs_goal_and_prints_json_trace():
@@ -1860,6 +1882,39 @@ def test_cli_interactive_runtime_tty_prints_live_progress(monkeypatch, capsys):
     assert "\n\nActions" not in captured.out
     assert "apply_patch" not in captured.out
     assert "add hello.md 13B" in captured.out
+
+
+def test_cli_interactive_progress_animates_when_stdout_is_tty(monkeypatch):
+    from kagent.cli.interactive import _RuntimeInteractiveProgress
+
+    class FakeTTYOutput:
+        def __init__(self):
+            self.writes = []
+
+        def isatty(self):
+            return True
+
+        def write(self, text):
+            self.writes.append(text)
+            return len(text)
+
+        def flush(self):
+            return None
+
+    stream = FakeTTYOutput()
+    monkeypatch.setattr(sys, "stdout", stream)
+
+    progress = _RuntimeInteractiveProgress()
+    try:
+        progress({"type": "planner_started", "iteration": "1"})
+        time.sleep(0.16)
+    finally:
+        progress.close()
+
+    output = "".join(stream.writes)
+    assert "\r  " in output
+    assert "Thinking" in output
+    assert "iter" not in output
 
 
 def test_cli_interactive_runtime_streams_answer_deltas_without_duplicate_summary(

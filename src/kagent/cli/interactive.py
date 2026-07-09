@@ -518,16 +518,23 @@ class _RuntimeInteractiveProgress:
         with self._lock:
             if self._closed:
                 return
-            if self._message == message:
+            if self._message == message and self._active:
                 return
             self._message = message
             if not self._started:
                 sys.stdout.write("\n")
                 self._started = True
-            sys.stdout.write(f"  {message}\n")
-            sys.stdout.flush()
-            self._active = False
-            self._last_width = 0
+            if not _stream_is_tty(sys.stdout):
+                sys.stdout.write(f"  {message}\n")
+                sys.stdout.flush()
+                self._active = False
+                self._last_width = 0
+                return
+            self._active = True
+            self._render_locked()
+            if self._thread is None or not self._thread.is_alive():
+                self._thread = threading.Thread(target=self._spin, daemon=True)
+                self._thread.start()
 
     def _finish_active(self, *, clear: bool) -> None:
         thread: threading.Thread | None
