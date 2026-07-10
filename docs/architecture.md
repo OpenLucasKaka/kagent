@@ -534,8 +534,14 @@ persistence is configured, it persists the runtime result through
 
 `service_runtime_resume.py` owns `POST /runtime/resume`. It requires configured
 trace persistence, loads the previous run by safe `run_id`, verifies the run is
-typed as a Codex-style runtime trace and waiting for approval, replays the
-persisted plan with action-level approvals, and persists the resumed result.
+typed as a Codex-style runtime trace and waiting for approval, then requires the
+persisted `pending_approval` action to exactly match the corresponding action in
+the persisted plan. Resume rebuilds the plan from that pending action through
+every later action. Dependencies on the already completed action prefix are
+treated as satisfied and removed, while dependencies among the remaining
+actions are preserved. Only the reviewed pending action receives an action-level
+approval; each later sensitive action is evaluated by policy again and can
+return `requires_approval` before the resumed result is persisted.
 `service_runtime_cancel.py` owns `POST /runtime/runs/{run_id}/cancel`. It
 requires trace persistence, enforces subject-scoped ownership, rejects terminal
 runs, clears pending approval state, appends a cancellation control event, and

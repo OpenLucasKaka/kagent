@@ -320,6 +320,11 @@ ready for SRE review.
   Matching `auth_subject` entries override the global allowlist, and audit
   surfaces expose `runtime_allowed_tools_by_subject_count` without exposing
   bearer tokens.
+- Approval resume preserves the persisted plan suffix starting with the pending
+  action. The persisted `pending_approval` payload must exactly match that plan
+  action; completed-prefix dependencies are treated as satisfied and removed,
+  dependencies among remaining actions stay intact, and every later sensitive
+  action must enter `requires_approval` again under the current runtime policy.
 - Runtime shell sandboxing for approved `shell_command` actions: command cwd is
   confined to the workspace, network-capable shell clients and common inline
   interpreter network APIs are rejected, host process environment variables are

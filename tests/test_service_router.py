@@ -2027,7 +2027,7 @@ def test_service_router_runtime_resume_continues_persisted_pending_approval(
     assert resumed_trace["approved_action_count"] == "1"
 
 
-def test_service_router_runtime_resume_executes_only_pending_approval_action(
+def test_service_router_runtime_resume_executes_pending_and_remaining_actions(
     tmp_path,
     monkeypatch,
 ):
@@ -2051,6 +2051,13 @@ def test_service_router_runtime_resume_executes_only_pending_approval_action(
                             "tool": "http_request",
                             "input": {"url": url},
                             "reason": "fetch after approval",
+                        },
+                        {
+                            "id": "step-3",
+                            "tool": "note",
+                            "input": {"text": "fetch completed"},
+                            "reason": "record completion",
+                            "depends_on": ["step-1", "step-2"],
                         },
                     ],
                     "final_answer": "recorded and fetched",
@@ -2081,10 +2088,13 @@ def test_service_router_runtime_resume_executes_only_pending_approval_action(
     assert resume_status == 200
     assert resume_payload["status"] == "done"
     assert [observation["action_id"] for observation in resume_payload["observations"]] == [
-        "step-2"
+        "step-2",
+        "step-3",
     ]
     assert resume_payload["observations"][0]["tool"] == "http_request"
     assert resume_payload["observations"][0]["output"]["body_text"] == "resumed fetch"
+    assert resume_payload["observations"][1]["tool"] == "note"
+    assert resume_payload["observations"][1]["status"] == "ok"
 
 
 def test_service_router_runtime_resume_treats_prior_dependencies_as_satisfied(
@@ -2141,6 +2151,89 @@ def test_service_router_runtime_resume_treats_prior_dependencies_as_satisfied(
     assert resume_payload["observations"][0]["output"]["body_text"] == (
         "dependency satisfied"
     )
+
+
+def test_service_router_runtime_resume_can_pause_for_a_later_approval(
+    tmp_path,
+    monkeypatch,
+):
+    url = _mock_public_http_request(monkeypatch, b"approved fetch")
+    first_status, first_payload = service_router.handle_request(
+        "POST",
+        "/runtime/run",
+        json.dumps(
+            {
+                "goal": "perform two reviewed fetches",
+                "plan": {
+                    "actions": [
+                        {
+                            "id": "step-1",
+                            "tool": "note",
+                            "input": {"text": "ready"},
+                            "reason": "record context",
+                        },
+                        {
+                            "id": "step-2",
+                            "tool": "http_request",
+                            "input": {"url": url},
+                            "reason": "first reviewed fetch",
+                            "depends_on": ["step-1"],
+                        },
+                        {
+                            "id": "step-3",
+                            "tool": "http_request",
+                            "input": {"url": url},
+                            "reason": "second reviewed fetch",
+                            "depends_on": ["step-2"],
+                        },
+                    ],
+                    "final_answer": "both fetches completed",
+                },
+            }
+        ).encode("utf-8"),
+        config=ServiceConfig(trace_dir=str(tmp_path)),
+    )
+
+    first_resume_status, first_resume_payload = service_router.handle_request(
+        "POST",
+        "/runtime/resume",
+        json.dumps(
+            {
+                "run_id": first_payload["run_id"],
+                "approved_action_ids": ["step-2"],
+            }
+        ).encode("utf-8"),
+        config=ServiceConfig(trace_dir=str(tmp_path)),
+    )
+    second_resume_status, second_resume_payload = service_router.handle_request(
+        "POST",
+        "/runtime/resume",
+        json.dumps(
+            {
+                "run_id": first_resume_payload["run_id"],
+                "approved_action_ids": ["step-3"],
+            }
+        ).encode("utf-8"),
+        config=ServiceConfig(trace_dir=str(tmp_path)),
+    )
+
+    assert first_status == 200
+    assert first_payload["status"] == "requires_approval"
+    assert first_payload["pending_approval"]["id"] == "step-2"
+    assert first_resume_status == 200
+    assert first_resume_payload["status"] == "requires_approval"
+    assert first_resume_payload["pending_approval"]["id"] == "step-3"
+    assert [
+        observation["action_id"]
+        for observation in first_resume_payload["observations"]
+    ] == ["step-2", "step-3"]
+    assert second_resume_status == 200
+    assert second_resume_payload["status"] == "done"
+    assert second_resume_payload["resumed_from_run_id"] == first_resume_payload["run_id"]
+    assert [
+        observation["action_id"]
+        for observation in second_resume_payload["observations"]
+    ] == ["step-3"]
 
 
 def test_service_router_runtime_resume_preserves_metadata_and_tags(

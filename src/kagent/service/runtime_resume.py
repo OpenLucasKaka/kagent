@@ -8,7 +8,11 @@ from uuid import uuid4
 
 from kagent.integrations.audit import KafkaRestProgressEventSink
 from kagent.providers.llm import FakeLLMProvider
-from kagent.runtime import RuntimeCancellationToken, run_runtime_agent
+from kagent.runtime import (
+    RuntimeCancellationToken,
+    build_resumable_plan,
+    run_runtime_agent,
+)
 from kagent.runtime.policy import RuntimePolicy
 from kagent.service import errors as service_errors
 from kagent.service.active_runs import ActiveRunRegistry, ExecutionSlotLease
@@ -145,7 +149,7 @@ def execute_runtime_resume_request(
             service_errors.INVALID_REQUEST_BODY,
             "runtime run trace is missing resumable plan state",
         )
-    resumable_plan = _pending_approval_plan(plan, pending_approval)
+    resumable_plan = build_resumable_plan(plan, pending_approval)
     if resumable_plan is None:
         return 400, failure_payload(
             service_errors.INVALID_REQUEST_BODY,
@@ -353,34 +357,6 @@ def execute_runtime_resume_request(
             failure["trace_path"] = trace_path
         return 500, failure
     return 200, json_ready(result)
-
-
-def _pending_approval_plan(
-    plan: Dict[str, Any],
-    pending_approval: Dict[str, Any],
-) -> Dict[str, Any] | None:
-    pending_action_id = str(pending_approval.get("id", ""))
-    actions = plan.get("actions")
-    if not isinstance(actions, list):
-        return None
-    matching_actions = [
-        action
-        for action in actions
-        if isinstance(action, dict) and action.get("id") == pending_action_id
-    ]
-    if len(matching_actions) != 1:
-        return None
-    matching_action = matching_actions[0]
-    if matching_action != pending_approval:
-        return None
-    pending_action = dict(matching_action)
-    # Dependencies from earlier actions were already satisfied in the persisted run.
-    pending_action.pop("depends_on", None)
-    resumable_plan: Dict[str, Any] = {"actions": [pending_action]}
-    final_answer = plan.get("final_answer")
-    if isinstance(final_answer, str) and final_answer:
-        resumable_plan["final_answer"] = final_answer
-    return resumable_plan
 
 
 def _runtime_event_sink(config: ServiceConfig):

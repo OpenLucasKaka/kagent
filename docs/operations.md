@@ -409,13 +409,18 @@ They also include `approved_tool_counts` so dashboards can separate approval
 consumption by policy-gated tool.
 If trace persistence is enabled, `POST /runtime/resume` can resume from a
 persisted pending run by `run_id` and `approved_action_ids`; resume accepts
-only the pending approval action from that trace and does not replay earlier
-actions that already executed before approval was requested. The persisted
-	`pending_approval` payload must match the plan action with the same ID before
-	execution resumes. Resumed responses include
-	`resumed_from_run_id` and a new `trace_path`. Operator/admin resumes keep the
-	original run owner in `auth_subject` and record the approver in
-	`resumed_by_auth_subject`, `approved_by_auth_subject`, and `approved_at`.
+only the pending approval action from that trace. Resume starts at that action
+and preserves every later action from the persisted plan; it does not replay the
+completed action prefix. Dependencies on completed prefix actions are treated as
+satisfied and removed from the resumable plan, while dependencies between the
+remaining actions are preserved. The persisted `pending_approval` payload must
+exactly match the full plan action with the same ID before execution resumes.
+Only that matching pending action is approved: every later sensitive action is
+checked against policy again and returns `requires_approval` when another human
+decision is required. Resumed responses include `resumed_from_run_id` and a new
+`trace_path`. Operator/admin resumes keep the original run owner in
+`auth_subject` and record the approver in `resumed_by_auth_subject`,
+`approved_by_auth_subject`, and `approved_at`.
 `/runtime/run trace persistence` uses `KAGENT_SERVICE_TRACE_DIR` too:
 persisted runtime responses include `trace_path`, HTTP responses include
 `X-Trace-Path`, and write failures return `trace_persistence_failed`. Runtime

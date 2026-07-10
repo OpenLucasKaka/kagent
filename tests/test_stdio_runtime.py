@@ -443,7 +443,7 @@ def test_stdio_runtime_reuses_and_persists_conversation_memory(monkeypatch, tmp_
     assert memory_path.stat().st_mode & 0o777 == 0o600
 
 
-def test_stdio_runtime_resumes_only_the_approved_pending_action(monkeypatch, tmp_path):
+def test_stdio_runtime_resumes_pending_and_remaining_actions(monkeypatch, tmp_path):
     monkeypatch.setenv(
         "KAGENT_SESSION_MEMORY_PATH",
         str(tmp_path / "session-memory.json"),
@@ -455,6 +455,13 @@ def test_stdio_runtime_resumes_only_the_approved_pending_action(monkeypatch, tmp
         "input": {"url": "https://github.com"},
         "reason": "open the requested page",
     }
+    remaining_action = {
+        "id": "record-opened",
+        "tool": "note",
+        "input": {"text": "GitHub opened"},
+        "reason": "record completion",
+        "depends_on": ["open-github"],
+    }
 
     def fake_run_runtime_agent(goal, **kwargs):
         calls.append((goal, kwargs))
@@ -462,7 +469,10 @@ def test_stdio_runtime_resumes_only_the_approved_pending_action(monkeypatch, tmp
             return {
                 "status": "requires_approval",
                 "goal": goal,
-                "plan": {"actions": [pending_action], "final_answer": "opened"},
+                "plan": {
+                    "actions": [pending_action, remaining_action],
+                    "final_answer": "opened",
+                },
                 "pending_approval": pending_action,
             }
         return {"status": "done", "answer": "opened", "goal": goal}
@@ -488,6 +498,11 @@ def test_stdio_runtime_resumes_only_the_approved_pending_action(monkeypatch, tmp
     assert approval["target"] == "https://github.com"
     assert len(calls) == 2
     assert calls[1][1]["approved_action_ids"] == {"open-github"}
+    provider = calls[1][1]["provider"]
+    assert json.loads(provider.response_text) == {
+        "actions": [pending_action, remaining_action],
+        "final_answer": "opened",
+    }
     assert events[-1]["type"] == "run_completed"
     assert events[-1]["status"] == "done"
 

@@ -32,7 +32,7 @@ from kagent.providers.llm import (
     save_provider_config,
     validate_provider_setup_config,
 )
-from kagent.runtime import run_runtime_agent
+from kagent.runtime import build_resumable_plan, run_runtime_agent
 from kagent.utils.json_output import json_ready
 
 Request = Dict[str, Any]
@@ -219,7 +219,7 @@ class StdioRuntimeSession:
             self._complete(pending.goal, result)
             return
 
-        resumable_plan = _pending_approval_plan(pending.plan, pending.action)
+        resumable_plan = build_resumable_plan(pending.plan, pending.action)
         if resumable_plan is None:
             self._fail("invalid_approval_state", "pending approval cannot be resumed")
             return
@@ -361,30 +361,6 @@ def _pending_approval_from_result(
     if not str(action.get("id", "")).strip():
         return None
     return PendingApproval(dict(action), goal, runtime_goal, dict(plan))
-
-
-def _pending_approval_plan(
-    plan: Dict[str, Any],
-    pending_action: Dict[str, Any],
-) -> Dict[str, Any] | None:
-    actions = plan.get("actions")
-    action_id = str(pending_action.get("id", "")).strip()
-    if not isinstance(actions, list) or not action_id:
-        return None
-    matches = [
-        action
-        for action in actions
-        if isinstance(action, dict) and action.get("id") == action_id
-    ]
-    if len(matches) != 1 or matches[0] != pending_action:
-        return None
-    action = dict(pending_action)
-    action.pop("depends_on", None)
-    resumable: Dict[str, Any] = {"actions": [action]}
-    final_answer = plan.get("final_answer")
-    if isinstance(final_answer, str) and final_answer:
-        resumable["final_answer"] = final_answer
-    return resumable
 
 
 def _approval_event(action: Dict[str, Any]) -> Dict[str, Any]:
