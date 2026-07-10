@@ -434,3 +434,16 @@ def test_operations_runbook_documents_continuous_iteration_and_failure_triage():
     assert "SIGTERM" in runbook
     assert "143" in runbook
     assert "curl" in runbook
+
+
+def test_operations_runbook_documents_cross_replica_cancellation_triage():
+    runbook = Path("docs/operations.md").read_text()
+
+    assert "Cross-Replica Cancellation Triage" in runbook
+    assert "same `KAGENT_SERVICE_TRACE_DIR`" in runbook
+    assert "persisted cancellation signal" in runbook
+    assert "normal cooperative stop" in runbook
+    assert "per-run lock state" in runbook
+    assert 'kagent_runtime_run_status_total{status="cancelled"}' in runbook
+    assert "do not measure cancellation\npropagation latency" in runbook
+    assert "terminal status\n   remains `cancelled`" in runbook

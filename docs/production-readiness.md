@@ -95,7 +95,11 @@ staleness thresholds. Production values must keep the stale threshold above
 the heartbeat interval and above expected shared-volume latency. Multi-replica
 deployments must place the trace directory on a shared volume so live owner
 leases protect active runs and startup reconciliation can fail interrupted runs
-instead of leaving permanent `running` or `resuming` traces.
+instead of leaving permanent `running` or `resuming` traces. The same shared
+directory carries persisted cancellation signals and per-run terminal-write
+locks. Release review must verify that every replica sees the same trace files,
+supports atomic rename and POSIX advisory locking, and preserves a terminal
+`cancelled` trace when the owner worker completes late.
 The audit emits `integration` evidence with an internal runtime client semantic check.
 It records `commands_present`, `auth_present`, `idempotency_present`,
 `runtime_routes_present`, audit-field coverage, secret-marker checks, and client
@@ -135,12 +139,14 @@ expected interval and timeout.
 The audit also emits `deployment` evidence with a Kubernetes manifest semantic
 check. The Kubernetes manifest semantic check records
 `required_resources_present`, `hardening_present`, `rollout_controls_present`,
-resource count, missing resource kinds, missing hardening markers, missing
-rollout markers, and manifest `sha256`, so release evidence proves the packaged
+`shared_trace_controls_present`, resource count, missing resource kinds,
+missing hardening markers, missing rollout markers, missing shared-trace
+markers, and manifest `sha256`, so release evidence proves the packaged
 cluster manifest still contains the Secret, ConfigMap, PVC, Deployment, Service,
 PodDisruptionBudget, NetworkPolicy, CronJob, production doctor, probes,
 non-root/read-only security context, resource limits, graceful termination, and
-trace retention job expected by internal production rollout. The trace retention
+the `ReadWriteMany` trace mount required by cross-replica cancellation and
+recovery. The trace retention
 CronJob uses `--fail-on-errors` so corrupt persisted traces or failed deletes
 become failed jobs after the redacted JSON summary is written.
 The same `deployment` evidence includes a systemd unit semantic check for

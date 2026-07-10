@@ -468,6 +468,24 @@ the recovering subject in `resumed_by_auth_subject`.
 operator cleanup: subject tokens can cancel only their own non-terminal runtime
 traces, while the primary bearer token can cancel any subject run and the trace
 records `cancelled_by_auth_subject`.
+Cancellation is replica-independent only when every service replica uses the
+same shared `trace_dir`. A request handled by the owner replica updates its
+process-local cancellation token immediately. A request handled by another
+replica persists a cancellation signal in the shared trace store; the owner
+worker observes that signal at cooperative cancellation boundaries and stops
+without requiring load-balancer affinity. The signal is control-plane state,
+not a replacement for force-killing a blocked provider or tool call, so stop
+latency remains bounded by the next cancellation check and the configured
+request/tool timeout.
+
+All terminal trace mutations for one `run_id`, including cancellation, normal
+worker completion, failure persistence, and startup recovery, are serialized by
+a per-run file lock in the shared trace store. The writer reloads state while
+holding the lock and preserves an existing `cancelled` terminal outcome. This
+prevents a late owner worker from replacing an accepted cancellation with
+`done` or `failed`. The lock and persisted signal require storage that provides
+cross-client visibility, atomic replacement, and working POSIX advisory locks;
+an independent local directory per replica does not satisfy this contract.
 
 `service/safety.py` owns pure trust-boundary helpers used by the service:
 constant-time bearer token checks, `Content-Type` validation, safe request IDs,

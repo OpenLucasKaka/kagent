@@ -826,6 +826,22 @@ outcomes.
 `Idempotency-Key` retries for this endpoint are scoped to the concrete
 `run_id`, so retrying one cancellation can replay safely without blocking or
 replaying cancellation of a different run.
+
+For a multi-replica service, cancellation is valid only when every replica
+mounts the same `KAGENT_SERVICE_TRACE_DIR`. The request can land on a non-owner
+replica: that replica persists a cancellation signal, and the owner worker
+cooperatively observes it at its next cancellation boundary. Per-run file locks
+serialize the cancel writer, owner completion, failure persistence, and startup
+recovery. Once the shared trace reaches terminal `cancelled`, a late worker
+result must not replace it with `done` or `failed`.
+
+After a cross-replica cancel returns success, poll
+`GET /runtime/runs/{run_id}` until it reports `status=cancelled`; do not use the
+HTTP response alone as proof that an in-flight provider or tool call has already
+returned. Expected convergence is bounded by the next cooperative cancellation
+check plus the active provider/tool timeout. Record the `run_id`, request time,
+owner `runtime_instance_id`, `cancelled_at`, and `cancel_reason` in the incident
+or change record.
 Use `GET /runtime/runs/{run_id}` to inspect a persisted runtime run status
 summary without returning full trace internals; `auth_subject` is included when
 the run was started by a named internal bearer token, while raw tokens are never
@@ -982,6 +998,12 @@ recovered runs, reopened approvals, live-owner protection, and lock skips, and
 errors. Alert on reconciliation errors immediately; treat
 `outcome="recovered_running"` as a restart or instance-failure signal that
 requires checking the recovered run timeline and the previous instance health.
+Use `kagent_runtime_run_status_total{status="cancelled"}` and
+`kagent_runtime_run_status_by_auth_subject_total{status="cancelled"}` to trend
+accepted terminal cancellations. These counters do not measure cancellation
+propagation latency. Investigate propagation with the persisted run status,
+owner heartbeat, service logs, and storage health rather than inventing a
+derived metric that the service does not export.
 `kagent_runtime_approval_required_total` for human approval queue
 pressure, and
 `kagent_runtime_failed_budget_exhaustions_total` to alert on
@@ -1203,6 +1225,38 @@ claim lease expired: correlate replica restarts, termination events, long agent
 runs, SQLite lock latency, and run timeout metrics. Repeated takeovers without
 restarts usually indicate the lease window is shorter than real execution time
 or an owner is failing to release claims.
+
+### Cross-Replica Cancellation Triage
+
+When a cancel request succeeds but the run does not converge to `cancelled`:
+
+1. Confirm all service pods have the same `KAGENT_SERVICE_TRACE_DIR` and mount
+   the same `ReadWriteMany` volume at that path. Compare the PVC name and mount
+   path from every pod, not only the Deployment template.
+2. Read `GET /runtime/runs/{run_id}` through more than one replica. Different
+   status or timestamps indicate broken shared-volume visibility or stale
+   client-side caching.
+3. Inspect the trace's `runtime_instance_id` and the matching heartbeat under
+   `.runtime-instances`. A fresh heartbeat with no cancellation convergence
+   points to a worker blocked inside a provider/tool call until its timeout; a
+   stale heartbeat points to owner loss and startup reconciliation.
+4. Check `kagent_error_responses_total{error_code="trace_persistence_failed"}`,
+   `kagent_runtime_reconciliation_errors_total`, and
+   `kagent_runtime_reconciliation_outcomes_total`. The packaged
+   `kagentTracePersistenceFailures` and `kagentRuntimeReconciliationErrors`
+   alerts cover shared trace write/read failures without adding a cancellation
+   metric that does not exist.
+5. Verify the storage class supports cross-client read-after-write visibility,
+   atomic rename, and POSIX advisory file locks. File-lock failures or a
+   node-local mount invalidate terminal-write serialization.
+6. Inspect the final trace timeline. A terminal `cancelled` trace followed by a
+   late worker completion event is acceptable only when the terminal status
+   remains `cancelled`; any later `done` or `failed` status is a release blocker.
+
+Do not delete the persisted cancellation signal, per-run lock state, or owner
+heartbeat while the owner may still be active. Preserve the trace directory for
+incident analysis and allow normal cooperative stop or stale-owner recovery to
+complete.
 
 ### Error Code Catalog
 

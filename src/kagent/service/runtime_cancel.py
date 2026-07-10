@@ -1,12 +1,11 @@
 from __future__ import annotations
 
 import json
-import time
 from datetime import datetime, timezone
 from typing import Any, Dict, Tuple
 
 from kagent.service import errors as service_errors
-from kagent.service.active_runs import ActiveRunRegistry
+from kagent.service.active_runs import ActiveRunRegistry, ActiveRunSnapshot
 from kagent.service.errors import failure_payload
 from kagent.service.runtime import ServiceConfig
 from kagent.service.runtime_lifecycle import persist_cancelled_runtime_trace
@@ -16,7 +15,6 @@ from kagent.service.runtime_status import (
 )
 from kagent.service.trace_store import (
     load_trace_by_run_id,
-    persist_trace,
 )
 from kagent.utils.json_output import json_ready
 
@@ -100,10 +98,21 @@ def execute_runtime_cancel_request(
                     active_run=active_run,
                     cancelled_by_auth_subject=auth_subject,
                 )
-            except OSError as exc:
+            except (OSError, ValueError) as exc:
                 return 500, failure_payload(
                     service_errors.TRACE_PERSISTENCE_FAILED,
                     f"could not persist trace: {exc}",
+                )
+            persisted_status = str(cancelled_trace.get("status", ""))
+            if persisted_status == "resuming":
+                return 409, failure_payload(
+                    service_errors.INVALID_REQUEST_BODY,
+                    "runtime run approval is being resumed",
+                )
+            if persisted_status != "cancelled":
+                return 409, failure_payload(
+                    service_errors.INVALID_REQUEST_BODY,
+                    "runtime run is already terminal",
                 )
             return 200, json_ready(
                 runtime_status_summary(
@@ -144,59 +153,39 @@ def execute_runtime_cancel_request(
         )
 
     cancelled_at = _utc_timestamp()
-    trace["status"] = "cancelled"
-    trace["completed_at"] = cancelled_at
-    trace["cancelled_at"] = cancelled_at
-    trace["cancelled_by_auth_subject"] = auth_subject
-    if reason:
-        trace["cancel_reason"] = reason
-    trace.pop("pending_approval", None)
-    _append_cancel_event(trace, cancelled_at, reason)
-    _refresh_duration_seconds(trace)
     try:
-        trace["trace_path"] = persist_trace(trace, service_config.trace_dir)
-    except OSError as exc:
+        trace = persist_cancelled_runtime_trace(
+            run_id=run_id,
+            trace_dir=service_config.trace_dir,
+            active_run=ActiveRunSnapshot(
+                run_id=run_id,
+                owner_auth_subject=owner_auth_subject,
+                state="cancelled",
+                started_at=str(trace.get("started_at", "")) or cancelled_at,
+                cancel_reason=reason,
+                cancelled_at=cancelled_at,
+            ),
+            cancelled_by_auth_subject=auth_subject,
+        )
+    except (OSError, ValueError) as exc:
         return 500, failure_payload(
             service_errors.TRACE_PERSISTENCE_FAILED,
             f"could not persist trace: {exc}",
         )
+    persisted_status = str(trace.get("status", ""))
+    if persisted_status == "resuming":
+        return 409, failure_payload(
+            service_errors.INVALID_REQUEST_BODY,
+            "runtime run approval is being resumed",
+        )
+    if persisted_status != "cancelled":
+        return 409, failure_payload(
+            service_errors.INVALID_REQUEST_BODY,
+            "runtime run is already terminal",
+        )
     return 200, json_ready(
         runtime_status_summary(trace, service_config.trace_dir, run_id)
     )
-
-
-def _append_cancel_event(
-    trace: Dict[str, Any],
-    cancelled_at: str,
-    reason: str,
-) -> None:
-    events = trace.get("events")
-    if not isinstance(events, list):
-        events = []
-        trace["events"] = events
-    event = {
-        "node": "control",
-        "status": "cancelled",
-        "started_at": cancelled_at,
-        "completed_at": cancelled_at,
-        "duration_seconds": "0.0000",
-    }
-    if reason:
-        event["reason"] = reason
-    events.append(event)
-
-
-def _refresh_duration_seconds(trace: Dict[str, Any]) -> None:
-    started_at = trace.get("started_at")
-    if not isinstance(started_at, str) or not started_at.strip():
-        return
-    try:
-        started = datetime.fromisoformat(started_at)
-    except ValueError:
-        return
-    if started.tzinfo is None:
-        started = started.replace(tzinfo=timezone.utc)
-    trace["duration_seconds"] = f"{max(0.0, time.time() - started.timestamp()):.4f}"
 
 
 def _utc_timestamp() -> str:

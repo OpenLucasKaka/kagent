@@ -47,6 +47,7 @@ REQUIRED_OPENAPI_PATHS = (
     "/runtime/runs",
     "/runtime/runs/summary",
     "/runtime/runs/{run_id}",
+    "/runtime/runs/{run_id}/cancel",
     "/runtime/runs/{run_id}/timeline",
     "/runtime/runs/{run_id}/artifacts",
     "/runtime/runs/{run_id}/artifacts/{artifact_id}",
@@ -229,6 +230,15 @@ REQUIRED_KUBERNETES_ROLLOUT_MARKERS = (
     "kagent-trace-prune",
     "--delete",
     "--fail-on-errors",
+)
+
+REQUIRED_KUBERNETES_SHARED_TRACE_MARKERS = (
+    "replicas: 2",
+    "KAGENT_SERVICE_TRACE_DIR: \"/var/lib/kagent/traces\"",
+    "accessModes:",
+    "- ReadWriteMany",
+    "name: traces",
+    "mountPath: /var/lib/kagent/traces",
 )
 
 REQUIRED_SYSTEMD_SERVICE_MARKERS = (
@@ -850,6 +860,10 @@ def _kubernetes_manifest_record(path: Path) -> Dict[str, Any]:
             "missing_hardening_markers": list(REQUIRED_KUBERNETES_HARDENING_MARKERS),
             "rollout_controls_present": "false",
             "missing_rollout_markers": list(REQUIRED_KUBERNETES_ROLLOUT_MARKERS),
+            "shared_trace_controls_present": "false",
+            "missing_shared_trace_markers": list(
+                REQUIRED_KUBERNETES_SHARED_TRACE_MARKERS
+            ),
         }
     content = path.read_bytes()
     try:
@@ -864,6 +878,10 @@ def _kubernetes_manifest_record(path: Path) -> Dict[str, Any]:
             "missing_hardening_markers": list(REQUIRED_KUBERNETES_HARDENING_MARKERS),
             "rollout_controls_present": "false",
             "missing_rollout_markers": list(REQUIRED_KUBERNETES_ROLLOUT_MARKERS),
+            "shared_trace_controls_present": "false",
+            "missing_shared_trace_markers": list(
+                REQUIRED_KUBERNETES_SHARED_TRACE_MARKERS
+            ),
             "sha256": sha256(content).hexdigest(),
         }
     resources = _kubernetes_resource_kinds(text)
@@ -876,6 +894,11 @@ def _kubernetes_manifest_record(path: Path) -> Dict[str, Any]:
     missing_rollout = [
         marker for marker in REQUIRED_KUBERNETES_ROLLOUT_MARKERS if marker not in text
     ]
+    missing_shared_trace = [
+        marker
+        for marker in REQUIRED_KUBERNETES_SHARED_TRACE_MARKERS
+        if marker not in text
+    ]
     status = "passed"
     if missing_resources:
         status = "missing_required_resources"
@@ -883,6 +906,8 @@ def _kubernetes_manifest_record(path: Path) -> Dict[str, Any]:
         status = "missing_hardening_markers"
     if missing_rollout:
         status = "missing_rollout_markers"
+    if missing_shared_trace:
+        status = "missing_shared_trace_markers"
     return {
         "status": status,
         "resource_count": str(len(resources)),
@@ -892,6 +917,8 @@ def _kubernetes_manifest_record(path: Path) -> Dict[str, Any]:
         "missing_hardening_markers": missing_hardening,
         "rollout_controls_present": str(not missing_rollout).lower(),
         "missing_rollout_markers": missing_rollout,
+        "shared_trace_controls_present": str(not missing_shared_trace).lower(),
+        "missing_shared_trace_markers": missing_shared_trace,
         "sha256": sha256(content).hexdigest(),
     }
 

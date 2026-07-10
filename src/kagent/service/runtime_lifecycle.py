@@ -2,11 +2,20 @@ from __future__ import annotations
 
 import time
 from datetime import datetime, timezone
-from typing import Any, Dict
+from typing import Any, Callable, Dict
 
 from kagent.runtime import RUNTIME_TRACE_TYPE
 from kagent.service.active_runs import ActiveRunSnapshot
-from kagent.service.trace_store import load_trace_by_run_id, persist_trace
+from kagent.service.trace_store import (
+    load_trace_by_run_id,
+    persist_trace,
+    runtime_trace_lock,
+    trace_path_for_run_id,
+)
+
+_TERMINAL_RUNTIME_STATUSES = {"cancelled", "done", "failed", "resumed"}
+_CANCELLATION_PROTECTED_STATUSES = _TERMINAL_RUNTIME_STATUSES | {"resuming"}
+TracePersistFunction = Callable[[Dict[str, Any], str], str]
 
 
 def running_runtime_trace(
@@ -51,30 +60,31 @@ def persist_cancelled_runtime_trace(
     error_code: str = "run_cancelled",
     error: str = "runtime run cancelled",
 ) -> Dict[str, Any]:
-    trace = load_trace_by_run_id(run_id, trace_dir) or {
-        "trace_type": RUNTIME_TRACE_TYPE,
-        "run_id": run_id,
-        "status": "running",
-        "started_at": active_run.started_at,
-        "events": [],
-    }
-    if str(trace.get("status", "")) in {"done", "failed", "resumed"}:
+    with runtime_trace_lock(run_id, trace_dir):
+        trace = load_trace_by_run_id(run_id, trace_dir) or {
+            "trace_type": RUNTIME_TRACE_TYPE,
+            "run_id": run_id,
+            "status": "running",
+            "started_at": active_run.started_at,
+            "events": [],
+        }
+        if str(trace.get("status", "")) in _CANCELLATION_PROTECTED_STATUSES:
+            return _with_trace_path(trace, run_id, trace_dir)
+        cancelled_at = active_run.cancelled_at or _utc_timestamp()
+        trace["status"] = "cancelled"
+        trace["completed_at"] = cancelled_at
+        trace["cancelled_at"] = cancelled_at
+        trace["error_code"] = error_code
+        trace["error"] = error
+        if cancelled_by_auth_subject:
+            trace["cancelled_by_auth_subject"] = cancelled_by_auth_subject
+        if active_run.cancel_reason:
+            trace["cancel_reason"] = active_run.cancel_reason
+        trace.pop("pending_approval", None)
+        _append_cancel_event(trace, cancelled_at, active_run.cancel_reason)
+        _refresh_duration_seconds(trace)
+        trace["trace_path"] = persist_trace(trace, trace_dir)
         return trace
-    cancelled_at = active_run.cancelled_at or _utc_timestamp()
-    trace["status"] = "cancelled"
-    trace["completed_at"] = cancelled_at
-    trace["cancelled_at"] = cancelled_at
-    trace["error_code"] = error_code
-    trace["error"] = error
-    if cancelled_by_auth_subject:
-        trace["cancelled_by_auth_subject"] = cancelled_by_auth_subject
-    if active_run.cancel_reason:
-        trace["cancel_reason"] = active_run.cancel_reason
-    trace.pop("pending_approval", None)
-    _append_cancel_event(trace, cancelled_at, active_run.cancel_reason)
-    _refresh_duration_seconds(trace)
-    trace["trace_path"] = persist_trace(trace, trace_dir)
-    return trace
 
 
 def persist_failed_runtime_trace(
@@ -84,24 +94,70 @@ def persist_failed_runtime_trace(
     error_code: str,
     error: str,
 ) -> Dict[str, Any]:
-    trace = load_trace_by_run_id(run_id, trace_dir) or {
-        "trace_type": RUNTIME_TRACE_TYPE,
-        "run_id": run_id,
-        "status": "running",
-        "started_at": _utc_timestamp(),
-        "events": [],
-    }
-    if str(trace.get("status", "")) in {"cancelled", "done", "failed", "resumed"}:
+    with runtime_trace_lock(run_id, trace_dir):
+        trace = load_trace_by_run_id(run_id, trace_dir) or {
+            "trace_type": RUNTIME_TRACE_TYPE,
+            "run_id": run_id,
+            "status": "running",
+            "started_at": _utc_timestamp(),
+            "events": [],
+        }
+        if str(trace.get("status", "")) in _TERMINAL_RUNTIME_STATUSES:
+            return _with_trace_path(trace, run_id, trace_dir)
+        completed_at = _utc_timestamp()
+        trace["status"] = "failed"
+        trace["completed_at"] = completed_at
+        trace["error_code"] = error_code
+        trace["error"] = error
+        trace.pop("pending_approval", None)
+        _append_failure_event(trace, completed_at, error_code, error)
+        _refresh_duration_seconds(trace)
+        trace["trace_path"] = persist_trace(trace, trace_dir)
         return trace
-    completed_at = _utc_timestamp()
-    trace["status"] = "failed"
-    trace["completed_at"] = completed_at
-    trace["error_code"] = error_code
-    trace["error"] = error
-    trace.pop("pending_approval", None)
-    _append_failure_event(trace, completed_at, error_code, error)
-    _refresh_duration_seconds(trace)
-    trace["trace_path"] = persist_trace(trace, trace_dir)
+
+
+def persist_runtime_worker_result(
+    *,
+    run_id: str,
+    trace_dir: str,
+    result: Dict[str, Any],
+    persist_trace_fn: TracePersistFunction,
+) -> Dict[str, Any]:
+    """Persist a worker result unless another replica already committed a terminal state."""
+
+    with runtime_trace_lock(run_id, trace_dir):
+        try:
+            current = load_trace_by_run_id(run_id, trace_dir)
+        except ValueError:
+            current = None
+        if current is not None and str(current.get("status", "")) in (
+            _TERMINAL_RUNTIME_STATUSES
+        ):
+            return _with_trace_path(current, run_id, trace_dir)
+        result["trace_path"] = persist_trace_fn(result, trace_dir)
+        return result
+
+
+def persisted_runtime_cancellation_probe(
+    *,
+    run_id: str,
+    trace_dir: str,
+) -> Dict[str, str] | None:
+    trace = load_trace_by_run_id(run_id, trace_dir)
+    if trace is None or str(trace.get("status", "")) != "cancelled":
+        return None
+    return {
+        "reason": str(trace.get("cancel_reason", "")),
+        "cancelled_at": str(trace.get("cancelled_at", "")),
+    }
+
+
+def _with_trace_path(
+    trace: Dict[str, Any],
+    run_id: str,
+    trace_dir: str,
+) -> Dict[str, Any]:
+    trace["trace_path"] = str(trace_path_for_run_id(run_id, trace_dir))
     return trace
 
 

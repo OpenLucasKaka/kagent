@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import argparse
+import fcntl
 import json
 import os
 import tempfile
 import time
+from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Iterator
 
 from kagent.runtime import RUNTIME_TRACE_TYPE
 from kagent.service.safety import (
@@ -17,10 +19,36 @@ from kagent.utils.json_output import format_and_write_json, json_ready
 DEFAULT_RUNTIME_RETENTION_STATUSES = ("cancelled", "done", "failed", "resumed")
 
 
+def trace_path_for_run_id(run_id: Any, trace_dir: str) -> Path:
+    return Path(trace_dir) / f"{safe_trace_file_stem(run_id)}.json"
+
+
+@contextmanager
+def runtime_trace_lock(run_id: Any, trace_dir: str) -> Iterator[None]:
+    """Serialize cross-process read/modify/write operations for one runtime trace."""
+
+    output_dir = Path(trace_dir)
+    _ensure_owner_only_trace_dir(output_dir)
+    lock_path = output_dir / f".{safe_trace_file_stem(run_id)}.runtime.lock"
+    flags = os.O_CREAT | os.O_RDWR
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    lock_fd = os.open(lock_path, flags, 0o600)
+    try:
+        os.fchmod(lock_fd, 0o600)
+        fcntl.flock(lock_fd, fcntl.LOCK_EX)
+        yield
+    finally:
+        try:
+            fcntl.flock(lock_fd, fcntl.LOCK_UN)
+        finally:
+            os.close(lock_fd)
+
+
 def persist_trace(trace: Dict[str, Any], trace_dir: str) -> str:
     output_dir = Path(trace_dir)
     _ensure_owner_only_trace_dir(output_dir)
-    output_path = output_dir / f"{safe_trace_file_stem(trace.get('run_id'))}.json"
+    output_path = trace_path_for_run_id(trace.get("run_id"), trace_dir)
     temporary_path = _write_owner_only_temporary_trace(
         output_dir,
         output_path.name,
@@ -34,7 +62,7 @@ def persist_trace(trace: Dict[str, Any], trace_dir: str) -> str:
 
 
 def load_trace_by_run_id(run_id: Any, trace_dir: str) -> Dict[str, Any] | None:
-    trace_path = Path(trace_dir) / f"{safe_trace_file_stem(run_id)}.json"
+    trace_path = trace_path_for_run_id(run_id, trace_dir)
     if trace_path.is_symlink():
         raise OSError("trace file must not be a symlink")
     try:

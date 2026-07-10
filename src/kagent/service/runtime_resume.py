@@ -25,6 +25,8 @@ from kagent.service.runtime_approval import (
 from kagent.service.runtime_lifecycle import (
     persist_cancelled_runtime_trace,
     persist_failed_runtime_trace,
+    persist_runtime_worker_result,
+    persisted_runtime_cancellation_probe,
     running_runtime_trace,
 )
 from kagent.service.runtime_resume_claim import (
@@ -177,7 +179,12 @@ def execute_runtime_resume_request(
             f"could not claim runtime approval: {exc}",
         )
 
-    cancellation_token = RuntimeCancellationToken()
+    cancellation_token = RuntimeCancellationToken(
+        external_cancellation_probe=lambda: persisted_runtime_cancellation_probe(
+            run_id=resumed_run_id,
+            trace_dir=service_config.trace_dir,
+        )
+    )
     approved_at = _utc_timestamp()
     initial_trace = running_runtime_trace(
         run_id=resumed_run_id,
@@ -283,22 +290,23 @@ def execute_runtime_resume_request(
             if isinstance(previous_trace.get("tags"), list):
                 result["tags"] = list(previous_trace["tags"])
             result["resumed_from_run_id"] = run_id
-            if registry.result_may_persist(resumed_run_id):
-                result["trace_path"] = persist_trace(result, service_config.trace_dir)
-            elif trace_path:
-                result["trace_path"] = trace_path
+            result = persist_runtime_worker_result(
+                run_id=resumed_run_id,
+                trace_dir=service_config.trace_dir,
+                result=result,
+                persist_trace_fn=persist_trace,
+            )
             return result
         except Exception as exc:
-            if registry.result_may_persist(resumed_run_id):
-                try:
-                    persist_failed_runtime_trace(
-                        run_id=resumed_run_id,
-                        trace_dir=service_config.trace_dir,
-                        error_code=service_errors.AGENT_RUN_FAILED,
-                        error=f"agent run failed: {exc}",
-                    )
-                except (OSError, ValueError):
-                    pass
+            try:
+                persist_failed_runtime_trace(
+                    run_id=resumed_run_id,
+                    trace_dir=service_config.trace_dir,
+                    error_code=service_errors.AGENT_RUN_FAILED,
+                    error=f"agent run failed: {exc}",
+                )
+            except (OSError, ValueError):
+                pass
             raise
 
     def cancel_timed_out_worker() -> None:

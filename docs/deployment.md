@@ -137,7 +137,14 @@ The service reads these environment variables:
 - `KAGENT_SERVICE_TRACE_DIR`: optional directory for persisted full
   run traces. When set, `/ready` validates that the directory can be created
   and written, `/run` responses include `trace_path`, and trace files are
-  atomically replaced after a successful temporary-file write.
+  atomically replaced after a successful temporary-file write. A deployment
+  with more than one service replica must mount the same shared directory at
+  this path on every replica. Cross-replica runtime cancellation, owner
+  heartbeat protection, startup recovery, and per-run terminal-write locking
+  all depend on that shared control plane. The storage backend must provide
+  cross-client read-after-write visibility, atomic rename, and POSIX advisory
+  file locking; separate node-local volumes are unsupported for multi-replica
+  runtime control.
 - `KAGENT_SERVICE_RUNTIME_WORKSPACE_DIR`: optional root for the runtime
   virtual workspace. When set, `/ready` creates and validates owner-only
   `workspace`, `reports`, `logs`, `policies`, and `memories` directories.
@@ -273,6 +280,13 @@ traffic is accepted. Readiness and liveness probes target `/ready` and `/health`
 annotations point at `/metrics.prom`. The trace PVC uses `ReadWriteMany`
 because the manifest runs two replicas; choose a storage class that supports
 multi-pod mounts or reduce replicas before applying it.
+The same PVC is a correctness requirement for cross-replica cancellation. A
+cancel request may reach a non-owner pod, which persists the cancellation
+signal in the shared trace directory. The owner pod cooperatively observes the
+signal and stops. Per-run file locks serialize cancellation, worker completion,
+and recovery writes so an already `cancelled` trace cannot be overwritten by a
+late `done` result. Do not replace this PVC with per-pod `emptyDir`, node-local
+storage, or a `ReadWriteOnce` layout while `replicas` is greater than one.
 Each replica writes a private heartbeat lease under
 `.runtime-instances` on that shared trace PVC and records its instance ID in
 new runtime traces. During startup, a replica atomically reconciles only traces

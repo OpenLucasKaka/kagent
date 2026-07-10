@@ -14,7 +14,11 @@ from kagent.runtime import RUNTIME_TRACE_TYPE
 from kagent.service.active_runs import ActiveRunRegistry
 from kagent.service.errors import AGENT_RUN_INTERRUPTED
 from kagent.service.safety import safe_trace_file_stem
-from kagent.service.trace_store import load_trace_by_run_id, persist_trace
+from kagent.service.trace_store import (
+    load_trace_by_run_id,
+    persist_trace,
+    runtime_trace_lock,
+)
 
 RUNTIME_INTERRUPTED_ERROR_CODE = AGENT_RUN_INTERRUPTED
 _INSTANCE_DIRECTORY = ".runtime-instances"
@@ -277,23 +281,27 @@ def _reconcile_running_trace(
         ) as acquired:
             if not acquired:
                 return "locked"
-            current = load_trace_by_run_id(run_id, trace_dir)
-            if current is None or current.get("status") != "running":
-                return "unchanged"
-            completed_at = now.isoformat()
-            current["status"] = "failed"
-            current["completed_at"] = completed_at
-            current["interrupted_at"] = completed_at
-            current["error_code"] = RUNTIME_INTERRUPTED_ERROR_CODE
-            current["error"] = "runtime worker owner heartbeat expired"
-            current["orphaned_runtime_instance_id"] = current.get("runtime_instance_id", "")
-            current["reconciled_by_runtime_instance_id"] = current_instance_id
-            current["reconciled_at"] = completed_at
-            current.pop("pending_approval", None)
-            _append_recovery_event(current, completed_at)
-            _refresh_duration(current, now)
-            current["trace_path"] = persist_trace(current, trace_dir)
-            return "recovered"
+            with runtime_trace_lock(run_id, trace_dir):
+                current = load_trace_by_run_id(run_id, trace_dir)
+                if current is None or current.get("status") != "running":
+                    return "unchanged"
+                completed_at = now.isoformat()
+                current["status"] = "failed"
+                current["completed_at"] = completed_at
+                current["interrupted_at"] = completed_at
+                current["error_code"] = RUNTIME_INTERRUPTED_ERROR_CODE
+                current["error"] = "runtime worker owner heartbeat expired"
+                current["orphaned_runtime_instance_id"] = current.get(
+                    "runtime_instance_id",
+                    "",
+                )
+                current["reconciled_by_runtime_instance_id"] = current_instance_id
+                current["reconciled_at"] = completed_at
+                current.pop("pending_approval", None)
+                _append_recovery_event(current, completed_at)
+                _refresh_duration(current, now)
+                current["trace_path"] = persist_trace(current, trace_dir)
+                return "recovered"
     except (OSError, ValueError) as exc:
         return f"error:{run_id}: {exc}"
 
@@ -316,29 +324,34 @@ def _reconcile_resuming_trace(
         ) as acquired:
             if not acquired:
                 return "locked"
-            current = load_trace_by_run_id(run_id, trace_dir)
-            if current is None or current.get("status") != "resuming":
-                return "unchanged"
-            child_run_id = str(current.get("resumed_to_run_id", ""))
-            child = load_trace_by_run_id(child_run_id, trace_dir) if child_run_id else None
-            reconciled_at = now.isoformat()
-            current["reconciled_at"] = reconciled_at
-            current["reconciled_by_runtime_instance_id"] = current_instance_id
-            if child is None:
-                current["status"] = "requires_approval"
-                current["resume_recovery"] = "reopened_before_child_initialization"
-                _clear_resume_claim(current, clear_child=True)
+            with runtime_trace_lock(run_id, trace_dir):
+                current = load_trace_by_run_id(run_id, trace_dir)
+                if current is None or current.get("status") != "resuming":
+                    return "unchanged"
+                child_run_id = str(current.get("resumed_to_run_id", ""))
+                child = (
+                    load_trace_by_run_id(child_run_id, trace_dir)
+                    if child_run_id
+                    else None
+                )
+                reconciled_at = now.isoformat()
+                current["reconciled_at"] = reconciled_at
+                current["reconciled_by_runtime_instance_id"] = current_instance_id
+                if child is None:
+                    current["status"] = "requires_approval"
+                    current["resume_recovery"] = "reopened_before_child_initialization"
+                    _clear_resume_claim(current, clear_child=True)
+                    persist_trace(current, trace_dir)
+                    return "reopened"
+                current["status"] = "resumed"
+                current["completed_at"] = reconciled_at
+                current["resumed_at"] = reconciled_at
+                current["resume_recovery"] = "approval_consumed_after_owner_loss"
+                current.pop("pending_approval", None)
+                current.pop("resume_claim_id", None)
+                current.pop("resume_claimed_at", None)
                 persist_trace(current, trace_dir)
-                return "reopened"
-            current["status"] = "resumed"
-            current["completed_at"] = reconciled_at
-            current["resumed_at"] = reconciled_at
-            current["resume_recovery"] = "approval_consumed_after_owner_loss"
-            current.pop("pending_approval", None)
-            current.pop("resume_claim_id", None)
-            current.pop("resume_claimed_at", None)
-            persist_trace(current, trace_dir)
-            return "completed"
+                return "completed"
     except (OSError, ValueError) as exc:
         return f"error:{run_id}: {exc}"
 

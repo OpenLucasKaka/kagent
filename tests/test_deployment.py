@@ -249,6 +249,22 @@ def test_kubernetes_manifest_defines_production_runtime_resources():
     assert "secretRef:" in manifest
 
 
+def test_kubernetes_manifest_supports_cross_replica_cancellation():
+    manifest = Path("deploy/kubernetes/kagent.yaml").read_text()
+    deployment = Path("docs/deployment.md").read_text()
+
+    assert "replicas: 2" in manifest
+    assert 'KAGENT_SERVICE_TRACE_DIR: "/var/lib/kagent/traces"' in manifest
+    assert "accessModes:\n    - ReadWriteMany" in manifest
+    assert "- name: traces\n              mountPath: /var/lib/kagent/traces" in manifest
+    assert "claimName: kagent-traces" in manifest
+    assert "cross-replica cancellation" in deployment
+    assert "persists the cancellation\nsignal" in deployment
+    assert "owner pod cooperatively observes" in deployment
+    assert "Per-run file locks" in deployment
+    assert "already `cancelled` trace cannot be overwritten" in deployment
+
+
 def test_kubernetes_manifest_image_tags_match_package_version():
     manifest = Path("deploy/kubernetes/kagent.yaml").read_text()
     version = json.loads(Path("package.json").read_text(encoding="utf-8"))["version"]

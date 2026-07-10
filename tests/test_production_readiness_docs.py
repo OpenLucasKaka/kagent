@@ -208,3 +208,15 @@ def test_detailed_docs_document_service_runtime_controls():
     assert "KAGENT_SERVICE_TRACE_DIR" in detailed_docs
     assert "SSRF" in detailed_docs
     assert "does not follow redirects" in detailed_docs
+
+
+def test_readiness_docs_require_shared_trace_cancellation_controls():
+    readiness = Path("docs/production-readiness.md").read_text()
+
+    assert "persisted cancellation signals" in readiness
+    assert "per-run terminal-write\nlocks" in readiness
+    assert "POSIX advisory locking" in readiness
+    assert "terminal\n`cancelled` trace" in readiness
+    assert "shared_trace_controls_present" in readiness
+    assert "missing shared-trace\nmarkers" in readiness
+    assert "`ReadWriteMany` trace mount" in readiness

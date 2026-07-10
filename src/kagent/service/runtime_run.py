@@ -25,6 +25,8 @@ from kagent.service.runtime_approval import (
 from kagent.service.runtime_lifecycle import (
     persist_cancelled_runtime_trace,
     persist_failed_runtime_trace,
+    persist_runtime_worker_result,
+    persisted_runtime_cancellation_probe,
     running_runtime_trace,
 )
 from kagent.service.runtime_metadata import (
@@ -155,7 +157,16 @@ def execute_runtime_run_request(
         else RuntimePolicy()
     )
     run_id = str(uuid4())
-    cancellation_token = RuntimeCancellationToken()
+    cancellation_token = RuntimeCancellationToken(
+        external_cancellation_probe=(
+            lambda: persisted_runtime_cancellation_probe(
+                run_id=run_id,
+                trace_dir=_service_config.trace_dir,
+            )
+            if _service_config.trace_dir
+            else None
+        )
+    )
     registry = active_run_registry or ActiveRunRegistry()
     trace_path = ""
     if _service_config.trace_dir:
@@ -220,13 +231,16 @@ def execute_runtime_run_request(
             result["run_id"] = run_id
             if auth_subject:
                 result["auth_subject"] = auth_subject
-            if _service_config.trace_dir and registry.result_may_persist(run_id):
-                result["trace_path"] = persist_trace(result, _service_config.trace_dir)
-            elif trace_path:
-                result["trace_path"] = trace_path
+            if _service_config.trace_dir:
+                result = persist_runtime_worker_result(
+                    run_id=run_id,
+                    trace_dir=_service_config.trace_dir,
+                    result=result,
+                    persist_trace_fn=persist_trace,
+                )
             return result
         except Exception as exc:
-            if _service_config.trace_dir and registry.result_may_persist(run_id):
+            if _service_config.trace_dir:
                 try:
                     persist_failed_runtime_trace(
                         run_id=run_id,

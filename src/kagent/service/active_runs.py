@@ -148,11 +148,6 @@ class ActiveRunRegistry:
                 active_run.cancelled_at = token_snapshot["cancelled_at"]
             return _snapshot(active_run)
 
-    def result_may_persist(self, run_id: str) -> bool:
-        with self._lock:
-            active_run = self._runs.get(run_id)
-            return active_run is not None and active_run.state == "running"
-
     def complete(self, run_id: str) -> None:
         with self._lock:
             active_run = self._runs.pop(run_id, None)

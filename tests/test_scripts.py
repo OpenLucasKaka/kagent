@@ -407,6 +407,12 @@ def test_production_readiness_audit_reports_required_artifacts():
     ] == "true"
     assert payload["deployment"]["kubernetes_manifest"]["hardening_present"] == "true"
     assert payload["deployment"]["kubernetes_manifest"]["rollout_controls_present"] == "true"
+    assert payload["deployment"]["kubernetes_manifest"][
+        "shared_trace_controls_present"
+    ] == "true"
+    assert payload["deployment"]["kubernetes_manifest"][
+        "missing_shared_trace_markers"
+    ] == []
     assert "--fail-on-errors" not in payload["deployment"]["kubernetes_manifest"][
         "missing_rollout_markers"
     ]

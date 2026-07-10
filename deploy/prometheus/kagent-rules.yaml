@@ -214,7 +214,7 @@ groups:
           severity: warning
         annotations:
           summary: Runtime startup reconciliation encountered errors
-          description: Persisted runtime traces could not be fully inspected or reconciled; check trace storage health and service startup logs.
+          description: Persisted runtime traces could not be fully inspected or reconciled; check shared trace storage, owner heartbeats, per-run locks, and service startup logs.
 
       - alert: kagentRuntimeInterruptedRunsRecovered
         expr: |
@@ -310,7 +310,7 @@ groups:
           severity: warning
         annotations:
           summary: kagent trace persistence is failing
-          description: Completed runs could not persist trace files; check trace storage and mounts.
+          description: Runtime traces or persisted cancellation signals could not be written; check shared trace storage, multi-replica mounts, and file-lock support.
 
       - alert: kagentConcurrencySaturated
         expr: |
