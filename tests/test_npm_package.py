@@ -64,6 +64,9 @@ def test_npm_ink_source_uses_jsonl_runtime_protocol():
     assert "run_progress" in combined
     assert "approval_required" in combined
     assert "approval_response" in combined
+    assert "provider_configure" in combined
+    assert "provider_configured" in combined
+    assert "provider_configuration_failed" in combined
     assert "run_completed" in combined
     assert "kagent.cli.stdio_runtime" in combined
     assert "--classic" not in Path("npm/src/runtime-client.ts").read_text(encoding="utf-8")
@@ -116,6 +119,68 @@ assert.deepEqual(state, {value: "你好A👍🏽", cursor: 3});
     subprocess.run([node, "-e", script], check=True)
 
 
+def test_npm_provider_setup_state_machine_supports_menu_defaults_and_secret_masking():
+    node = shutil.which("node")
+    if node is None:
+        return
+
+    script = r"""
+const assert = require("node:assert/strict");
+const {
+  createProviderSetupState,
+  maskSecret,
+  providerConfiguration,
+  providerSetupReducer,
+} = require("./npm/lib/provider-setup");
+
+const options = [
+  {
+    provider: "qwen_openai_compatible",
+    label: "Qwen / DashScope",
+    base_url: "https://dashscope.example/v1",
+    model: "qwen-plus",
+    api_key_required: true,
+  },
+  {
+    provider: "ollama_openai_compatible",
+    label: "Ollama local",
+    base_url: "http://localhost:11434/v1",
+    model: "llama3",
+    api_key_required: false,
+  },
+];
+
+let state = createProviderSetupState(options);
+state = providerSetupReducer(state, {type: "select", offset: -1});
+assert.equal(state.selectedIndex, 1);
+state = providerSetupReducer(state, {type: "next"});
+assert.equal(state.stage, "base_url");
+assert.equal(state.editor.value, "http://localhost:11434/v1");
+state = providerSetupReducer(state, {type: "next"});
+assert.equal(state.stage, "model");
+state = providerSetupReducer(state, {type: "next"});
+assert.equal(state.stage, "api_key");
+state = providerSetupReducer(state, {type: "next"});
+assert.equal(state.stage, "saving");
+assert.deepEqual(providerConfiguration(state), {
+  provider: "ollama_openai_compatible",
+  baseUrl: "http://localhost:11434/v1",
+  model: "llama3",
+  apiKey: "",
+});
+
+let required = createProviderSetupState(options);
+required = providerSetupReducer(required, {type: "next"});
+required = providerSetupReducer(required, {type: "next"});
+required = providerSetupReducer(required, {type: "next"});
+required = providerSetupReducer(required, {type: "next"});
+assert.equal(required.stage, "api_key");
+assert.match(required.error, /required/);
+assert.equal(maskSecret("s你👍🏽"), "•••");
+"""
+    subprocess.run([node, "-e", script], check=True)
+
+
 def test_npm_runtime_client_reuses_python_session_and_handles_approval(tmp_path):
     node = shutil.which("node")
     if node is None:
@@ -164,6 +229,37 @@ function run(goal, plan) {
 }
 
 async function main() {
+  const ready = await new Promise((resolve, reject) => {
+    client.subscribe((event) => {
+      if (event.type === "runtime_ready") {
+        resolve(event);
+      }
+      if (event.type === "runtime_unavailable" || event.type === "client_failed") {
+        reject(new Error(event.message));
+      }
+    });
+  });
+  assert.equal(ready.provider.configured, false);
+  assert.equal(ready.provider_options.length, 4);
+
+  const configured = await new Promise((resolve, reject) => {
+    client.configureProvider({
+      provider: "ollama_openai_compatible",
+      baseUrl: "http://localhost:11434/v1",
+      model: "llama3",
+      apiKey: "",
+    }, (event) => {
+      if (event.type === "provider_configured") {
+        resolve(event);
+      }
+      if (event.type === "provider_configuration_failed" || event.type === "client_failed") {
+        reject(new Error(event.message));
+      }
+    });
+  });
+  assert.equal(configured.provider.display_name, "Ollama");
+  assert.equal(configured.provider.api_key_configured, false);
+
   const first = await run("first", {actions: [], final_answer: "first answer"});
   const second = await run("second", {actions: [], final_answer: "second answer"});
   assert.equal(first.at(-1).answer, "first answer");
@@ -206,20 +302,32 @@ main().catch((error) => {
   process.exitCode = 1;
 });
 """
+    env = {
+        **dict(os.environ),
+        "KAGENT_TEST_PYTHON": sys.executable,
+        "KAGENT_LLM_CONFIG_PATH": str(tmp_path / "provider.json"),
+        "KAGENT_SESSION_MEMORY_PATH": str(tmp_path / "session-memory.json"),
+    }
+    for name in (
+        "KAGENT_LLM_PROVIDER",
+        "KAGENT_LLM_BASE_URL",
+        "KAGENT_LLM_API_KEY",
+        "KAGENT_LLM_MODEL",
+    ):
+        env.pop(name, None)
+
     completed = subprocess.run(
         [node, "-e", script],
         check=False,
         capture_output=True,
         text=True,
         timeout=30,
-        env={
-            **dict(os.environ),
-            "KAGENT_TEST_PYTHON": sys.executable,
-            "KAGENT_SESSION_MEMORY_PATH": str(tmp_path / "session-memory.json"),
-        },
+        env=env,
     )
 
     assert completed.returncode == 0, completed.stderr
+    saved = json.loads((tmp_path / "provider.json").read_text(encoding="utf-8"))
+    assert saved["provider"] == "ollama_openai_compatible"
 
 
 def test_npm_bin_scripts_are_executable_node_wrappers():

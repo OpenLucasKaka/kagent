@@ -18,6 +18,8 @@ function createRuntimeSessionClient() {
     let queuedRequest = null;
     let startupFailure = "";
     let lastStderrLine = "";
+    let lifecycleEvent = null;
+    const subscribers = new Set();
     function spawn() {
         generation += 1;
         const childGeneration = generation;
@@ -37,6 +39,8 @@ function createRuntimeSessionClient() {
                 if (event.type === "runtime_ready") {
                     ready = true;
                     startupFailure = "";
+                    lifecycleEvent = event;
+                    notify(event);
                     if (queuedRequest) {
                         const request = queuedRequest;
                         queuedRequest = null;
@@ -47,6 +51,7 @@ function createRuntimeSessionClient() {
                 if (event.type === "runtime_unavailable") {
                     ready = false;
                     startupFailure = event.message;
+                    notify(event);
                     failCurrent(event.message);
                     return;
                 }
@@ -54,7 +59,13 @@ function createRuntimeSessionClient() {
                     return;
                 }
                 currentHandler(event);
-                if (event.type === "run_completed" || event.type === "run_failed") {
+                if (event.type === "provider_configured") {
+                    updateProviderLifecycle(event);
+                }
+                if (event.type === "run_completed" ||
+                    event.type === "run_failed" ||
+                    event.type === "provider_configured" ||
+                    event.type === "provider_configuration_failed") {
                     busy = false;
                     currentHandler = null;
                 }
@@ -106,6 +117,18 @@ function createRuntimeSessionClient() {
         }
         writeNow(request);
     }
+    function notify(event) {
+        for (const subscriber of subscribers) {
+            subscriber(event);
+        }
+    }
+    function updateProviderLifecycle(event) {
+        if (!lifecycleEvent) {
+            return;
+        }
+        lifecycleEvent = { ...lifecycleEvent, provider: event.provider };
+        notify(lifecycleEvent);
+    }
     function failCurrent(message) {
         const handler = currentHandler;
         busy = false;
@@ -131,6 +154,41 @@ function createRuntimeSessionClient() {
     }
     spawn();
     return {
+        subscribe(handler) {
+            subscribers.add(handler);
+            if (lifecycleEvent) {
+                handler(lifecycleEvent);
+            }
+            else if (startupFailure) {
+                handler({ type: "client_failed", message: startupFailure });
+            }
+            return () => subscribers.delete(handler);
+        },
+        configureProvider(config, onEvent) {
+            if (closed) {
+                onEvent({ type: "client_failed", message: "runtime session is closed" });
+                return;
+            }
+            if (busy) {
+                onEvent({ type: "client_failed", message: "runtime session is busy" });
+                return;
+            }
+            busy = true;
+            currentHandler = onEvent;
+            const request = {
+                type: "provider_configure",
+                provider: config.provider,
+                base_url: config.baseUrl,
+                model: config.model,
+                api_key: config.apiKey,
+            };
+            try {
+                send(request);
+            }
+            catch (error) {
+                failCurrent(errorMessage(error));
+            }
+        },
         run(goal, onEvent, options = {}) {
             if (closed) {
                 onEvent({ type: "client_failed", message: "runtime session is closed" });
@@ -189,6 +247,7 @@ function createRuntimeSessionClient() {
             busy = false;
             currentHandler = null;
             queuedRequest = null;
+            subscribers.clear();
             generation += 1;
             stdout?.close();
             if (child && !child.killed) {

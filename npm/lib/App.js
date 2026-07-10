@@ -6,6 +6,7 @@ exports.applyInput = applyInput;
 exports.moveCursor = moveCursor;
 exports.splitGraphemes = splitGraphemes;
 const runtime_client_1 = require("./runtime-client");
+const provider_setup_1 = require("./provider-setup");
 const FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 const GRAPHEME_SEGMENTER = new Intl.Segmenter(undefined, { granularity: "grapheme" });
 function KagentInkApp({ React, Ink, runtimeSessionFactory = runtime_client_1.createRuntimeSessionClient, }) {
@@ -14,23 +15,40 @@ function KagentInkApp({ React, Ink, runtimeSessionFactory = runtime_client_1.cre
     const [runtime] = React.useState(() => runtimeSessionFactory());
     const [editor, setEditor] = React.useState({ value: "", cursor: 0 });
     const [messages, setMessages] = React.useState([]);
-    const [status, setStatus] = React.useState("idle");
+    const [status, setStatus] = React.useState("starting");
     const [statusText, setStatusText] = React.useState("");
     const [frame, setFrame] = React.useState(0);
     const [approval, setApproval] = React.useState(null);
     const [showApprovalDetails, setShowApprovalDetails] = React.useState(false);
-    React.useEffect(() => () => runtime.close(), [React, runtime]);
+    const [provider, setProvider] = React.useState(null);
+    const [setup, setSetup] = React.useState(null);
     React.useEffect(() => {
-        if (status !== "thinking") {
+        const unsubscribe = runtime.subscribe(handleLifecycleEvent);
+        return () => {
+            unsubscribe();
+            runtime.close();
+        };
+    }, [React, runtime]);
+    React.useEffect(() => {
+        if (status !== "thinking" && status !== "starting" && setup?.stage !== "saving") {
             return undefined;
         }
         const timer = setInterval(() => {
             setFrame((current) => (current + 1) % FRAMES.length);
         }, 90);
         return () => clearInterval(timer);
-    }, [React, status]);
+    }, [React, setup?.stage, status]);
     Ink.useInput((value, key) => {
         if (key.ctrl && value === "c") {
+            if (setup) {
+                if (setup.stage === "saving") {
+                    runtime.cancel();
+                    setSetup((current) => current ? (0, provider_setup_1.providerSetupReducer)(current, { type: "back" }) : current);
+                    return;
+                }
+                app.exit();
+                return;
+            }
             if (status === "thinking" || status === "approval") {
                 runtime.cancel();
                 setApproval(null);
@@ -39,6 +57,10 @@ function KagentInkApp({ React, Ink, runtimeSessionFactory = runtime_client_1.cre
                 return;
             }
             app.exit();
+            return;
+        }
+        if (setup) {
+            handleSetupInput(value, key);
             return;
         }
         if (status === "approval") {
@@ -68,6 +90,107 @@ function KagentInkApp({ React, Ink, runtimeSessionFactory = runtime_client_1.cre
             setEditor((current) => applyInput(current, value));
         }
     });
+    function handleLifecycleEvent(event) {
+        if (event.type === "runtime_ready") {
+            applyRuntimeReady(event);
+            return;
+        }
+        if (event.type === "runtime_unavailable" || event.type === "client_failed") {
+            showError(event.message);
+        }
+    }
+    function applyRuntimeReady(event) {
+        setProvider(event.provider);
+        if (event.provider.configured) {
+            setSetup(null);
+            setStatus("idle");
+            return;
+        }
+        try {
+            setSetup((0, provider_setup_1.createProviderSetupState)(event.provider_options));
+            setStatus("idle");
+        }
+        catch (error) {
+            showError(errorMessage(error));
+        }
+    }
+    function handleSetupInput(value, key) {
+        if (!setup || setup.stage === "saving") {
+            return;
+        }
+        if (key.escape) {
+            if (setup.stage === "provider") {
+                app.exit();
+            }
+            else {
+                setSetup((0, provider_setup_1.providerSetupReducer)(setup, { type: "back" }));
+            }
+            return;
+        }
+        if (setup.stage === "provider") {
+            if (key.upArrow) {
+                setSetup((0, provider_setup_1.providerSetupReducer)(setup, { type: "select", offset: -1 }));
+            }
+            else if (key.downArrow) {
+                setSetup((0, provider_setup_1.providerSetupReducer)(setup, { type: "select", offset: 1 }));
+            }
+            else if (key.return) {
+                setSetup((0, provider_setup_1.providerSetupReducer)(setup, { type: "next" }));
+            }
+            return;
+        }
+        if (key.return) {
+            const next = (0, provider_setup_1.providerSetupReducer)(setup, { type: "next" });
+            setSetup(next);
+            if (next.stage === "saving") {
+                runtime.configureProvider((0, provider_setup_1.providerConfiguration)(next), handleProviderEvent);
+            }
+            return;
+        }
+        if (key.backspace || key.delete || value === "\b" || value === "\x7f") {
+            updateSetupEditor(deleteBeforeCursor);
+            return;
+        }
+        if (key.leftArrow) {
+            updateSetupEditor((current) => moveCursor(current, -1));
+            return;
+        }
+        if (key.rightArrow) {
+            updateSetupEditor((current) => moveCursor(current, 1));
+            return;
+        }
+        if (value && !key.ctrl && !key.meta) {
+            updateSetupEditor((current) => applyInput(current, value));
+        }
+    }
+    function updateSetupEditor(update) {
+        setSetup((current) => {
+            if (!current || !(0, provider_setup_1.isInputStage)(current.stage)) {
+                return current;
+            }
+            return (0, provider_setup_1.providerSetupReducer)(current, {
+                type: "edit",
+                editor: update(current.editor),
+            });
+        });
+    }
+    function handleProviderEvent(event) {
+        if (event.type === "provider_configured") {
+            setProvider(event.provider);
+            setSetup(null);
+            setStatus("idle");
+            return;
+        }
+        if (event.type === "provider_configuration_failed" || event.type === "client_failed") {
+            setSetup((current) => current
+                ? (0, provider_setup_1.providerSetupReducer)(current, {
+                    type: "failure",
+                    message: event.message,
+                    field: event.type === "provider_configuration_failed" ? event.field : undefined,
+                })
+                : current);
+        }
+    }
     function submit() {
         const goal = editor.value.trim();
         if (!goal) {
@@ -142,7 +265,16 @@ function KagentInkApp({ React, Ink, runtimeSessionFactory = runtime_client_1.cre
         setStatusText("");
         setMessages((current) => current.concat({ role: "system", text: message }));
     }
-    return React.createElement(Box, { flexDirection: "column", paddingX: 1 }, React.createElement(Header, { React, Box, Text }), React.createElement(MessageList, { React, Box, Text, messages }), approval
+    if (setup) {
+        return React.createElement(Box, { flexDirection: "column", paddingX: 1 }, React.createElement(Header, { React, Box, Text, provider: null, setup: true }), React.createElement(ProviderSetupPanel, {
+            React,
+            Box,
+            Text,
+            frame,
+            setup,
+        }));
+    }
+    return React.createElement(Box, { flexDirection: "column", paddingX: 1 }, React.createElement(Header, { React, Box, Text, provider, setup: false }), React.createElement(MessageList, { React, Box, Text, messages }), approval
         ? React.createElement(ApprovalPanel, {
             React,
             Box,
@@ -150,17 +282,68 @@ function KagentInkApp({ React, Ink, runtimeSessionFactory = runtime_client_1.cre
             approval,
             showDetails: showApprovalDetails,
         })
-        : null, React.createElement(StatusLine, { React, Text, frame, status, statusText }), React.createElement(PromptLine, {
+        : null, React.createElement(StatusLine, { React, Text, frame, status, statusText }), status === "starting"
+        ? null
+        : React.createElement(PromptLine, {
+            React,
+            Box,
+            Text,
+            cursor: editor.cursor,
+            input: editor.value,
+            disabled: status === "thinking" || status === "approval",
+        }));
+}
+function Header({ React, Box, Text, provider, setup, }) {
+    return React.createElement(Box, { flexDirection: "column", marginBottom: 1 }, React.createElement(Box, { flexDirection: "row" }, React.createElement(Text, { bold: true, color: "cyan" }, "◆ kagent"), React.createElement(Text, { color: "gray" }, setup ? "  setup" : "  agent")), provider?.configured
+        ? React.createElement(Text, { color: "gray" }, `${provider.display_name}${provider.model ? ` · ${provider.model}` : ""}`)
+        : null);
+}
+function ProviderSetupPanel({ React, Box, Text, frame, setup, }) {
+    const option = (0, provider_setup_1.selectedProvider)(setup);
+    if (setup.stage === "provider") {
+        return React.createElement(Box, { flexDirection: "column" }, React.createElement(Text, { bold: true }, "Connect a model provider"), React.createElement(Text, { color: "gray" }, "Choose where kagent should think."), React.createElement(Box, { flexDirection: "column", marginTop: 1 }, ...setup.options.map((candidate, index) => React.createElement(Text, {
+            key: candidate.provider,
+            bold: index === setup.selectedIndex,
+            color: index === setup.selectedIndex ? "cyan" : undefined,
+        }, `${index === setup.selectedIndex ? "›" : " "} ${candidate.label}`))), React.createElement(Text, { color: "gray" }, "↑↓ choose  enter continue  esc quit"));
+    }
+    if (setup.stage === "saving") {
+        return React.createElement(Box, { flexDirection: "column" }, React.createElement(Text, { bold: true }, `Connect ${option.label}`), React.createElement(Text, { color: "cyan" }, `${FRAMES[frame]} Saving settings`));
+    }
+    const field = setupField(setup);
+    const displayValue = setup.stage === "api_key" ? (0, provider_setup_1.maskSecret)(setup.editor.value) : setup.editor.value;
+    return React.createElement(Box, { flexDirection: "column" }, React.createElement(Text, { bold: true }, `Connect ${option.label}`), React.createElement(Text, { color: "gray" }, field.hint), React.createElement(Text, { color: "gray", bold: true }, field.label), React.createElement(PromptLine, {
         React,
         Box,
         Text,
-        cursor: editor.cursor,
-        input: editor.value,
-        disabled: status === "thinking" || status === "approval",
-    }));
+        cursor: setup.editor.cursor,
+        input: displayValue,
+        disabled: false,
+        placeholder: field.placeholder,
+        compact: true,
+    }), setup.error ? React.createElement(Text, { color: "red", wrap: "wrap" }, setup.error) : null, React.createElement(Text, { color: "gray" }, "enter continue  esc back"));
 }
-function Header({ React, Box, Text }) {
-    return React.createElement(Box, { marginBottom: 1 }, React.createElement(Text, { bold: true, color: "cyan" }, "kagent"), React.createElement(Text, { color: "gray" }, "  agent runtime"));
+function setupField(setup) {
+    if (setup.stage === "base_url") {
+        return {
+            label: "Base URL",
+            hint: "OpenAI-compatible API endpoint",
+            placeholder: "https://api.example.com/v1",
+        };
+    }
+    if (setup.stage === "model") {
+        return {
+            label: "Model",
+            hint: "Exact model ID exposed by the provider",
+            placeholder: "model-id",
+        };
+    }
+    const required = (0, provider_setup_1.selectedProvider)(setup).api_key_required;
+    return {
+        label: required ? "API key" : "API key (optional)",
+        hint: "Stored locally with owner-only permissions",
+        placeholder: required ? "Paste API key" : "Leave empty for local providers",
+    };
 }
 function MessageList({ React, Box, Text, messages }) {
     const recent = messages.slice(-10);
@@ -178,20 +361,21 @@ function ApprovalPanel({ React, Box, Text, approval, showDetails, }) {
         : null, React.createElement(Text, { color: "gray" }, "y allow   n deny   d details"));
 }
 function StatusLine({ React, Text, frame, status, statusText, }) {
-    if (status !== "thinking") {
+    if (status !== "thinking" && status !== "starting") {
         return React.createElement(Text, null, "");
     }
-    return React.createElement(Text, { color: "cyan" }, `${FRAMES[frame]} ${statusText}`);
+    const label = status === "starting" ? "Starting runtime" : statusText;
+    return React.createElement(Text, { color: "cyan" }, `${FRAMES[frame]} ${label}`);
 }
-function PromptLine({ React, Box, Text, cursor, disabled, input, }) {
+function PromptLine({ React, Box, Text, cursor, disabled, input, placeholder = "Ask kagent", compact = false, }) {
     const characters = splitGraphemes(input);
     const safeCursor = Math.min(Math.max(cursor, 0), characters.length);
     const before = characters.slice(0, safeCursor).join("");
     const active = characters[safeCursor] || " ";
     const after = characters.slice(safeCursor + 1).join("");
-    return React.createElement(Box, { flexDirection: "row", marginTop: 1, alignItems: "flex-start" }, React.createElement(Text, { color: disabled ? "gray" : "cyan" }, "› "), input
+    return React.createElement(Box, { flexDirection: "row", marginTop: compact ? 0 : 1, alignItems: "flex-start" }, React.createElement(Text, { color: disabled ? "gray" : "cyan" }, "› "), input
         ? React.createElement(Text, { wrap: "wrap" }, before, React.createElement(Text, { inverse: !disabled }, active), after)
-        : React.createElement(Text, { color: "gray" }, disabled ? "" : "Ask kagent"));
+        : React.createElement(Text, { color: "gray" }, disabled ? "" : placeholder));
 }
 function progressLabel(event) {
     const type = String(event.type || "");

@@ -11,7 +11,32 @@ export type ApprovalResponseRequest = {
   approved: boolean;
 };
 
-export type RuntimeRequest = RunRequest | ApprovalResponseRequest;
+export type ProviderConfigureRequest = {
+  type: "provider_configure";
+  provider: string;
+  base_url: string;
+  model: string;
+  api_key: string;
+};
+
+export type RuntimeRequest = RunRequest | ApprovalResponseRequest | ProviderConfigureRequest;
+
+export type ProviderSnapshot = {
+  configured: boolean;
+  provider: string;
+  display_name: string;
+  base_url_configured: boolean;
+  model: string;
+  api_key_configured: boolean;
+};
+
+export type ProviderOption = {
+  provider: string;
+  label: string;
+  base_url: string;
+  model: string;
+  api_key_required: boolean;
+};
 
 export type RunStartedEvent = {
   type: "run_started";
@@ -21,6 +46,8 @@ export type RunStartedEvent = {
 
 export type RuntimeReadyEvent = {
   type: "runtime_ready";
+  provider: ProviderSnapshot;
+  provider_options: ProviderOption[];
 };
 
 export type RuntimeUnavailableEvent = {
@@ -54,6 +81,18 @@ export type RunFailedEvent = {
   message: string;
 };
 
+export type ProviderConfiguredEvent = {
+  type: "provider_configured";
+  provider: ProviderSnapshot;
+};
+
+export type ProviderConfigurationFailedEvent = {
+  type: "provider_configuration_failed";
+  error_code: string;
+  message: string;
+  field?: "base_url" | "model" | "api_key";
+};
+
 export type RuntimeProtocolEvent =
   | RuntimeReadyEvent
   | RuntimeUnavailableEvent
@@ -61,7 +100,9 @@ export type RuntimeProtocolEvent =
   | RunProgressEvent
   | ApprovalRequiredEvent
   | RunCompletedEvent
-  | RunFailedEvent;
+  | RunFailedEvent
+  | ProviderConfiguredEvent
+  | ProviderConfigurationFailedEvent;
 
 const EVENT_TYPES = new Set([
   "runtime_ready",
@@ -71,6 +112,8 @@ const EVENT_TYPES = new Set([
   "approval_required",
   "run_completed",
   "run_failed",
+  "provider_configured",
+  "provider_configuration_failed",
 ]);
 
 export function parseRuntimeProtocolLine(line: string): RuntimeProtocolEvent | null {

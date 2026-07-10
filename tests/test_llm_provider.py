@@ -1,6 +1,7 @@
 import io
 import stat
 import urllib.error
+from pathlib import Path
 
 from kagent.providers.llm import (
     DEFAULT_LLM_MODEL,
@@ -13,8 +14,11 @@ from kagent.providers.llm import (
     default_provider_config_path,
     detect_provider_kind,
     load_provider_config,
+    missing_provider_config_fields,
     provider_display_name,
+    provider_setup_options,
     save_provider_config,
+    validate_provider_setup_config,
 )
 
 
@@ -190,6 +194,84 @@ def test_provider_display_names_are_stable_for_setup_and_audit_output():
     assert provider_display_name("unknown") == "OpenAI-compatible"
 
 
+def test_provider_setup_options_are_protocol_ready_and_keep_ollama_key_optional():
+    options = provider_setup_options("default-model")
+
+    assert [option["provider"] for option in options] == [
+        "qwen_openai_compatible",
+        "deepseek",
+        "ollama_openai_compatible",
+        "openai_compatible",
+    ]
+    assert options[0]["model"] == "default-model"
+    assert options[1]["model"] == "deepseek-chat"
+    assert options[2]["api_key_required"] is False
+
+
+def test_validate_provider_setup_config_checks_url_model_and_required_key():
+    valid = LLMProviderConfig(
+        provider=ProviderKind.DEEPSEEK,
+        base_url="https://api.deepseek.com/v1",
+        api_key="secret",
+        model="deepseek-chat",
+    )
+
+    validate_provider_setup_config(valid)
+
+    invalid_configs = [
+        (LLMProviderConfig(model="model"), "base_url is required"),
+        (
+            LLMProviderConfig(base_url="not-a-url", model="model"),
+            "absolute http or https URL",
+        ),
+        (
+            LLMProviderConfig(base_url="https://example.com/v1"),
+            "model is required",
+        ),
+        (
+            LLMProviderConfig(
+                provider=ProviderKind.QWEN_OPENAI_COMPATIBLE,
+                base_url="https://example.com/v1",
+                model="qwen",
+            ),
+            "api_key is required",
+        ),
+    ]
+    for config, expected_message in invalid_configs:
+        try:
+            validate_provider_setup_config(config)
+        except ValueError as exc:
+            assert expected_message in str(exc)
+        else:
+            raise AssertionError("invalid provider setup config was accepted")
+
+
+def test_validate_provider_setup_config_allows_ollama_without_api_key():
+    validate_provider_setup_config(
+        LLMProviderConfig(
+            provider=ProviderKind.OLLAMA_OPENAI_COMPATIBLE,
+            base_url="http://localhost:11434/v1",
+            model="llama3",
+        )
+    )
+
+
+def test_missing_provider_config_fields_requires_keys_only_for_hosted_native_options():
+    qwen = LLMProviderConfig(
+        provider=ProviderKind.QWEN_OPENAI_COMPATIBLE,
+        base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+        model="qwen-plus",
+    )
+    custom = LLMProviderConfig(
+        provider=ProviderKind.OPENAI_COMPATIBLE,
+        base_url="https://gateway.example/v1",
+        model="internal-model",
+    )
+
+    assert missing_provider_config_fields(qwen) == ["KAGENT_LLM_API_KEY"]
+    assert missing_provider_config_fields(custom) == []
+
+
 def test_build_llm_provider_uses_configured_provider_kind():
     provider = build_llm_provider(
         LLMProviderConfig(
@@ -232,6 +314,23 @@ def test_provider_config_rejects_symlink_paths(tmp_path):
         assert "provider config path must not contain symlinks" in str(exc)
     else:
         raise AssertionError("provider config was saved through a symlink")
+
+
+def test_provider_config_allows_root_owned_macos_var_alias(tmp_path):
+    if not Path("/var").is_symlink() or not str(tmp_path).startswith("/private/var/"):
+        return
+    aliased_path = Path(str(tmp_path).replace("/private/var/", "/var/", 1)) / "provider.json"
+
+    save_provider_config(
+        LLMProviderConfig(
+            base_url="https://llm.example/v1",
+            model="agent-model",
+        ),
+        str(aliased_path),
+    )
+
+    assert aliased_path.exists()
+    assert stat.S_IMODE(aliased_path.stat().st_mode) == 0o600
 
 
 def test_fake_llm_provider_returns_configured_text_response():

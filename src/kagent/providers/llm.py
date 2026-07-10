@@ -5,6 +5,7 @@ import os
 import stat
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from dataclasses import dataclass
 from enum import Enum
@@ -240,6 +241,70 @@ def provider_display_name(provider: object) -> str:
     return names[kind]
 
 
+def provider_setup_options(
+    default_model: str = DEFAULT_LLM_MODEL,
+) -> List[Dict[str, object]]:
+    return [
+        {
+            "provider": ProviderKind.QWEN_OPENAI_COMPATIBLE,
+            "label": "Qwen / DashScope",
+            "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+            "model": default_model,
+            "api_key_required": True,
+        },
+        {
+            "provider": ProviderKind.DEEPSEEK,
+            "label": "DeepSeek",
+            "base_url": "https://api.deepseek.com/v1",
+            "model": "deepseek-chat",
+            "api_key_required": True,
+        },
+        {
+            "provider": ProviderKind.OLLAMA_OPENAI_COMPATIBLE,
+            "label": "Ollama local",
+            "base_url": "http://localhost:11434/v1",
+            "model": "llama3",
+            "api_key_required": False,
+        },
+        {
+            "provider": ProviderKind.OPENAI_COMPATIBLE,
+            "label": "OpenAI-compatible / custom",
+            "base_url": "",
+            "model": default_model,
+            "api_key_required": False,
+        },
+    ]
+
+
+def missing_provider_config_fields(config: LLMProviderConfig) -> List[str]:
+    missing = []
+    if not config.base_url.strip():
+        missing.append("KAGENT_LLM_BASE_URL")
+    if not config.model.strip():
+        missing.append("KAGENT_LLM_MODEL")
+    if config.provider in {
+        ProviderKind.QWEN_OPENAI_COMPATIBLE,
+        ProviderKind.DEEPSEEK,
+    } and not config.api_key.strip():
+        missing.append("KAGENT_LLM_API_KEY")
+    return missing
+
+
+def validate_provider_setup_config(config: LLMProviderConfig) -> None:
+    if not config.base_url.strip():
+        raise ValueError("base_url is required")
+    endpoint = urllib.parse.urlsplit(config.base_url)
+    if endpoint.scheme not in {"http", "https"} or not endpoint.netloc:
+        raise ValueError("base_url must be an absolute http or https URL")
+    if not config.model.strip():
+        raise ValueError("model is required")
+    if config.provider in {
+        ProviderKind.QWEN_OPENAI_COMPATIBLE,
+        ProviderKind.DEEPSEEK,
+    } and not config.api_key.strip():
+        raise ValueError("api_key is required for this provider")
+
+
 def _provider_from_env(
     env: Mapping[str, str],
     *,
@@ -276,6 +341,8 @@ def _reject_symlink_path(path: Path) -> None:
     for part in parts:
         current = current / part
         if current.is_symlink():
+            if current.parent == Path(current.anchor) and current.lstat().st_uid == 0:
+                continue
             raise ValueError("provider config path must not contain symlinks")
 
 

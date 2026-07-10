@@ -384,14 +384,12 @@ def _runtime_provider_from_args(
     default_config_path=None,
     save_config=None,
 ):
+    from kagent.providers.llm import missing_provider_config_fields
+
     if args.runtime_plan:
         return FakeLLMProvider(args.runtime_plan)
     config = LLMProviderConfig.from_sources()
-    missing = []
-    if not config.base_url:
-        missing.append("KAGENT_LLM_BASE_URL")
-    if not config.model:
-        missing.append("KAGENT_LLM_MODEL")
+    missing = missing_provider_config_fields(config)
     if missing:
         if interactive_setup and default_config_path is not None and save_config is not None:
             config = _configure_runtime_provider_interactively(
@@ -400,11 +398,7 @@ def _runtime_provider_from_args(
                 default_config_path=default_config_path,
                 save_config=save_config,
             )
-            missing = []
-            if not config.base_url:
-                missing.append("KAGENT_LLM_BASE_URL")
-            if not config.model:
-                missing.append("KAGENT_LLM_MODEL")
+            missing = missing_provider_config_fields(config)
             if not missing:
                 return build_llm_provider(config)
         raise RuntimeProviderConfigError(runtime_provider_config_message(missing))
@@ -452,6 +446,9 @@ def _configure_runtime_provider_interactively(
         api_key=api_key,
         model=model,
     )
+    from kagent.providers.llm import validate_provider_setup_config
+
+    validate_provider_setup_config(config)
     saved_path = save_config(config)
     print(f"kagent provider config saved to {saved_path}", file=prompt_stream)
     return config
@@ -485,34 +482,9 @@ def _select_provider_for_setup(
 
 
 def _provider_setup_options(default_model: str) -> list[dict[str, object]]:
-    from kagent.providers.llm import ProviderKind
+    from kagent.providers.llm import provider_setup_options
 
-    return [
-        {
-            "provider": ProviderKind.QWEN_OPENAI_COMPATIBLE,
-            "label": "Qwen / DashScope",
-            "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
-            "model": default_model,
-        },
-        {
-            "provider": ProviderKind.DEEPSEEK,
-            "label": "DeepSeek",
-            "base_url": "https://api.deepseek.com/v1",
-            "model": "deepseek-chat",
-        },
-        {
-            "provider": ProviderKind.OLLAMA_OPENAI_COMPATIBLE,
-            "label": "Ollama local",
-            "base_url": "http://localhost:11434/v1",
-            "model": "llama3",
-        },
-        {
-            "provider": ProviderKind.OPENAI_COMPATIBLE,
-            "label": "OpenAI-compatible / custom",
-            "base_url": "",
-            "model": default_model,
-        },
-    ]
+    return provider_setup_options(default_model)
 
 
 def _can_use_arrow_provider_menu(input_fn, prompt_stream) -> bool:

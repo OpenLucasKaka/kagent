@@ -4,7 +4,12 @@ import readline from "node:readline";
 import {
   parseRuntimeProtocolLine,
   type ApprovalResponseRequest,
+  type ProviderConfigureRequest,
+  type ProviderConfiguredEvent,
+  type ProviderOption,
+  type ProviderSnapshot,
   type RunRequest,
+  type RuntimeReadyEvent,
   type RuntimeProtocolEvent,
   type RuntimeRequest,
 } from "./protocol";
@@ -21,6 +26,11 @@ export type RuntimeClientEvent =
   | { type: "client_failed"; message: string };
 
 export type RuntimeSessionClient = {
+  subscribe(handler: (event: RuntimeClientEvent) => void): () => void;
+  configureProvider(
+    config: ProviderConfiguration,
+    onEvent: (event: RuntimeClientEvent) => void,
+  ): void;
   run(
     goal: string,
     onEvent: (event: RuntimeClientEvent) => void,
@@ -29,6 +39,18 @@ export type RuntimeSessionClient = {
   respondToApproval(actionId: string, approved: boolean): void;
   cancel(): void;
   close(): void;
+};
+
+export type ProviderConfiguration = {
+  provider: string;
+  baseUrl: string;
+  model: string;
+  apiKey: string;
+};
+
+export type RuntimeProviderState = {
+  provider: ProviderSnapshot;
+  options: ProviderOption[];
 };
 
 export function createRuntimeSessionClient(): RuntimeSessionClient {
@@ -42,6 +64,8 @@ export function createRuntimeSessionClient(): RuntimeSessionClient {
   let queuedRequest: RuntimeRequest | null = null;
   let startupFailure = "";
   let lastStderrLine = "";
+  let lifecycleEvent: RuntimeReadyEvent | null = null;
+  const subscribers = new Set<(event: RuntimeClientEvent) => void>();
 
   function spawn(): void {
     generation += 1;
@@ -63,6 +87,8 @@ export function createRuntimeSessionClient(): RuntimeSessionClient {
         if (event.type === "runtime_ready") {
           ready = true;
           startupFailure = "";
+          lifecycleEvent = event;
+          notify(event);
           if (queuedRequest) {
             const request = queuedRequest;
             queuedRequest = null;
@@ -73,6 +99,7 @@ export function createRuntimeSessionClient(): RuntimeSessionClient {
         if (event.type === "runtime_unavailable") {
           ready = false;
           startupFailure = event.message;
+          notify(event);
           failCurrent(event.message);
           return;
         }
@@ -80,7 +107,15 @@ export function createRuntimeSessionClient(): RuntimeSessionClient {
           return;
         }
         currentHandler(event);
-        if (event.type === "run_completed" || event.type === "run_failed") {
+        if (event.type === "provider_configured") {
+          updateProviderLifecycle(event);
+        }
+        if (
+          event.type === "run_completed" ||
+          event.type === "run_failed" ||
+          event.type === "provider_configured" ||
+          event.type === "provider_configuration_failed"
+        ) {
           busy = false;
           currentHandler = null;
         }
@@ -135,6 +170,20 @@ export function createRuntimeSessionClient(): RuntimeSessionClient {
     writeNow(request);
   }
 
+  function notify(event: RuntimeClientEvent): void {
+    for (const subscriber of subscribers) {
+      subscriber(event);
+    }
+  }
+
+  function updateProviderLifecycle(event: ProviderConfiguredEvent): void {
+    if (!lifecycleEvent) {
+      return;
+    }
+    lifecycleEvent = { ...lifecycleEvent, provider: event.provider };
+    notify(lifecycleEvent);
+  }
+
   function failCurrent(message: string): void {
     const handler = currentHandler;
     busy = false;
@@ -163,6 +212,39 @@ export function createRuntimeSessionClient(): RuntimeSessionClient {
   spawn();
 
   return {
+    subscribe(handler) {
+      subscribers.add(handler);
+      if (lifecycleEvent) {
+        handler(lifecycleEvent);
+      } else if (startupFailure) {
+        handler({ type: "client_failed", message: startupFailure });
+      }
+      return () => subscribers.delete(handler);
+    },
+    configureProvider(config, onEvent) {
+      if (closed) {
+        onEvent({ type: "client_failed", message: "runtime session is closed" });
+        return;
+      }
+      if (busy) {
+        onEvent({ type: "client_failed", message: "runtime session is busy" });
+        return;
+      }
+      busy = true;
+      currentHandler = onEvent;
+      const request: ProviderConfigureRequest = {
+        type: "provider_configure",
+        provider: config.provider,
+        base_url: config.baseUrl,
+        model: config.model,
+        api_key: config.apiKey,
+      };
+      try {
+        send(request);
+      } catch (error) {
+        failCurrent(errorMessage(error));
+      }
+    },
     run(goal, onEvent, options = {}) {
       if (closed) {
         onEvent({ type: "client_failed", message: "runtime session is closed" });
@@ -219,6 +301,7 @@ export function createRuntimeSessionClient(): RuntimeSessionClient {
       busy = false;
       currentHandler = null;
       queuedRequest = null;
+      subscribers.clear();
       generation += 1;
       stdout?.close();
       if (child && !child.killed) {

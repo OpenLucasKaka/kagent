@@ -18,7 +18,16 @@ from kagent.cli.memory import (
     save_runtime_session_memory,
 )
 from kagent.cli.provider import RuntimeProviderConfigError, runtime_provider_config_message
-from kagent.providers.llm import FakeLLMProvider, LLMProviderConfig, build_llm_provider
+from kagent.providers.llm import (
+    FakeLLMProvider,
+    LLMProviderConfig,
+    build_llm_provider,
+    missing_provider_config_fields,
+    provider_display_name,
+    provider_setup_options,
+    save_provider_config,
+    validate_provider_setup_config,
+)
 from kagent.runtime import run_runtime_agent
 from kagent.utils.json_output import json_ready
 
@@ -44,6 +53,7 @@ class StdioRuntimeSession:
             self.memory_path,
             max_turns=RUNTIME_MEMORY_MAX_TURNS,
         )
+        self.provider_config = LLMProviderConfig.from_sources()
         self.pending_approval: PendingApproval | None = None
 
     def handle(self, request: Request) -> None:
@@ -54,10 +64,20 @@ class StdioRuntimeSession:
         if request_type == "approval_response":
             self._handle_approval_response(request)
             return
+        if request_type == "provider_configure":
+            self._handle_provider_configure(request)
+            return
         self._fail(
             "invalid_request_type",
-            "request type must be run_request or approval_response",
+            "request type must be run_request, approval_response, or provider_configure",
         )
+
+    def ready_event(self) -> Dict[str, Any]:
+        return {
+            "type": "runtime_ready",
+            "provider": _provider_snapshot(self.provider_config),
+            "provider_options": provider_setup_options(),
+        }
 
     def _handle_run_request(self, request: Request) -> None:
         if self.pending_approval is not None:
@@ -88,7 +108,7 @@ class StdioRuntimeSession:
             },
         )
         try:
-            provider = _provider_from_request(request)
+            provider = _provider_from_request(request, self.provider_config)
             runtime_goal = runtime_goal_with_memory(goal, self.memory)
             result = run_runtime_agent(
                 runtime_goal,
@@ -101,6 +121,39 @@ class StdioRuntimeSession:
             self._fail("provider_not_configured", str(exc))
         except Exception as exc:  # pragma: no cover - defensive protocol boundary
             self._fail("runtime_error", str(exc))
+
+    def _handle_provider_configure(self, request: Request) -> None:
+        if self.pending_approval is not None:
+            self._provider_configuration_failed(
+                "approval_pending",
+                "respond to the pending approval before changing the provider",
+            )
+            return
+        try:
+            config = LLMProviderConfig(
+                provider=str(request.get("provider", "")),
+                base_url=str(request.get("base_url", "")).strip(),
+                api_key=str(request.get("api_key", "")).strip(),
+                model=str(request.get("model", "")).strip(),
+            )
+            validate_provider_setup_config(config)
+            save_provider_config(config)
+        except (OSError, TypeError, ValueError) as exc:
+            message = str(exc)
+            self._provider_configuration_failed(
+                "invalid_provider_config",
+                message,
+                field=_provider_error_field(message),
+            )
+            return
+        self.provider_config = config
+        _emit(
+            self.stdout,
+            {
+                "type": "provider_configured",
+                "provider": _provider_snapshot(config),
+            },
+        )
 
     def _handle_approval_response(self, request: Request) -> None:
         pending = self.pending_approval
@@ -184,6 +237,22 @@ class StdioRuntimeSession:
             {"type": "run_failed", "error_code": error_code, "message": message},
         )
 
+    def _provider_configuration_failed(
+        self,
+        error_code: str,
+        message: str,
+        *,
+        field: str = "",
+    ) -> None:
+        payload = {
+            "type": "provider_configuration_failed",
+            "error_code": error_code,
+            "message": message,
+        }
+        if field:
+            payload["field"] = field
+        _emit(self.stdout, payload)
+
 
 def main() -> None:
     warnings.filterwarnings("ignore")
@@ -202,7 +271,7 @@ def run_stdio_runtime(stdin: TextIO, stdout: TextIO) -> None:
             },
         )
         return
-    _emit(stdout, {"type": "runtime_ready"})
+    _emit(stdout, session.ready_event())
     for line in stdin:
         line = line.strip()
         if not line:
@@ -300,24 +369,37 @@ def _bounded_text(value: Any, limit: int) -> str:
     return text[: limit - 3] + "..."
 
 
-def _provider_from_request(request: Request) -> Any:
+def _provider_from_request(request: Request, config: LLMProviderConfig) -> Any:
     runtime_plan = str(request.get("runtime_plan", "")).strip()
     if runtime_plan:
         return FakeLLMProvider(runtime_plan)
-    config = LLMProviderConfig.from_sources()
-    missing = _missing_provider_fields(config)
+    missing = missing_provider_config_fields(config)
     if missing:
         raise RuntimeProviderConfigError(runtime_provider_config_message(missing))
     return build_llm_provider(config)
 
 
-def _missing_provider_fields(config: LLMProviderConfig) -> list[str]:
-    missing = []
-    if not config.base_url:
-        missing.append("KAGENT_LLM_BASE_URL")
-    if not config.model:
-        missing.append("KAGENT_LLM_MODEL")
-    return missing
+def _provider_snapshot(config: LLMProviderConfig) -> Dict[str, Any]:
+    configured = not missing_provider_config_fields(config)
+    return {
+        "configured": configured,
+        "provider": config.provider.value if configured else "unconfigured",
+        "display_name": provider_display_name(config.provider) if configured else "Unconfigured",
+        "base_url_configured": bool(config.base_url),
+        "model": config.model,
+        "api_key_configured": bool(config.api_key),
+    }
+
+
+def _provider_error_field(message: str) -> str:
+    normalized = message.lower()
+    if "base_url" in normalized:
+        return "base_url"
+    if "model" in normalized:
+        return "model"
+    if "api_key" in normalized:
+        return "api_key"
+    return ""
 
 
 def _positive_int(value: Any, *, default: int) -> int:
