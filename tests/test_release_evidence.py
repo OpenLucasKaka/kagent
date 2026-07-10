@@ -40,6 +40,18 @@ def test_release_evidence_requires_lifecycle_observability_metrics():
         "kagent_runtime_approvals_by_auth_subject_total"
         in REQUIRED_OBSERVABILITY_ACCEPTANCE_METRICS
     )
+    assert (
+        "kagent_runtime_reconciliation_runs_total"
+        in REQUIRED_OBSERVABILITY_ACCEPTANCE_METRICS
+    )
+    assert (
+        "kagent_runtime_reconciliation_outcomes_total"
+        in REQUIRED_OBSERVABILITY_ACCEPTANCE_METRICS
+    )
+    assert (
+        "kagent_runtime_reconciliation_errors_total"
+        in REQUIRED_OBSERVABILITY_ACCEPTANCE_METRICS
+    )
 
 
 def test_release_evidence_cli_builds_verified_bundle(tmp_path):

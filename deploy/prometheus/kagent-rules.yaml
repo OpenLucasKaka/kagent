@@ -207,6 +207,29 @@ groups:
           summary: Codex-style runtime hooks are failing
           description: Runtime hook callbacks failed; inspect hook failure events before trusting audit or middleware side effects.
 
+      - alert: kagentRuntimeReconciliationErrors
+        expr: sum(increase(kagent_runtime_reconciliation_errors_total[10m])) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Runtime startup reconciliation encountered errors
+          description: Persisted runtime traces could not be fully inspected or reconciled; check trace storage health and service startup logs.
+
+      - alert: kagentRuntimeInterruptedRunsRecovered
+        expr: |
+          sum(increase(
+            kagent_runtime_reconciliation_outcomes_total{
+              outcome="recovered_running"
+            }[10m]
+          )) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: Interrupted runtime runs were recovered during startup
+          description: A service restart or failed instance left running traces behind; inspect recovered run timelines and the previous instance health.
+
       - alert: kagentRuntimePlannerFailures
         expr: |
           sum(rate(kagent_runtime_planner_failures_total[5m]))

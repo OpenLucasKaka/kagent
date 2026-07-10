@@ -386,7 +386,7 @@ def test_prometheus_alert_rules_cover_service_and_agent_health():
     )
     assert "groups:" in rules
     assert "  - name: kagent.rules" in rules
-    assert alert_count == 34
+    assert alert_count == 36
     assert "kagentServiceDown" in rules
     assert "kagentHighErrorRate" in rules
     assert "kagentHighRequestLatency" in rules
@@ -404,6 +404,8 @@ def test_prometheus_alert_rules_cover_service_and_agent_health():
     assert "kagentRuntimeSubjectResumes" in rules
     assert "kagentRuntimeBudgetExhausted" in rules
     assert "kagentRuntimeProgressSinkFailures" in rules
+    assert "kagentRuntimeReconciliationErrors" in rules
+    assert "kagentRuntimeInterruptedRunsRecovered" in rules
     assert "kagentRuntimePlannerFailures" in rules
     assert "kagentRuntimeLLMProviderFailures" in rules
     assert "kagentRuntimeToolExecutionFailures" in rules
@@ -435,6 +437,8 @@ def test_prometheus_alert_rules_cover_service_and_agent_health():
     assert "kagent_runtime_failed_budget_exhaustions_total" in rules
     assert "kagent_runtime_progress_event_sink_failures_total" in rules
     assert "kagent_runtime_hook_failures_total" in rules
+    assert "kagent_runtime_reconciliation_errors_total" in rules
+    assert "kagent_runtime_reconciliation_outcomes_total" in rules
     assert "kagent_runtime_llm_provider_requests_total" in rules
     assert "kagent_runtime_llm_provider_requests_by_status_total" in rules
     assert "kagent_runtime_observation_errors_total" in rules
@@ -499,7 +503,7 @@ def test_grafana_dashboard_covers_internal_runtime_operations():
     assert "Runtime Resumes by Subject" in panel_titles
     assert "Runtime Approvals by Subject" in panel_titles
     assert "Runtime Approval Pressure" in panel_titles
-    assert "Runtime Progress Sink Failures" in panel_titles
+    assert "Runtime Reliability Signals" in panel_titles
     assert "Runtime Stale Pending Approvals" in panel_titles
     assert "Runtime Tool Errors" in panel_titles
     assert 'up{job=\\"kagent\\"}' in dashboard_text
@@ -512,6 +516,8 @@ def test_grafana_dashboard_covers_internal_runtime_operations():
     assert "kagent_runtime_approval_required_total" in payload
     assert "kagent_runtime_progress_event_sink_failures_total" in payload
     assert "kagent_runtime_hook_failures_total" in payload
+    assert "kagent_runtime_reconciliation_errors_total" in payload
+    assert "kagent_runtime_reconciliation_outcomes_total" in payload
     assert "kagent_runtime_stale_pending_approvals_current" in payload
     assert "kagent_runtime_llm_provider_requests_by_status_total" in payload
     assert "kagent_runtime_llm_provider_request_retries_total" in payload

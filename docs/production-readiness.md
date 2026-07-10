@@ -116,14 +116,16 @@ progress sink failure counters, per-subject usage, per-subject outcome, resume,
 and tool-error metrics, including
 `kagent_runtime_stale_pending_approvals_current` and
 `kagent_runtime_progress_event_sink_failures_total` plus
-`kagent_runtime_hook_failures_total`.
+`kagent_runtime_hook_failures_total`,
+`kagent_runtime_reconciliation_errors_total`, and
+`kagent_runtime_reconciliation_outcomes_total`.
 It also runs a Prometheus alert rules semantic check that records
 `required_alerts_present`, `required_metrics_present`, alert count, missing
 alert names, missing metric names, and rules file `sha256`. This keeps service
 down, HTTP error, runtime latency, stale pending approval, per-subject
 failure/resume, progress sink failure, tool timeout, trace persistence,
-concurrency, malformed request, oversized request, and unknown route alerting
-in the release evidence.
+runtime reconciliation errors, interrupted-run recovery, concurrency, malformed
+request, oversized request, and unknown route alerting in the release evidence.
 The `observability` section also includes a ServiceMonitor semantic check for
 Prometheus Operator clusters. It records `scrape_target_present`,
 `selector_present`, missing scrape markers, and ServiceMonitor `sha256`, so the

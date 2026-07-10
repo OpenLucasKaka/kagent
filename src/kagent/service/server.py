@@ -47,7 +47,8 @@ def create_threading_server(
         host=str(bound_host),
         port=int(bound_port),
     )
-    server.service_metrics = ServiceMetrics()  # type: ignore[attr-defined]
+    service_metrics = ServiceMetrics()
+    server.service_metrics = service_metrics  # type: ignore[attr-defined]
     server.service_rate_limiter = ServiceRateLimiter(  # type: ignore[attr-defined]
         limit_per_minute=server.service_config.rate_limit_per_minute  # type: ignore[attr-defined]
     )
@@ -91,6 +92,9 @@ def create_threading_server(
                     ),
                 )
             )
+            service_metrics.record_runtime_reconciliation(
+                server.service_runtime_reconciliation  # type: ignore[attr-defined]
+            )
         except OSError as exc:
             lease.stop()
             server.service_runtime_instance_lease = None  # type: ignore[attr-defined]
@@ -99,6 +103,10 @@ def create_threading_server(
                 "reason": "trace_persistence_unavailable",
                 "error_type": type(exc).__name__,
             }
+            service_metrics.record_runtime_reconciliation(
+                {"errors": 1},
+                status="unavailable",
+            )
         except Exception:
             lease.stop()
             super(ProductionThreadingHTTPServer, server).server_close()

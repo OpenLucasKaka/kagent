@@ -504,6 +504,11 @@ def test_service_metrics_tracks_requests_by_path_and_status():
         "runtime_failed_observations_total": "0",
         "runtime_progress_event_sink_failures_total": "0",
         "runtime_hook_failures_total": "0",
+        "runtime_reconciliation_runs_total": "0",
+        "runtime_reconciliation_runs_by_status": {},
+        "runtime_reconciliation_traces_scanned_total": "0",
+        "runtime_reconciliation_outcomes": {},
+        "runtime_reconciliation_errors_total": "0",
         "runtime_observation_errors_by_code": {},
         "runtime_tool_executions_by_tool_status": {},
         "runtime_planner_attempts_by_status": {},
@@ -747,6 +752,44 @@ def test_service_metrics_tracks_runtime_operational_counters():
     assert snapshot["runtime_run_duration_seconds_sum"] == "3.6000"
     assert snapshot["average_runtime_run_duration_seconds"] == "1.2000"
     assert snapshot["max_runtime_run_duration_seconds"] == "3.0000"
+
+
+def test_service_metrics_tracks_runtime_reconciliation_outcomes():
+    metrics = ServiceMetrics()
+    metrics.record_runtime_reconciliation(
+        {
+            "scanned": 4,
+            "recovered_running": 2,
+            "completed_resumes": 1,
+            "reopened_approvals": 1,
+            "protected_live": 3,
+            "skipped_unowned": 1,
+            "skipped_locked": 2,
+            "errors": ["invalid trace", "unreadable trace"],
+        }
+    )
+    metrics.record_runtime_reconciliation(
+        {"scanned": "2", "recovered_running": "1", "errors": 1},
+        status="unavailable",
+    )
+
+    snapshot = metrics.snapshot()
+
+    assert snapshot["runtime_reconciliation_runs_total"] == "2"
+    assert snapshot["runtime_reconciliation_runs_by_status"] == {
+        "ok": "1",
+        "unavailable": "1",
+    }
+    assert snapshot["runtime_reconciliation_traces_scanned_total"] == "6"
+    assert snapshot["runtime_reconciliation_outcomes"] == {
+        "completed_resumes": "1",
+        "protected_live": "3",
+        "recovered_running": "3",
+        "reopened_approvals": "1",
+        "skipped_locked": "2",
+        "skipped_unowned": "1",
+    }
+    assert snapshot["runtime_reconciliation_errors_total"] == "3"
 
 
 def test_service_metrics_bounds_http_method_cardinality():
@@ -1161,6 +1204,15 @@ def test_service_prometheus_metrics_endpoint_reports_text_exposition(monkeypatch
             "retryable_reason": "model_unloaded",
         },
     )
+    metrics.record_runtime_reconciliation(
+        {
+            "scanned": 3,
+            "recovered_running": 1,
+            "reopened_approvals": 1,
+            "protected_live": 1,
+            "errors": ["invalid trace"],
+        }
+    )
     limiter = ServiceConcurrencyLimiter(max_concurrent_runs=2)
     idempotency_cache = ServiceIdempotencyCache(max_entries=5)
     release = limiter.try_acquire()
@@ -1430,6 +1482,21 @@ def test_service_prometheus_metrics_endpoint_reports_text_exposition(monkeypatch
     assert "kagent_runtime_approval_required_total 1" in payload
     assert "kagent_runtime_progress_event_sink_failures_total 3" in payload
     assert "kagent_runtime_hook_failures_total 3" in payload
+    assert "# HELP kagent_runtime_reconciliation_runs_total" in payload
+    assert "# TYPE kagent_runtime_reconciliation_runs_total counter" in payload
+    assert 'kagent_runtime_reconciliation_runs_total{status="ok"} 1' in payload
+    assert "kagent_runtime_reconciliation_traces_scanned_total 3" in payload
+    assert (
+        'kagent_runtime_reconciliation_outcomes_total'
+        '{outcome="recovered_running"} 1'
+        in payload
+    )
+    assert (
+        'kagent_runtime_reconciliation_outcomes_total'
+        '{outcome="reopened_approvals"} 1'
+        in payload
+    )
+    assert "kagent_runtime_reconciliation_errors_total 1" in payload
     assert "kagent_runtime_final_answer_guardrails_total 0" in payload
     assert "kagent_runtime_pending_approvals_current 0" in payload
     assert "kagent_runtime_stale_pending_approvals_current 0" in payload

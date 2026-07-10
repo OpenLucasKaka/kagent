@@ -73,6 +73,10 @@ required_metrics = [
     "kagent_runtime_stale_pending_approvals_current",
     "kagent_runtime_progress_event_sink_failures_total",
     "kagent_runtime_hook_failures_total",
+    "kagent_runtime_reconciliation_runs_total",
+    "kagent_runtime_reconciliation_traces_scanned_total",
+    "kagent_runtime_reconciliation_outcomes_total",
+    "kagent_runtime_reconciliation_errors_total",
     "kagent_runtime_runs_by_auth_subject_total",
     "kagent_build_info",
 ]
@@ -140,6 +144,8 @@ def grafana_status():
         "kagent_runtime_llm_provider_requests_by_status_total",
         "kagent_runtime_progress_event_sink_failures_total",
         "kagent_runtime_hook_failures_total",
+        "kagent_runtime_reconciliation_outcomes_total",
+        "kagent_runtime_reconciliation_errors_total",
         "kagent_runtime_stale_pending_approvals_current",
     ]
     expressions = []

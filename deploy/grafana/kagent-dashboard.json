@@ -176,9 +176,19 @@
           "expr": "sum(rate(kagent_runtime_hook_failures_total[5m]))",
           "legendFormat": "hook failures",
           "refId": "B"
+        },
+        {
+          "expr": "sum(rate(kagent_runtime_reconciliation_errors_total[5m]))",
+          "legendFormat": "reconciliation errors",
+          "refId": "C"
+        },
+        {
+          "expr": "sum(rate(kagent_runtime_reconciliation_outcomes_total{outcome=\"recovered_running\"}[5m]))",
+          "legendFormat": "interrupted runs recovered",
+          "refId": "D"
         }
       ],
-      "title": "Runtime Progress Sink Failures",
+      "title": "Runtime Reliability Signals",
       "type": "timeseries"
     },
     {

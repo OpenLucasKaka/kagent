@@ -2167,6 +2167,17 @@ def _metrics_response_properties() -> Dict[str, Dict[str, Any]]:
     properties = _diagnostic_audit_properties()
     properties["runtime_progress_event_sink_failures_total"] = {"type": "string"}
     properties["runtime_hook_failures_total"] = {"type": "string"}
+    properties["runtime_reconciliation_runs_total"] = {"type": "string"}
+    properties["runtime_reconciliation_runs_by_status"] = {
+        "type": "object",
+        "additionalProperties": {"type": "string"},
+    }
+    properties["runtime_reconciliation_traces_scanned_total"] = {"type": "string"}
+    properties["runtime_reconciliation_outcomes"] = {
+        "type": "object",
+        "additionalProperties": {"type": "string"},
+    }
+    properties["runtime_reconciliation_errors_total"] = {"type": "string"}
     properties.update(_runtime_llm_provider_metric_properties())
     return properties
 

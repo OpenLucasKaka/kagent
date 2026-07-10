@@ -1524,6 +1524,26 @@ def test_service_contract_documents_runtime_progress_sink_failure_metric():
     )
 
 
+def test_service_contract_documents_runtime_reconciliation_metrics():
+    payload = service_openapi()
+    schema_properties = payload["components"]["schemas"]["MetricsResponse"]["properties"]
+
+    for metric in [
+        "runtime_reconciliation_runs_total",
+        "runtime_reconciliation_traces_scanned_total",
+        "runtime_reconciliation_errors_total",
+    ]:
+        assert schema_properties[metric] == {"type": "string"}
+    for metric in [
+        "runtime_reconciliation_runs_by_status",
+        "runtime_reconciliation_outcomes",
+    ]:
+        assert schema_properties[metric] == {
+            "type": "object",
+            "additionalProperties": {"type": "string"},
+        }
+
+
 def test_service_contract_documents_runtime_llm_provider_metrics():
     payload = service_openapi()
     schema_properties = payload["components"]["schemas"]["MetricsResponse"]["properties"]

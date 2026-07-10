@@ -3,6 +3,7 @@ import time
 from http.server import BaseHTTPRequestHandler
 
 from kagent.runtime.cancellation import RuntimeCancellationToken
+from kagent.service import server as service_server
 from kagent.service.active_runs import ActiveRunRegistry
 from kagent.service.runtime import (
     ServiceConcurrencyLimiter,
@@ -125,6 +126,14 @@ def test_create_threading_server_starts_runtime_lease_and_reconciles_orphans(
             == server.service_active_run_registry.instance_id
         )
         assert server.service_runtime_reconciliation["recovered_running"] == 1
+        metrics = server.service_metrics.snapshot()
+        assert metrics["runtime_reconciliation_runs_total"] == "1"
+        assert metrics["runtime_reconciliation_runs_by_status"] == {"ok": "1"}
+        assert metrics["runtime_reconciliation_traces_scanned_total"] == "1"
+        assert metrics["runtime_reconciliation_outcomes"] == {
+            "recovered_running": "1"
+        }
+        assert metrics["runtime_reconciliation_errors_total"] == "0"
         recovered = load_trace_by_run_id("orphaned-run", str(tmp_path))
         assert recovered is not None
         assert recovered["status"] == "failed"
@@ -133,6 +142,34 @@ def test_create_threading_server_starts_runtime_lease_and_reconciles_orphans(
         server.server_close()
 
     assert not lease_path.exists()
+
+
+def test_create_threading_server_records_unavailable_reconciliation(
+    monkeypatch,
+    tmp_path,
+):
+    def fail_start(_lease):
+        raise OSError("trace storage unavailable")
+
+    monkeypatch.setattr(service_server.RuntimeInstanceLease, "start", fail_start)
+    config = ServiceConfig(trace_dir=str(tmp_path))
+
+    server = create_threading_server("127.0.0.1", 0, DummyHandler, config=config)
+    try:
+        assert server.service_runtime_instance_lease is None
+        assert server.service_runtime_reconciliation == {
+            "enabled": False,
+            "reason": "trace_persistence_unavailable",
+            "error_type": "OSError",
+        }
+        metrics = server.service_metrics.snapshot()
+        assert metrics["runtime_reconciliation_runs_total"] == "1"
+        assert metrics["runtime_reconciliation_runs_by_status"] == {
+            "unavailable": "1"
+        }
+        assert metrics["runtime_reconciliation_errors_total"] == "1"
+    finally:
+        server.server_close()
 
 
 def test_create_threading_server_does_not_reconcile_live_instance_trace(tmp_path):

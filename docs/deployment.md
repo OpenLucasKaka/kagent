@@ -282,6 +282,14 @@ its child trace already exists; otherwise the original approval is reopened.
 Live replicas remain protected, and per-trace exclusive locks prevent duplicate
 recovery by concurrently starting pods. Locks left behind by a terminated
 reconciler are reclaimed after the same stale-owner threshold.
+Startup recovery is exported through
+`kagent_runtime_reconciliation_runs_total`,
+`kagent_runtime_reconciliation_traces_scanned_total`,
+`kagent_runtime_reconciliation_outcomes_total`, and
+`kagent_runtime_reconciliation_errors_total`. The packaged Prometheus rules
+alert when reconciliation encounters errors or recovers interrupted running
+traces, so rollout automation can distinguish an ordinary restart from a
+restart that repaired abandoned work.
 The production doctor initContainer has CPU, memory, and ephemeral-storage
 requests and limits so release-gate checks remain bounded during rollout.
 The Deployment uses `minReadySeconds: 5` so a pod must remain ready briefly

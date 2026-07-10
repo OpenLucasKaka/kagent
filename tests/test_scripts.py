@@ -340,6 +340,10 @@ def test_production_readiness_audit_reports_required_artifacts():
     assert "scripts/production_readiness_audit.py" in rollout
     assert "kagent_runtime_progress_event_sink_failures_total" in script_text
     assert "kagentRuntimeProgressSinkFailures" in script_text
+    assert "kagent_runtime_reconciliation_errors_total" in script_text
+    assert "kagent_runtime_reconciliation_outcomes_total" in script_text
+    assert "kagentRuntimeReconciliationErrors" in script_text
+    assert "kagentRuntimeInterruptedRunsRecovered" in script_text
     assert "kagent_runtime_planner_attempts_total" in script_text
     assert "kagent_runtime_planner_failures_total" in script_text
     assert "kagent_runtime_llm_provider_requests_by_status_total" in script_text
@@ -541,6 +545,10 @@ def test_observability_acceptance_script_is_secret_safe_and_documented():
     assert "kagent_runtime_stale_pending_approvals_current" in script
     assert "kagent_runtime_progress_event_sink_failures_total" in script
     assert "kagent_runtime_hook_failures_total" in script
+    assert "kagent_runtime_reconciliation_runs_total" in script
+    assert "kagent_runtime_reconciliation_traces_scanned_total" in script
+    assert "kagent_runtime_reconciliation_outcomes_total" in script
+    assert "kagent_runtime_reconciliation_errors_total" in script
     assert "kagent_runtime_planner_attempts_total" in script
     assert "kagent_runtime_planner_failures_total" in script
     assert "kagent_runtime_llm_provider_requests_total" in script

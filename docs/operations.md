@@ -969,6 +969,14 @@ failure pressure,
 `kagent_runtime_progress_event_sink_failures_total` for progress
 event delivery failures in streaming, webhook, or operator UI sinks,
 `kagent_runtime_hook_failures_total` for runtime hook callback failures,
+`kagent_runtime_reconciliation_runs_total{status="..."}` for startup recovery
+availability, `kagent_runtime_reconciliation_traces_scanned_total` for recovery
+scan volume, `kagent_runtime_reconciliation_outcomes_total{outcome="..."}` for
+recovered runs, reopened approvals, live-owner protection, and lock skips, and
+`kagent_runtime_reconciliation_errors_total` for trace inspection or recovery
+errors. Alert on reconciliation errors immediately; treat
+`outcome="recovered_running"` as a restart or instance-failure signal that
+requires checking the recovered run timeline and the previous instance health.
 `kagent_runtime_approval_required_total` for human approval queue
 pressure, and
 `kagent_runtime_failed_budget_exhaustions_total` to alert on

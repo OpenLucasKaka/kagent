@@ -18,6 +18,15 @@ from kagent.utils.json_output import json_ready
 _KNOWN_HTTP_METHODS = {"GET", "HEAD", "OPTIONS", "POST"}
 _UNKNOWN_METRICS_LABEL = "__unknown__"
 _DURATION_BUCKETS = (0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0)
+_RUNTIME_RECONCILIATION_STATUSES = {"ok", "unavailable"}
+_RUNTIME_RECONCILIATION_OUTCOMES = (
+    "recovered_running",
+    "completed_resumes",
+    "reopened_approvals",
+    "protected_live",
+    "skipped_unowned",
+    "skipped_locked",
+)
 
 
 @dataclass(frozen=True)
@@ -298,6 +307,11 @@ class ServiceMetrics:
         self._runtime_failed_observations_total = 0
         self._runtime_progress_event_sink_failures_total = 0
         self._runtime_hook_failures_total = 0
+        self._runtime_reconciliation_runs_total = 0
+        self._runtime_reconciliation_runs_by_status: Dict[str, int] = {}
+        self._runtime_reconciliation_traces_scanned_total = 0
+        self._runtime_reconciliation_outcomes: Dict[str, int] = {}
+        self._runtime_reconciliation_errors_total = 0
         self._runtime_observation_errors_by_code: Dict[str, int] = {}
         self._runtime_tool_executions_by_tool_status: Dict[str, int] = {}
         self._runtime_planner_attempts_by_status: Dict[str, int] = {}
@@ -580,6 +594,39 @@ class ServiceMetrics:
             if budget_exhausted:
                 self._runtime_failed_budget_exhaustions_total += 1
 
+    def record_runtime_reconciliation(
+        self,
+        summary: Mapping[str, Any],
+        *,
+        status: str = "ok",
+    ) -> None:
+        status_key = (
+            status
+            if status in _RUNTIME_RECONCILIATION_STATUSES
+            else _UNKNOWN_METRICS_LABEL
+        )
+        errors = summary.get("errors", ())
+        error_count = (
+            len(errors)
+            if isinstance(errors, (list, tuple))
+            else _non_negative_int_value(errors)
+        )
+        with self._lock:
+            self._runtime_reconciliation_runs_total += 1
+            self._runtime_reconciliation_runs_by_status[status_key] = (
+                self._runtime_reconciliation_runs_by_status.get(status_key, 0) + 1
+            )
+            self._runtime_reconciliation_traces_scanned_total += (
+                _non_negative_int_value(summary.get("scanned", 0))
+            )
+            for outcome in _RUNTIME_RECONCILIATION_OUTCOMES:
+                count = _non_negative_int_value(summary.get(outcome, 0))
+                if count:
+                    self._runtime_reconciliation_outcomes[outcome] = (
+                        self._runtime_reconciliation_outcomes.get(outcome, 0) + count
+                    )
+            self._runtime_reconciliation_errors_total += error_count
+
     def snapshot(self, *, now: Optional[float] = None) -> Dict[str, Any]:
         with self._lock:
             current_time = time.monotonic() if now is None else now
@@ -657,6 +704,21 @@ class ServiceMetrics:
                 ),
                 "runtime_hook_failures_total": str(
                     self._runtime_hook_failures_total
+                ),
+                "runtime_reconciliation_runs_total": str(
+                    self._runtime_reconciliation_runs_total
+                ),
+                "runtime_reconciliation_runs_by_status": _string_counts(
+                    self._runtime_reconciliation_runs_by_status
+                ),
+                "runtime_reconciliation_traces_scanned_total": str(
+                    self._runtime_reconciliation_traces_scanned_total
+                ),
+                "runtime_reconciliation_outcomes": _string_counts(
+                    self._runtime_reconciliation_outcomes
+                ),
+                "runtime_reconciliation_errors_total": str(
+                    self._runtime_reconciliation_errors_total
                 ),
                 "runtime_observation_errors_by_code": _string_counts(
                     self._runtime_observation_errors_by_code
@@ -1485,6 +1547,46 @@ def prometheus_metrics_text(snapshot: Mapping[str, Any]) -> str:
             "# TYPE kagent_runtime_hook_failures_total counter",
             "kagent_runtime_hook_failures_total "
             f"{snapshot.get('runtime_hook_failures_total', '0')}",
+            "# HELP kagent_runtime_reconciliation_runs_total "
+            "Runtime startup reconciliation passes by bounded status.",
+            "# TYPE kagent_runtime_reconciliation_runs_total counter",
+        ]
+    )
+    for status, count in _mapping_value(
+        snapshot,
+        "runtime_reconciliation_runs_by_status",
+    ).items():
+        lines.append(
+            "kagent_runtime_reconciliation_runs_total"
+            f'{{status="{_prometheus_label(status)}"}} {count}'
+        )
+    lines.extend(
+        [
+            "# HELP kagent_runtime_reconciliation_traces_scanned_total "
+            "Persisted runtime traces scanned during startup reconciliation.",
+            "# TYPE kagent_runtime_reconciliation_traces_scanned_total counter",
+            "kagent_runtime_reconciliation_traces_scanned_total "
+            f"{snapshot.get('runtime_reconciliation_traces_scanned_total', '0')}",
+            "# HELP kagent_runtime_reconciliation_outcomes_total "
+            "Startup reconciliation outcomes by bounded outcome.",
+            "# TYPE kagent_runtime_reconciliation_outcomes_total counter",
+        ]
+    )
+    for outcome, count in _mapping_value(
+        snapshot,
+        "runtime_reconciliation_outcomes",
+    ).items():
+        lines.append(
+            "kagent_runtime_reconciliation_outcomes_total"
+            f'{{outcome="{_prometheus_label(outcome)}"}} {count}'
+        )
+    lines.extend(
+        [
+            "# HELP kagent_runtime_reconciliation_errors_total "
+            "Errors encountered while reconciling persisted runtime traces.",
+            "# TYPE kagent_runtime_reconciliation_errors_total counter",
+            "kagent_runtime_reconciliation_errors_total "
+            f"{snapshot.get('runtime_reconciliation_errors_total', '0')}",
             "# HELP kagent_runtime_approval_required_total "
             "Approval-required observations produced by Codex-style runtime runs.",
             "# TYPE kagent_runtime_approval_required_total counter",
