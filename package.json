@@ -16,10 +16,14 @@
   "engines": {
     "node": ">=18"
   },
+  "dependencies": {
+    "ink": "^5.0.1",
+    "react": "^18.3.1"
+  },
   "publishConfig": {
     "access": "public"
   },
   "scripts": {
-    "check": "node --check npm/bin/kagent.js && node --check npm/bin/kagent-serve.js && node --check npm/lib/python-runner.js"
+    "check": "node --check npm/bin/kagent.js && node --check npm/bin/kagent-serve.js && node --check npm/lib/ink-runner.js && node --check npm/lib/python-runner.js"
   }
 }

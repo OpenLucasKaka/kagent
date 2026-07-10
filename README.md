@@ -22,13 +22,16 @@ npm install -g github:OpenLucasKaka/kagent
 kagent
 ```
 
-The first `kagent` run prepares a private Python runtime under your user cache,
-installs kagent there, and then opens the terminal agent. If no provider is
-configured yet, kagent starts a first-time setup flow. The setup first asks you
-to choose Qwen, DeepSeek, Ollama, or OpenAI-compatible/custom from a provider
-menu, then asks for that provider's Base URL, model, and API key. The local
-provider config is stored at `${XDG_CONFIG_HOME:-~/.config}/kagent/provider.json`
-with owner-only permissions.
+The default `kagent` command opens an Ink-based terminal UI and keeps the
+Python LangGraph runtime as the execution engine behind it. The first run
+prepares a private Python runtime under your user cache, installs kagent there,
+and then opens the terminal agent. If no provider is configured yet, kagent
+starts a first-time setup flow. The setup first asks you to choose Qwen,
+DeepSeek, Ollama, or OpenAI-compatible/custom from a provider menu, then asks
+for that provider's Base URL, model, and API key. The local provider config is
+stored at `${XDG_CONFIG_HOME:-~/.config}/kagent/provider.json` with owner-only
+permissions. Use `kagent --classic` to bypass the Ink UI and run the Python CLI
+directly.
 
 Interactive `kagent` launches check GitHub for updates. For this GitHub-based
 install path, kagent compares both the package version and the `main` commit

@@ -29,11 +29,38 @@ def test_npm_package_ships_python_runtime_sources():
     assert "npm" in package_json["files"]
 
 
+def test_npm_package_declares_ink_tui_dependencies():
+    package_json = json.loads(Path("package.json").read_text(encoding="utf-8"))
+
+    assert package_json["dependencies"]["ink"].startswith("^5.")
+    assert package_json["dependencies"]["react"].startswith("^18.")
+
+
 def test_npm_bin_scripts_are_executable_node_wrappers():
     for script in (Path("npm/bin/kagent.js"), Path("npm/bin/kagent-serve.js")):
         text = script.read_text(encoding="utf-8")
         assert text.startswith("#!/usr/bin/env node\n")
         assert "runPythonEntrypoint" in text
+
+
+def test_npm_kagent_bin_prefers_ink_tui_with_classic_fallback():
+    text = Path("npm/bin/kagent.js").read_text(encoding="utf-8")
+
+    assert "runKagentInk" in text
+    assert "shouldRunInkTui" in text
+    assert "--classic" in text
+    assert "runPythonEntrypoint(\"kagent\", classicArgs(args))" in text
+
+
+def test_npm_ink_runner_bridges_to_classic_python_runtime():
+    text = Path("npm/lib/ink-runner.js").read_text(encoding="utf-8")
+
+    assert "Ink" in text
+    assert "React" in text
+    assert "spawn" in text
+    assert "--classic" in text
+    assert "--runtime" in text
+    assert "kagent" in text
 
 
 def test_npm_runner_uses_cache_venv_and_env_forwarding():
@@ -231,6 +258,7 @@ def test_npm_wrapper_javascript_syntax_is_valid_when_node_is_available():
     for script in (
         "npm/bin/kagent.js",
         "npm/bin/kagent-serve.js",
+        "npm/lib/ink-runner.js",
         "npm/lib/python-runner.js",
     ):
         subprocess.run([node, "--check", script], check=True)
