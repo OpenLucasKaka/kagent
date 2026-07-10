@@ -1137,9 +1137,10 @@ def test_cli_interactive_runtime_prints_prompt_to_real_stderr(monkeypatch, capsy
     captured = capsys.readouterr()
     assert "› " in captured.out
     assert "kagent" in captured.err
-    assert "[K]" in captured.err
-    assert "local agent for your terminal" in captured.err
-    assert "ask · approve · automate" in captured.err
+    assert "[K]" not in captured.err
+    assert "local terminal agent" in captured.err
+    assert "ask anything" in captured.err
+    assert "approve actions" in captured.err
     assert "ready for work" not in captured.err
     assert "/help" not in captured.err
     assert "/config" not in captured.err
@@ -1235,21 +1236,12 @@ def test_cli_runtime_user_message_block_is_wide_and_not_arrow_prefixed():
 
     block = runtime_user_message_block("测试", color=True, width=12)
 
-    assert block.startswith("\033[48;5;236m")
-    assert "›" not in block
+    assert "\033[48;" not in block
+    assert block.startswith("\033[36m›\033[0m ")
     assert "测试" in block
     assert block.endswith("\033[0m")
-    visible = (
-        block.replace("\033[48;5;236m", "")
-        .replace("\033[97m", "")
-        .replace("\033[0m", "")
-    )
-    assert visible.splitlines() == [
-        "            ",
-        "测试        ",
-        "            ",
-    ]
-    assert runtime_user_message_block("测试", color=False, width=12) == "测试"
+    assert block.count("\n") == 0
+    assert runtime_user_message_block("测试", color=False, width=12) == "› 测试"
 
 
 def test_cli_runtime_ready_message_feels_like_kagent_product_shell():
@@ -1258,9 +1250,10 @@ def test_cli_runtime_ready_message_feels_like_kagent_product_shell():
     message = runtime_ready_message(color=False)
 
     assert message.splitlines()[0] == "kagent"
-    assert "[K]" in message
-    assert "local agent for your terminal" in message
-    assert "ask · approve · automate" in message
+    assert "[K]" not in message
+    assert "local terminal agent" in message
+    assert "ask anything" in message
+    assert "approve actions" in message
     assert "/config" not in message
     assert "/help" not in message
     assert "/status" not in message
@@ -1280,7 +1273,7 @@ def test_cli_runtime_setup_message_keeps_brand_presence():
     )
 
     assert message.splitlines()[0] == "kagent setup"
-    assert "[K]" in message
+    assert "[K]" not in message
     assert "Configure your provider once." in message
     assert "K-bot" not in message
     assert "(o_o)" not in message
@@ -1573,7 +1566,7 @@ def test_cli_prompt_toolkit_reader_wraps_long_lines():
             "wrap_lines": True,
             "multiline": False,
             "prompt_continuation": _runtime_prompt_continuation,
-            "reserve_space_for_menu": 4,
+            "reserve_space_for_menu": 0,
             "refresh_interval": 0.12,
         }
     ]
@@ -1589,12 +1582,11 @@ def test_cli_prompt_toolkit_prompt_fragments_keep_arrow_inside_input_bar():
     )
 
     assert _runtime_prompt_fragments(color=True) == [
-        ("class:input-bar.padding", "  "),
         ("class:input-bar.prompt", "› "),
     ]
-    assert _runtime_prompt_fragments(color=False) == "  › "
+    assert _runtime_prompt_fragments(color=False) == "› "
     assert _runtime_prompt_continuation(80, 1, False) == [
-        ("class:input-bar.padding", "    "),
+        ("class:input-bar.continuation", "  "),
     ]
 
 
@@ -1686,8 +1678,8 @@ def test_cli_prompt_toolkit_session_uses_persistent_history(
     style_rules = str(created_sessions[0]["style"].style_rules)
     assert "bg:" not in style_rules
     assert "bottom-toolbar" not in str(created_sessions[0]["style"].style_rules)
-    assert "input-bar.padding" in str(created_sessions[0]["style"].style_rules)
     assert "input-bar.prompt" in str(created_sessions[0]["style"].style_rules)
+    assert "input-bar.continuation" in str(created_sessions[0]["style"].style_rules)
     assert "input-bar.progress" not in str(created_sessions[0]["style"].style_rules)
     assert "#303030" not in style_rules
     assert set(created_sessions[0]["completer"].words) == set(
@@ -1919,13 +1911,14 @@ def test_cli_interactive_runtime_tty_prints_live_progress(monkeypatch, capsys):
 
     captured = capsys.readouterr()
     assert "\r  " not in captured.out
-    assert "Thinking" in captured.out
-    assert "Planned 1 action · 0.2000s" in captured.out
-    assert "Working" in captured.out
+    assert "working..." in captured.out
+    assert "Thinking" not in captured.out
+    assert "Planned" not in captured.out
+    assert "Working" not in captured.out
     assert "Thinking · iter" not in captured.out
     assert "Planner failed" not in captured.out
     assert "Approval required ·" not in captured.out
-    assert "✓ Completed · 0.0100s" in captured.out
+    assert "✓ Done · 0.0100s" in captured.out
     assert "\n\nDone" in captured.out
     assert "\n\nAnswer\n  文件已创建。" in captured.out
     assert "\n\nResults\n  ✓ Updated files add hello.md 13B" in captured.out
@@ -1963,7 +1956,8 @@ def test_cli_interactive_progress_animates_when_stdout_is_tty(monkeypatch):
 
     output = "".join(stream.writes)
     assert "\r  " in output
-    assert "Thinking" in output
+    assert "working..." in output
+    assert "Thinking" not in output
     assert "iter" not in output
 
 

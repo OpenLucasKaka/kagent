@@ -291,7 +291,7 @@ class _PromptToolkitLineReader(_RuntimeLineReader):
                 wrap_lines=True,
                 multiline=False,
                 prompt_continuation=_runtime_prompt_continuation,
-                reserve_space_for_menu=4,
+                reserve_space_for_menu=0,
                 refresh_interval=0.12,
             )
         with patch_stdout(raw=True):
@@ -300,7 +300,7 @@ class _PromptToolkitLineReader(_RuntimeLineReader):
                 wrap_lines=True,
                 multiline=False,
                 prompt_continuation=_runtime_prompt_continuation,
-                reserve_space_for_menu=4,
+                reserve_space_for_menu=0,
                 refresh_interval=0.12,
             )
 
@@ -322,9 +322,8 @@ class _PromptToolkitLineReader(_RuntimeLineReader):
 
 def _runtime_prompt_fragments(*, color: bool) -> Any:
     if not color:
-        return "  › "
+        return "› "
     return [
-        ("class:input-bar.padding", "  "),
         ("class:input-bar.prompt", "› "),
     ]
 
@@ -334,7 +333,7 @@ def _runtime_prompt_continuation(
     _line_number: int,
     _is_soft_wrap: bool,
 ) -> list[tuple[str, str]]:
-    return [("class:input-bar.padding", "    ")]
+    return [("class:input-bar.continuation", "  ")]
 
 
 def _runtime_interactive_line_reader(
@@ -374,8 +373,8 @@ def _prompt_toolkit_session_for_tty(prompt_stream: Any) -> Any:
             {
                 "": "#ffffff",
                 "input-bar": "#ffffff",
-                "input-bar.padding": "#6b7280",
                 "input-bar.prompt": "ansicyan bold",
+                "input-bar.continuation": "#6b7280",
             }
         ),
     )
