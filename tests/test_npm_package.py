@@ -174,6 +174,142 @@ assert.equal(isSessionCommandInput("tell me /status"), false);
     subprocess.run([node, "-e", script], check=True)
 
 
+def test_npm_terminal_input_bridge_preserves_raw_editing_keys():
+    node = shutil.which("node")
+    if node is None:
+        return
+
+    script = r"""
+const assert = require("node:assert/strict");
+const {createTerminalInputBridge} = require("./npm/lib/terminal-input");
+
+const events = [];
+const bridge = createTerminalInputBridge((input, key) => {
+  events.push([input, key.name, key.ctrl]);
+});
+
+for (const sequence of [
+  "\x7f",
+  "\x1b[3~",
+  "\x1b[H",
+  "\x1b[F",
+  "\x1b[D",
+  "\x1b[C",
+  "\x1b[A",
+  "\x1b[B",
+  "\x01",
+  "\x05",
+  "\x03",
+  "你",
+]) {
+  bridge.write(sequence);
+}
+bridge.close();
+
+assert.deepEqual(events, [
+  ["", "backspace", false],
+  ["", "delete", false],
+  ["", "home", false],
+  ["", "end", false],
+  ["", "left", false],
+  ["", "right", false],
+  ["", "up", false],
+  ["", "down", false],
+  ["a", "a", true],
+  ["e", "e", true],
+  ["c", "c", true],
+  ["你", undefined, false],
+]);
+"""
+    subprocess.run([node, "-e", script], check=True)
+
+
+def test_npm_ink_app_uses_raw_terminal_input_and_cooperative_ctrl_c():
+    node = shutil.which("node")
+    if node is None:
+        return
+
+    app = Path("npm/src/App.tsx").read_text(encoding="utf-8")
+    runner = Path("npm/src/ink-runner.tsx").read_text(encoding="utf-8")
+
+    assert "Ink.useStdin()" in app
+    assert "createTerminalInputBridge" in app
+    assert "Ink.useInput" not in app
+    assert 'key.name === "backspace"' in app
+    assert 'key.name === "delete"' in app
+    assert 'key.name === "home"' in app
+    assert 'key.name === "end"' in app
+    assert "showError(errorMessage(error));\n      showError(errorMessage(error));" not in app
+    assert "exitOnCtrlC: false" in runner
+
+    script = r"""
+const assert = require("node:assert/strict");
+const {EventEmitter} = require("node:events");
+const {KagentInkApp} = require("./npm/lib/App");
+
+const states = [];
+const effects = [];
+const rawModes = [];
+let exits = 0;
+const React = {
+  createElement(type, props, ...children) {
+    return {type, props, children};
+  },
+  useEffect(effect) {
+    effects.push(effect);
+  },
+  useRef(value) {
+    return {current: value};
+  },
+  useState(initial) {
+    const index = states.length;
+    states.push(typeof initial === "function" ? initial() : initial);
+    return [states[index], (update) => {
+      states[index] = typeof update === "function" ? update(states[index]) : update;
+    }];
+  },
+};
+const inputEvents = new EventEmitter();
+const Ink = {
+  Box: "Box",
+  Text: "Text",
+  useApp() {
+    return {exit() { exits += 1; }};
+  },
+  useStdin() {
+    return {
+      internal_eventEmitter: inputEvents,
+      setRawMode(value) { rawModes.push(value); },
+    };
+  },
+};
+const runtime = {
+  subscribe() { return () => {}; },
+  close() {},
+  cancel() {},
+};
+
+KagentInkApp({React, Ink, runtimeSessionFactory: () => runtime});
+const cleanup = effects[0]();
+const editor = () => states[1];
+assert.equal(inputEvents.listenerCount("input"), 1);
+
+inputEvents.emit("input", "abc\x1b[D\x7f");
+assert.deepEqual([editor().value, editor().cursor], ["ac", 1]);
+inputEvents.emit("input", "\x1b[3~");
+assert.deepEqual([editor().value, editor().cursor], ["a", 1]);
+inputEvents.emit("input", "\x1b[H你\x1b[F!\x01X\x05Y\x1b[D\x1b[C");
+assert.deepEqual([editor().value, editor().cursor], ["X你a!Y", 5]);
+inputEvents.emit("input", "\x03");
+assert.equal(exits, 1);
+
+cleanup();
+assert.deepEqual(rawModes, [true, false]);
+assert.equal(inputEvents.listenerCount("input"), 0);
+"""
+    subprocess.run([node, "-e", script], check=True)
+
+
 def test_npm_provider_setup_state_machine_supports_menu_defaults_and_secret_masking():
     node = shutil.which("node")
     if node is None:

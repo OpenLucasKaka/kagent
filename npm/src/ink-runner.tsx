@@ -24,9 +24,11 @@ export function shouldRunInkTui(args: string[], stdin: NodeJS.ReadStream): boole
 export async function runKagentInk(_args: string[], options: FallbackOptions = {}): Promise<void> {
   try {
     const React = (await dynamicImport("react")) as typeof import("react");
-    const Ink = (await dynamicImport("ink")) as { render: (element: React.ReactElement) => void };
+    const Ink = (await dynamicImport("ink")) as {
+      render: (element: React.ReactElement, options?: { exitOnCtrlC?: boolean }) => void;
+    };
     const element = React.createElement(KagentInkApp, { React, Ink: Ink as never });
-    Ink.render(element);
+    Ink.render(element, { exitOnCtrlC: false });
   } catch (error) {
     if (typeof options.fallback === "function") {
       process.stderr.write(`kagent: terminal UI unavailable: ${errorMessage(error)}; using classic CLI\n`);

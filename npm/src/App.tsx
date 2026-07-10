@@ -33,12 +33,23 @@ import type {
   ProviderSnapshot,
   RuntimeReadyEvent,
 } from "./protocol";
+import {
+  createTerminalInputBridge,
+  type TerminalInputHandler,
+  type TerminalKey,
+} from "./terminal-input";
 
 type InkApi = {
   Box: ReactNamespace.ElementType;
   Text: ReactNamespace.ElementType;
   useApp: () => { exit: () => void };
-  useInput: (handler: (input: string, key: Record<string, boolean | undefined>) => void) => void;
+  useStdin: () => {
+    setRawMode: (value: boolean) => void;
+    internal_eventEmitter: {
+      on: (event: "input", listener: (input: string | Buffer) => void) => void;
+      removeListener: (event: "input", listener: (input: string | Buffer) => void) => void;
+    };
+  };
 };
 
 type AppProps = {
@@ -64,6 +75,7 @@ export function KagentInkApp({
 }: AppProps): ReactNamespace.ReactElement {
   const { Box, Text } = Ink;
   const app = Ink.useApp();
+  const { internal_eventEmitter: inputEvents, setRawMode } = Ink.useStdin();
   const [runtime] = React.useState<RuntimeSessionClient>(() => runtimeSessionFactory());
   const [editor, setEditor] = React.useState<EditorState>(createEditorState);
   const [messages, setMessages] = React.useState<Message[]>([]);
@@ -74,6 +86,22 @@ export function KagentInkApp({
   const [showApprovalDetails, setShowApprovalDetails] = React.useState(false);
   const [provider, setProvider] = React.useState<ProviderSnapshot | null>(null);
   const [setup, setSetup] = React.useState<ProviderSetupState | null>(null);
+  const terminalInputHandler = React.useRef<TerminalInputHandler>(() => undefined);
+  terminalInputHandler.current = handleTerminalInput;
+
+  React.useEffect(() => {
+    const bridge = createTerminalInputBridge((input, key) => {
+      terminalInputHandler.current(input, key);
+    });
+    const handleRawInput = (input: string | Buffer): void => bridge.write(input);
+    inputEvents.on("input", handleRawInput);
+    setRawMode(true);
+    return () => {
+      inputEvents.removeListener("input", handleRawInput);
+      bridge.close();
+      setRawMode(false);
+    };
+  }, [React, inputEvents, setRawMode]);
 
   React.useEffect(() => {
     const unsubscribe = runtime.subscribe(handleLifecycleEvent);
@@ -93,8 +121,8 @@ export function KagentInkApp({
     return () => clearInterval(timer);
   }, [React, setup?.stage, status]);
 
-  Ink.useInput((value, key) => {
-    if (key.ctrl && value === "c") {
+  function handleTerminalInput(value: string, key: TerminalKey): void {
+    if (key.ctrl && key.name === "c") {
       if (setup) {
         if (setup.stage === "saving") {
           runtime.cancel();
@@ -127,46 +155,46 @@ export function KagentInkApp({
     if (status === "thinking") {
       return;
     }
-    if (key.return) {
+    if (key.name === "return" || key.name === "enter") {
       submit();
       return;
     }
-    if (key.backspace || value === "\b" || value === "\x7f") {
+    if (key.name === "backspace") {
       setEditor(deleteBeforeCursor);
       return;
     }
-    if (key.delete) {
+    if (key.name === "delete") {
       setEditor(deleteAtCursor);
       return;
     }
-    if (key.leftArrow) {
+    if (key.name === "left") {
       setEditor((current) => moveCursor(current, -1));
       return;
     }
-    if (key.rightArrow) {
+    if (key.name === "right") {
       setEditor((current) => moveCursor(current, 1));
       return;
     }
-    if (key.home || (key.ctrl && value === "a")) {
+    if (key.name === "home" || (key.ctrl && key.name === "a")) {
       setEditor(moveCursorToStart);
       return;
     }
-    if (key.end || (key.ctrl && value === "e")) {
+    if (key.name === "end" || (key.ctrl && key.name === "e")) {
       setEditor(moveCursorToEnd);
       return;
     }
-    if (key.upArrow) {
+    if (key.name === "up") {
       setEditor((current) => navigateHistory(current, -1));
       return;
     }
-    if (key.downArrow) {
+    if (key.name === "down") {
       setEditor((current) => navigateHistory(current, 1));
       return;
     }
     if (value && !key.ctrl && !key.meta) {
       setEditor((current) => insertInput(current, value));
     }
-  });
+  }
 
   function handleLifecycleEvent(event: RuntimeClientEvent): void {
     if (event.type === "runtime_ready") {
@@ -195,12 +223,12 @@ export function KagentInkApp({
 
   function handleSetupInput(
     value: string,
-    key: Record<string, boolean | undefined>,
+    key: TerminalKey,
   ): void {
     if (!setup || setup.stage === "saving") {
       return;
     }
-    if (key.escape) {
+    if (key.name === "escape") {
       if (setup.stage === "provider") {
         app.exit();
       } else {
@@ -209,16 +237,16 @@ export function KagentInkApp({
       return;
     }
     if (setup.stage === "provider") {
-      if (key.upArrow) {
+      if (key.name === "up") {
         setSetup(providerSetupReducer(setup, { type: "select", offset: -1 }));
-      } else if (key.downArrow) {
+      } else if (key.name === "down") {
         setSetup(providerSetupReducer(setup, { type: "select", offset: 1 }));
-      } else if (key.return) {
+      } else if (key.name === "return" || key.name === "enter") {
         setSetup(providerSetupReducer(setup, { type: "next" }));
       }
       return;
     }
-    if (key.return) {
+    if (key.name === "return" || key.name === "enter") {
       const next = providerSetupReducer(setup, { type: "next" });
       setSetup(next);
       if (next.stage === "saving") {
@@ -226,27 +254,27 @@ export function KagentInkApp({
       }
       return;
     }
-    if (key.backspace || value === "\b" || value === "\x7f") {
+    if (key.name === "backspace") {
       updateSetupEditor(deleteBeforeCursor);
       return;
     }
-    if (key.delete) {
+    if (key.name === "delete") {
       updateSetupEditor(deleteAtCursor);
       return;
     }
-    if (key.leftArrow) {
+    if (key.name === "left") {
       updateSetupEditor((current) => moveCursor(current, -1));
       return;
     }
-    if (key.rightArrow) {
+    if (key.name === "right") {
       updateSetupEditor((current) => moveCursor(current, 1));
       return;
     }
-    if (key.home || (key.ctrl && value === "a")) {
+    if (key.name === "home" || (key.ctrl && key.name === "a")) {
       updateSetupEditor(moveCursorToStart);
       return;
     }
-    if (key.end || (key.ctrl && value === "e")) {
+    if (key.name === "end" || (key.ctrl && key.name === "e")) {
       updateSetupEditor(moveCursorToEnd);
       return;
     }

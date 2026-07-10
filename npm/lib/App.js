@@ -5,10 +5,12 @@ exports.isSessionCommandInput = isSessionCommandInput;
 const editor_1 = require("./editor");
 const runtime_client_1 = require("./runtime-client");
 const provider_setup_1 = require("./provider-setup");
+const terminal_input_1 = require("./terminal-input");
 const FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 function KagentInkApp({ React, Ink, runtimeSessionFactory = runtime_client_1.createRuntimeSessionClient, }) {
     const { Box, Text } = Ink;
     const app = Ink.useApp();
+    const { internal_eventEmitter: inputEvents, setRawMode } = Ink.useStdin();
     const [runtime] = React.useState(() => runtimeSessionFactory());
     const [editor, setEditor] = React.useState(editor_1.createEditorState);
     const [messages, setMessages] = React.useState([]);
@@ -19,6 +21,21 @@ function KagentInkApp({ React, Ink, runtimeSessionFactory = runtime_client_1.cre
     const [showApprovalDetails, setShowApprovalDetails] = React.useState(false);
     const [provider, setProvider] = React.useState(null);
     const [setup, setSetup] = React.useState(null);
+    const terminalInputHandler = React.useRef(() => undefined);
+    terminalInputHandler.current = handleTerminalInput;
+    React.useEffect(() => {
+        const bridge = (0, terminal_input_1.createTerminalInputBridge)((input, key) => {
+            terminalInputHandler.current(input, key);
+        });
+        const handleRawInput = (input) => bridge.write(input);
+        inputEvents.on("input", handleRawInput);
+        setRawMode(true);
+        return () => {
+            inputEvents.removeListener("input", handleRawInput);
+            bridge.close();
+            setRawMode(false);
+        };
+    }, [React, inputEvents, setRawMode]);
     React.useEffect(() => {
         const unsubscribe = runtime.subscribe(handleLifecycleEvent);
         return () => {
@@ -35,8 +52,8 @@ function KagentInkApp({ React, Ink, runtimeSessionFactory = runtime_client_1.cre
         }, 90);
         return () => clearInterval(timer);
     }, [React, setup?.stage, status]);
-    Ink.useInput((value, key) => {
-        if (key.ctrl && value === "c") {
+    function handleTerminalInput(value, key) {
+        if (key.ctrl && key.name === "c") {
             if (setup) {
                 if (setup.stage === "saving") {
                     runtime.cancel();
@@ -67,46 +84,46 @@ function KagentInkApp({ React, Ink, runtimeSessionFactory = runtime_client_1.cre
         if (status === "thinking") {
             return;
         }
-        if (key.return) {
+        if (key.name === "return" || key.name === "enter") {
             submit();
             return;
         }
-        if (key.backspace || value === "\b" || value === "\x7f") {
+        if (key.name === "backspace") {
             setEditor(editor_1.deleteBeforeCursor);
             return;
         }
-        if (key.delete) {
+        if (key.name === "delete") {
             setEditor(editor_1.deleteAtCursor);
             return;
         }
-        if (key.leftArrow) {
+        if (key.name === "left") {
             setEditor((current) => (0, editor_1.moveCursor)(current, -1));
             return;
         }
-        if (key.rightArrow) {
+        if (key.name === "right") {
             setEditor((current) => (0, editor_1.moveCursor)(current, 1));
             return;
         }
-        if (key.home || (key.ctrl && value === "a")) {
+        if (key.name === "home" || (key.ctrl && key.name === "a")) {
             setEditor(editor_1.moveCursorToStart);
             return;
         }
-        if (key.end || (key.ctrl && value === "e")) {
+        if (key.name === "end" || (key.ctrl && key.name === "e")) {
             setEditor(editor_1.moveCursorToEnd);
             return;
         }
-        if (key.upArrow) {
+        if (key.name === "up") {
             setEditor((current) => (0, editor_1.navigateHistory)(current, -1));
             return;
         }
-        if (key.downArrow) {
+        if (key.name === "down") {
             setEditor((current) => (0, editor_1.navigateHistory)(current, 1));
             return;
         }
         if (value && !key.ctrl && !key.meta) {
             setEditor((current) => (0, editor_1.insertInput)(current, value));
         }
-    });
+    }
     function handleLifecycleEvent(event) {
         if (event.type === "runtime_ready") {
             applyRuntimeReady(event);
@@ -135,7 +152,7 @@ function KagentInkApp({ React, Ink, runtimeSessionFactory = runtime_client_1.cre
         if (!setup || setup.stage === "saving") {
             return;
         }
-        if (key.escape) {
+        if (key.name === "escape") {
             if (setup.stage === "provider") {
                 app.exit();
             }
@@ -145,18 +162,18 @@ function KagentInkApp({ React, Ink, runtimeSessionFactory = runtime_client_1.cre
             return;
         }
         if (setup.stage === "provider") {
-            if (key.upArrow) {
+            if (key.name === "up") {
                 setSetup((0, provider_setup_1.providerSetupReducer)(setup, { type: "select", offset: -1 }));
             }
-            else if (key.downArrow) {
+            else if (key.name === "down") {
                 setSetup((0, provider_setup_1.providerSetupReducer)(setup, { type: "select", offset: 1 }));
             }
-            else if (key.return) {
+            else if (key.name === "return" || key.name === "enter") {
                 setSetup((0, provider_setup_1.providerSetupReducer)(setup, { type: "next" }));
             }
             return;
         }
-        if (key.return) {
+        if (key.name === "return" || key.name === "enter") {
             const next = (0, provider_setup_1.providerSetupReducer)(setup, { type: "next" });
             setSetup(next);
             if (next.stage === "saving") {
@@ -164,27 +181,27 @@ function KagentInkApp({ React, Ink, runtimeSessionFactory = runtime_client_1.cre
             }
             return;
         }
-        if (key.backspace || value === "\b" || value === "\x7f") {
+        if (key.name === "backspace") {
             updateSetupEditor(editor_1.deleteBeforeCursor);
             return;
         }
-        if (key.delete) {
+        if (key.name === "delete") {
             updateSetupEditor(editor_1.deleteAtCursor);
             return;
         }
-        if (key.leftArrow) {
+        if (key.name === "left") {
             updateSetupEditor((current) => (0, editor_1.moveCursor)(current, -1));
             return;
         }
-        if (key.rightArrow) {
+        if (key.name === "right") {
             updateSetupEditor((current) => (0, editor_1.moveCursor)(current, 1));
             return;
         }
-        if (key.home || (key.ctrl && value === "a")) {
+        if (key.name === "home" || (key.ctrl && key.name === "a")) {
             updateSetupEditor(editor_1.moveCursorToStart);
             return;
         }
-        if (key.end || (key.ctrl && value === "e")) {
+        if (key.name === "end" || (key.ctrl && key.name === "e")) {
             updateSetupEditor(editor_1.moveCursorToEnd);
             return;
         }

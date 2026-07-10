@@ -21,7 +21,7 @@ async function runKagentInk(_args, options = {}) {
         const React = (await dynamicImport("react"));
         const Ink = (await dynamicImport("ink"));
         const element = React.createElement(App_1.KagentInkApp, { React, Ink: Ink });
-        Ink.render(element);
+        Ink.render(element, { exitOnCtrlC: false });
     }
     catch (error) {
         if (typeof options.fallback === "function") {
