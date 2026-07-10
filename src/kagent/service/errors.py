@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Dict
 
 AGENT_RUN_FAILED = "agent_run_failed"
+AGENT_RUN_INTERRUPTED = "agent_run_interrupted"
 AGENT_RUN_TIMEOUT = "agent_run_timeout"
 EXPECTATION_FAILED = "expectation_failed"
 INVALID_AGENT_CONFIG = "invalid_agent_config"
@@ -30,6 +31,7 @@ UNSUPPORTED_MEDIA_TYPE = "unsupported_media_type"
 
 ERROR_CODES = (
     AGENT_RUN_FAILED,
+    AGENT_RUN_INTERRUPTED,
     AGENT_RUN_TIMEOUT,
     EXPECTATION_FAILED,
     INVALID_AGENT_CONFIG,

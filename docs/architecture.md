@@ -498,8 +498,17 @@ keeps byte-level response formatting out of the request handler.
 creates `ProductionThreadingHTTPServer` instances with bounded request threads,
 `block_on_close`, address reuse, and an explicit listen backlog, then attaches
 runtime dependencies: service configuration, metrics, rate limiting, and
-concurrency limiting. This keeps process bootstrap separate from request
-handling.
+concurrency limiting. When trace persistence is enabled, bootstrap also starts
+a `service_runtime_recovery.py` heartbeat lease using the process-local
+`ActiveRunRegistry` instance ID, then reconciles orphaned runtime traces before
+the server accepts traffic. Persisted `running` and `resuming` traces carry
+their owner instance ID; a replacement process may recover them only after the
+owner heartbeat is stale. Per-trace exclusive reconciliation locks serialize
+competing startup recovery across replicas sharing the same trace volume.
+Server close removes an idle lease immediately, but keeps it alive until the
+active-run registry drains when a timeout worker is still completing. This
+keeps process bootstrap separate from request handling while giving persisted
+runtime state a crash-recovery boundary.
 
 `service_router.py` owns pure request routing for the service. It maps method
 and path to readiness, config, metrics, OpenAPI, tool metadata, and `/run`

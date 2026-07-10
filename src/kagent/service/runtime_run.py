@@ -164,6 +164,7 @@ def execute_runtime_run_request(
             goal=goal,
             max_iterations=max_iterations,
             auth_subject=auth_subject,
+            runtime_instance_id=registry.instance_id,
         )
         try:
             trace_path = persist_trace(initial_trace, _service_config.trace_dir)

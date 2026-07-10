@@ -16,6 +16,7 @@ def running_runtime_trace(
     max_iterations: int,
     auth_subject: str = "",
     resumed_from_run_id: str = "",
+    runtime_instance_id: str = "",
 ) -> Dict[str, Any]:
     started_at = _utc_timestamp()
     trace: Dict[str, Any] = {
@@ -36,6 +37,8 @@ def running_runtime_trace(
         trace["auth_subject"] = auth_subject
     if resumed_from_run_id:
         trace["resumed_from_run_id"] = resumed_from_run_id
+    if runtime_instance_id:
+        trace["runtime_instance_id"] = runtime_instance_id
     return trace
 
 

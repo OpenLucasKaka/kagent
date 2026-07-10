@@ -2131,6 +2131,8 @@ def _diagnostic_audit_properties() -> Dict[str, Dict[str, Any]]:
         "runtime_allowed_tools": {"type": "string"},
         "runtime_allowed_tools_by_subject_count": {"type": "string"},
         "runtime_pending_approval_stale_seconds": {"type": "string"},
+        "runtime_instance_heartbeat_seconds": {"type": "string"},
+        "runtime_orphaned_run_stale_seconds": {"type": "string"},
     }
     properties.update(_trace_permission_policy_properties())
     properties.update(_embedding_provider_audit_properties())

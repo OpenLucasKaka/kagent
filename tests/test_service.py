@@ -125,6 +125,8 @@ def test_service_config_endpoint_reports_redacted_runtime_config(monkeypatch, tm
             idempotency_cache_size=5,
             runtime_allowed_tools_by_subject={"team-a": ("note",)},
             runtime_pending_approval_stale_seconds=1800,
+            runtime_instance_heartbeat_seconds=5.0,
+            runtime_orphaned_run_stale_seconds=45.0,
             allow_full_trace_response=True,
             protect_diagnostics=True,
             trace_dir="/tmp/traces",
@@ -150,6 +152,8 @@ def test_service_config_endpoint_reports_redacted_runtime_config(monkeypatch, tm
         "runtime_allowed_tools_by_subject_count": "1",
         "runtime_max_iterations": "10",
         "runtime_pending_approval_stale_seconds": "1800",
+        "runtime_instance_heartbeat_seconds": "5.0",
+        "runtime_orphaned_run_stale_seconds": "45.0",
         "allow_full_trace_response": "true",
         "protect_diagnostics": "true",
         "trust_forwarded_for": "false",
@@ -2053,6 +2057,8 @@ def test_service_config_reads_environment_defaults():
             ),
             "KAGENT_SERVICE_RUNTIME_MAX_ITERATIONS": "17",
             "KAGENT_SERVICE_RUNTIME_PENDING_APPROVAL_STALE_SECONDS": "1800",
+            "KAGENT_SERVICE_RUNTIME_INSTANCE_HEARTBEAT_SECONDS": "7.5",
+            "KAGENT_SERVICE_RUNTIME_ORPHANED_RUN_STALE_SECONDS": "45",
             "KAGENT_SERVICE_ALLOW_FULL_TRACE_RESPONSE": "true",
             "KAGENT_SERVICE_PROTECT_DIAGNOSTICS": "true",
             "KAGENT_SERVICE_TRUST_FORWARDED_FOR": "true",
@@ -2090,6 +2096,8 @@ def test_service_config_reads_environment_defaults():
     }
     assert config.runtime_max_iterations == 17
     assert config.runtime_pending_approval_stale_seconds == 1800
+    assert config.runtime_instance_heartbeat_seconds == 7.5
+    assert config.runtime_orphaned_run_stale_seconds == 45
     assert config.allow_full_trace_response is True
     assert config.protect_diagnostics is True
     assert config.trust_forwarded_for is True
@@ -2254,6 +2262,30 @@ def test_service_config_rejects_invalid_pending_approval_stale_threshold():
         )
     else:
         raise AssertionError("negative pending approval stale threshold was accepted")
+
+
+def test_service_config_rejects_non_positive_runtime_instance_heartbeat():
+    try:
+        ServiceConfig(runtime_instance_heartbeat_seconds=0)
+    except ValueError as exc:
+        assert str(exc) == "runtime_instance_heartbeat_seconds must be positive"
+    else:
+        raise AssertionError("non-positive runtime instance heartbeat was accepted")
+
+
+def test_service_config_rejects_orphan_threshold_not_above_heartbeat():
+    try:
+        ServiceConfig(
+            runtime_instance_heartbeat_seconds=10,
+            runtime_orphaned_run_stale_seconds=10,
+        )
+    except ValueError as exc:
+        assert str(exc) == (
+            "runtime_orphaned_run_stale_seconds must be greater than "
+            "runtime_instance_heartbeat_seconds"
+        )
+    else:
+        raise AssertionError("unsafe orphaned runtime threshold was accepted")
 
 
 def test_service_module_reports_invalid_environment_config_without_traceback():

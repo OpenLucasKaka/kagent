@@ -1498,6 +1498,12 @@ def test_service_contract_documents_internal_auth_audit_fields():
         assert schema_properties["runtime_pending_approval_stale_seconds"] == {
             "type": "string"
         }
+        assert schema_properties["runtime_instance_heartbeat_seconds"] == {
+            "type": "string"
+        }
+        assert schema_properties["runtime_orphaned_run_stale_seconds"] == {
+            "type": "string"
+        }
 
 
 def test_service_contract_documents_runtime_progress_sink_failure_metric():

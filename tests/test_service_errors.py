@@ -7,6 +7,7 @@ from kagent.service.errors import (
 def test_service_error_catalog_lists_stable_error_codes():
     assert ERROR_CODES == (
         "agent_run_failed",
+        "agent_run_interrupted",
         "agent_run_timeout",
         "expectation_failed",
         "invalid_agent_config",

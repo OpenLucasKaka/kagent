@@ -12,6 +12,10 @@ from kagent.service.runtime import (
     ServiceRateLimiter,
     SqliteServiceIdempotencyCache,
 )
+from kagent.service.runtime_recovery import (
+    RuntimeInstanceLease,
+    reconcile_orphaned_runtime_traces,
+)
 
 
 class ProductionThreadingHTTPServer(ThreadingHTTPServer):
@@ -19,6 +23,15 @@ class ProductionThreadingHTTPServer(ThreadingHTTPServer):
     block_on_close = True
     allow_reuse_address = True
     request_queue_size = 64
+
+    def server_close(self) -> None:
+        super().server_close()
+        lease = getattr(self, "service_runtime_instance_lease", None)
+        registry = getattr(self, "service_active_run_registry", None)
+        if isinstance(lease, RuntimeInstanceLease) and isinstance(
+            registry, ActiveRunRegistry
+        ):
+            lease.stop_when_idle(registry)
 
 
 def create_threading_server(
@@ -51,4 +64,43 @@ def create_threading_server(
         server.service_idempotency_cache = ServiceIdempotencyCache(  # type: ignore[attr-defined]
             max_entries=server.service_config.idempotency_cache_size  # type: ignore[attr-defined]
         )
+    server.service_runtime_instance_lease = None  # type: ignore[attr-defined]
+    server.service_runtime_reconciliation = {  # type: ignore[attr-defined]
+        "enabled": False,
+        "reason": "trace_persistence_disabled",
+    }
+    if server.service_config.trace_dir:  # type: ignore[attr-defined]
+        lease = RuntimeInstanceLease(
+            server.service_config.trace_dir,  # type: ignore[attr-defined]
+            instance_id=server.service_active_run_registry.instance_id,  # type: ignore[attr-defined]
+            heartbeat_seconds=(
+                server.service_config.runtime_instance_heartbeat_seconds  # type: ignore[attr-defined]
+            ),
+        )
+        server.service_runtime_instance_lease = lease  # type: ignore[attr-defined]
+        try:
+            lease.start()
+            server.service_runtime_reconciliation = (  # type: ignore[attr-defined]
+                reconcile_orphaned_runtime_traces(
+                    server.service_config.trace_dir,  # type: ignore[attr-defined]
+                    current_instance_id=(
+                        server.service_active_run_registry.instance_id  # type: ignore[attr-defined]
+                    ),
+                    stale_after_seconds=(
+                        server.service_config.runtime_orphaned_run_stale_seconds  # type: ignore[attr-defined]
+                    ),
+                )
+            )
+        except OSError as exc:
+            lease.stop()
+            server.service_runtime_instance_lease = None  # type: ignore[attr-defined]
+            server.service_runtime_reconciliation = {  # type: ignore[attr-defined]
+                "enabled": False,
+                "reason": "trace_persistence_unavailable",
+                "error_type": type(exc).__name__,
+            }
+        except Exception:
+            lease.stop()
+            super(ProductionThreadingHTTPServer, server).server_close()
+            raise
     return server

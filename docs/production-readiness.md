@@ -90,6 +90,12 @@ It records `service_keys_present`, `runtime_keys_present`,
 so release evidence proves the packaged environment template still covers
 service controls, Codex-style runtime controls, and OpenAI-compatible provider
 configuration without storing provider secrets.
+The runtime configuration set includes the instance heartbeat and orphaned-run
+staleness thresholds. Production values must keep the stale threshold above
+the heartbeat interval and above expected shared-volume latency. Multi-replica
+deployments must place the trace directory on a shared volume so live owner
+leases protect active runs and startup reconciliation can fail interrupted runs
+instead of leaving permanent `running` or `resuming` traces.
 The audit emits `integration` evidence with an internal runtime client semantic check.
 It records `commands_present`, `auth_present`, `idempotency_present`,
 `runtime_routes_present`, audit-field coverage, secret-marker checks, and client

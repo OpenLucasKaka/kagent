@@ -152,6 +152,7 @@ def execute_runtime_resume_request(
             "runtime run trace is missing pending approval action plan",
         )
 
+    registry = active_run_registry or ActiveRunRegistry()
     resumed_run_id = str(uuid4())
     claim_id = str(uuid4())
     try:
@@ -162,6 +163,7 @@ def execute_runtime_resume_request(
             claim_id=claim_id,
             resumed_run_id=resumed_run_id,
             claimed_by_auth_subject=auth_subject,
+            runtime_instance_id=registry.instance_id,
         )
     except RuntimeResumeClaimConflict as exc:
         return 409, failure_payload(service_errors.INVALID_REQUEST_BODY, str(exc))
@@ -171,7 +173,6 @@ def execute_runtime_resume_request(
             f"could not claim runtime approval: {exc}",
         )
 
-    registry = active_run_registry or ActiveRunRegistry()
     cancellation_token = RuntimeCancellationToken()
     approved_at = _utc_timestamp()
     initial_trace = running_runtime_trace(
@@ -180,6 +181,7 @@ def execute_runtime_resume_request(
         max_iterations=max_iterations,
         auth_subject=owner_auth_subject,
         resumed_from_run_id=run_id,
+        runtime_instance_id=registry.instance_id,
     )
     initial_trace["approved_at"] = approved_at
     if auth_subject:

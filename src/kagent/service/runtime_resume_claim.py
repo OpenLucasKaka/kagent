@@ -21,6 +21,7 @@ def claim_runtime_resume(
     claim_id: str,
     resumed_run_id: str,
     claimed_by_auth_subject: str = "",
+    runtime_instance_id: str = "",
 ) -> Dict[str, Any]:
     lock_path = _resume_lock_path(trace_dir, run_id)
     try:
@@ -47,6 +48,8 @@ def claim_runtime_resume(
         trace["resume_claim_id"] = claim_id
         trace["resume_claimed_at"] = _utc_timestamp()
         trace["resumed_to_run_id"] = resumed_run_id
+        if runtime_instance_id:
+            trace["resume_runtime_instance_id"] = runtime_instance_id
         if claimed_by_auth_subject:
             trace["resumed_by_auth_subject"] = claimed_by_auth_subject
             trace["approved_by_auth_subject"] = claimed_by_auth_subject
@@ -73,6 +76,7 @@ def release_runtime_resume_claim(
     trace.pop("resumed_to_run_id", None)
     trace.pop("resumed_by_auth_subject", None)
     trace.pop("approved_by_auth_subject", None)
+    trace.pop("resume_runtime_instance_id", None)
     persist_trace(trace, trace_dir)
 
 

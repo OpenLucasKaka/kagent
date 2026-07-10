@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from threading import Lock
 from typing import Callable, Dict, Optional
+from uuid import uuid4
 
 from kagent.runtime.cancellation import RuntimeCancellationToken
 
@@ -70,9 +71,18 @@ class _ActiveRun:
 class ActiveRunRegistry:
     """Process-local registry for live runtime workers and cancellation signals."""
 
-    def __init__(self) -> None:
+    def __init__(self, *, instance_id: str = "") -> None:
         self._lock = Lock()
         self._runs: Dict[str, _ActiveRun] = {}
+        self._instance_id = instance_id.strip() or str(uuid4())
+
+    @property
+    def instance_id(self) -> str:
+        return self._instance_id
+
+    def is_empty(self) -> bool:
+        with self._lock:
+            return not self._runs
 
     def register(
         self,

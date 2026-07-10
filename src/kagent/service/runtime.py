@@ -38,6 +38,8 @@ class ServiceConfig:
     )
     runtime_max_iterations: int = 10
     runtime_pending_approval_stale_seconds: int = 3600
+    runtime_instance_heartbeat_seconds: float = 10.0
+    runtime_orphaned_run_stale_seconds: float = 60.0
     allow_full_trace_response: bool = False
     protect_diagnostics: bool = False
     trust_forwarded_for: bool = False
@@ -114,6 +116,16 @@ class ServiceConfig:
                 source,
                 "KAGENT_SERVICE_RUNTIME_PENDING_APPROVAL_STALE_SECONDS",
                 cls.runtime_pending_approval_stale_seconds,
+            ),
+            runtime_instance_heartbeat_seconds=_env_float(
+                source,
+                "KAGENT_SERVICE_RUNTIME_INSTANCE_HEARTBEAT_SECONDS",
+                cls.runtime_instance_heartbeat_seconds,
+            ),
+            runtime_orphaned_run_stale_seconds=_env_float(
+                source,
+                "KAGENT_SERVICE_RUNTIME_ORPHANED_RUN_STALE_SECONDS",
+                cls.runtime_orphaned_run_stale_seconds,
             ),
             allow_full_trace_response=_env_bool(
                 source,
@@ -213,6 +225,16 @@ class ServiceConfig:
         if self.runtime_pending_approval_stale_seconds < 0:
             raise ValueError(
                 "runtime_pending_approval_stale_seconds must be non-negative"
+            )
+        if self.runtime_instance_heartbeat_seconds <= 0:
+            raise ValueError("runtime_instance_heartbeat_seconds must be positive")
+        if (
+            self.runtime_orphaned_run_stale_seconds
+            <= self.runtime_instance_heartbeat_seconds
+        ):
+            raise ValueError(
+                "runtime_orphaned_run_stale_seconds must be greater than "
+                "runtime_instance_heartbeat_seconds"
             )
         if self.protect_diagnostics and not self.auth_required:
             raise ValueError("protect_diagnostics requires auth_token")

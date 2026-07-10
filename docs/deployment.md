@@ -116,6 +116,14 @@ The service reads these environment variables:
 - `KAGENT_SERVICE_RUNTIME_PENDING_APPROVAL_STALE_SECONDS`: age
   threshold used by `/metrics` and `/metrics.prom` stale pending approval
   gauges, default `3600`.
+- `KAGENT_SERVICE_RUNTIME_INSTANCE_HEARTBEAT_SECONDS`: interval used by each
+  service process to renew its owner lease in the shared trace directory,
+  default `10` seconds. This lease distinguishes an active replica from a
+  process that exited while a runtime run was still persisted as `running`.
+- `KAGENT_SERVICE_RUNTIME_ORPHANED_RUN_STALE_SECONDS`: owner heartbeat age
+  after which a new service process may reconcile interrupted `running` and
+  `resuming` traces, default `60` seconds. It must be greater than the heartbeat
+  interval; size it above expected shared-volume latency and scheduler pauses.
 - `KAGENT_SERVICE_ALLOW_FULL_TRACE_RESPONSE`: whether
   `full_trace=true` may return complete internal trace bodies over HTTP,
   default `false`. Keep this disabled for normal production traffic and use
@@ -265,6 +273,15 @@ traffic is accepted. Readiness and liveness probes target `/ready` and `/health`
 annotations point at `/metrics.prom`. The trace PVC uses `ReadWriteMany`
 because the manifest runs two replicas; choose a storage class that supports
 multi-pod mounts or reduce replicas before applying it.
+Each replica writes a private heartbeat lease under
+`.runtime-instances` on that shared trace PVC and records its instance ID in
+new runtime traces. During startup, a replica atomically reconciles only traces
+whose owner heartbeat is stale. Interrupted `running` traces become failed with
+`agent_run_interrupted`. An interrupted approval resume is marked complete when
+its child trace already exists; otherwise the original approval is reopened.
+Live replicas remain protected, and per-trace exclusive locks prevent duplicate
+recovery by concurrently starting pods. Locks left behind by a terminated
+reconciler are reclaimed after the same stale-owner threshold.
 The production doctor initContainer has CPU, memory, and ephemeral-storage
 requests and limits so release-gate checks remain bounded during rollout.
 The Deployment uses `minReadySeconds: 5` so a pod must remain ready briefly
@@ -372,6 +389,9 @@ status `143`, which lets Docker, systemd, and Kubernetes treat planned stops
 separately from application crashes. Accepted requests run on bounded request threads,
 and server shutdown uses `block_on_close` so the process waits for those in-flight
 handlers to finish within the configured run timeout and supervisor grace window.
+If a timed-out runtime worker is still draining after the HTTP server closes,
+the process lease remains active until the in-memory active-run registry is
+empty so another replica does not falsely recover work that is still finishing.
 
 ## Rollback
 

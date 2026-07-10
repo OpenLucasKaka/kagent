@@ -90,6 +90,12 @@ def service_config_snapshot(config: ServiceConfig) -> Dict[str, str]:
         "runtime_pending_approval_stale_seconds": str(
             config.runtime_pending_approval_stale_seconds
         ),
+        "runtime_instance_heartbeat_seconds": str(
+            config.runtime_instance_heartbeat_seconds
+        ),
+        "runtime_orphaned_run_stale_seconds": str(
+            config.runtime_orphaned_run_stale_seconds
+        ),
         "allow_full_trace_response": str(config.allow_full_trace_response).lower(),
         "protect_diagnostics": str(config.protect_diagnostics).lower(),
         "trust_forwarded_for": str(config.trust_forwarded_for).lower(),

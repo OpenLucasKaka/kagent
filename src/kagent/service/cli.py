@@ -166,6 +166,18 @@ def main(argv: Optional[List[str]] = None) -> int:
         ),
     )
     parser.add_argument(
+        "--runtime-instance-heartbeat-seconds",
+        type=float,
+        default=defaults.runtime_instance_heartbeat_seconds,
+        help="Heartbeat interval for this service instance in the shared trace store.",
+    )
+    parser.add_argument(
+        "--runtime-orphaned-run-stale-seconds",
+        type=float,
+        default=defaults.runtime_orphaned_run_stale_seconds,
+        help="Owner heartbeat age after which interrupted runtime runs are recovered.",
+    )
+    parser.add_argument(
         "--runtime-allowed-tools",
         default=",".join(defaults.runtime_allowed_tools),
         help=(
@@ -233,6 +245,12 @@ def main(argv: Optional[List[str]] = None) -> int:
             runtime_max_iterations=args.runtime_max_iterations,
             runtime_pending_approval_stale_seconds=(
                 args.runtime_pending_approval_stale_seconds
+            ),
+            runtime_instance_heartbeat_seconds=(
+                args.runtime_instance_heartbeat_seconds
+            ),
+            runtime_orphaned_run_stale_seconds=(
+                args.runtime_orphaned_run_stale_seconds
             ),
             allow_full_trace_response=args.allow_full_trace_response,
             protect_diagnostics=args.protect_diagnostics,

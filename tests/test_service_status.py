@@ -62,6 +62,8 @@ def test_service_status_reports_readiness_and_redacted_config(
         "runtime_allowed_tools_by_subject_count": "1",
         "runtime_max_iterations": "9",
         "runtime_pending_approval_stale_seconds": "1800",
+        "runtime_instance_heartbeat_seconds": "10.0",
+        "runtime_orphaned_run_stale_seconds": "60.0",
         "allow_full_trace_response": "true",
         "protect_diagnostics": "true",
         "trust_forwarded_for": "true",

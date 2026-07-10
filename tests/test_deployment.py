@@ -17,6 +17,8 @@ def test_dockerfile_defines_runtime_image_healthcheck_and_non_root_user():
     assert "0.0.0.0" in dockerfile
     assert "KAGENT_SERVICE_MAX_GOAL_CHARS=4096" in dockerfile
     assert "KAGENT_SERVICE_RUNTIME_MAX_ITERATIONS=10" in dockerfile
+    assert "KAGENT_SERVICE_RUNTIME_INSTANCE_HEARTBEAT_SECONDS=10" in dockerfile
+    assert "KAGENT_SERVICE_RUNTIME_ORPHANED_RUN_STALE_SECONDS=60" in dockerfile
     assert "KAGENT_SERVICE_MAX_CONCURRENT_RUNS=4" in dockerfile
     assert "KAGENT_SERVICE_RUN_TIMEOUT_SECONDS=30" in dockerfile
     assert "KAGENT_SERVICE_REQUEST_TIMEOUT_SECONDS=10" in dockerfile
@@ -117,6 +119,8 @@ def test_environment_example_documents_service_runtime_knobs():
     assert "KAGENT_SERVICE_RUNTIME_ALLOWED_TOOLS_BY_SUBJECT=" in env_example
     assert "KAGENT_SERVICE_RUNTIME_MAX_ITERATIONS=10" in env_example
     assert "KAGENT_SERVICE_RUNTIME_PENDING_APPROVAL_STALE_SECONDS=3600" in env_example
+    assert "KAGENT_SERVICE_RUNTIME_INSTANCE_HEARTBEAT_SECONDS=10" in env_example
+    assert "KAGENT_SERVICE_RUNTIME_ORPHANED_RUN_STALE_SECONDS=60" in env_example
     assert "KAGENT_SERVICE_ALLOW_FULL_TRACE_RESPONSE=false" in env_example
     assert "KAGENT_SERVICE_PROTECT_DIAGNOSTICS=false" in env_example
     assert "KAGENT_SERVICE_TRUST_FORWARDED_FOR=false" in env_example
@@ -234,6 +238,8 @@ def test_kubernetes_manifest_defines_production_runtime_resources():
     assert "KAGENT_SERVICE_RUNTIME_ALLOWED_TOOLS_BY_SUBJECT" in manifest
     assert "KAGENT_SERVICE_RUNTIME_MAX_ITERATIONS" in manifest
     assert "KAGENT_SERVICE_RUNTIME_PENDING_APPROVAL_STALE_SECONDS" in manifest
+    assert "KAGENT_SERVICE_RUNTIME_INSTANCE_HEARTBEAT_SECONDS" in manifest
+    assert "KAGENT_SERVICE_RUNTIME_ORPHANED_RUN_STALE_SECONDS" in manifest
     assert "KAGENT_SERVICE_ALLOW_FULL_TRACE_RESPONSE" in manifest
     assert "KAGENT_SERVICE_PROTECT_DIAGNOSTICS" in manifest
     assert "KAGENT_SERVICE_REQUEST_TIMEOUT_SECONDS" in manifest
