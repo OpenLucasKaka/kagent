@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import difflib
 import hashlib
 import os
 import tempfile
@@ -197,6 +198,50 @@ class RuntimeWorkspace:
             "truncated": truncated,
         }
 
+    def diff(
+        self,
+        kind: str,
+        relative_path: str | Path,
+        *,
+        revision_id: str = "",
+        context_lines: int = 3,
+        max_bytes: int = _DEFAULT_MAX_READ_BYTES,
+    ) -> Dict[str, Any]:
+        if context_lines < 0:
+            raise ValueError("context_lines must be non-negative")
+        if max_bytes < 1:
+            raise ValueError("max_bytes must be positive")
+        self.ensure_layout()
+        target = self.resolve(kind, relative_path)
+        if not target.exists():
+            raise ValueError("file does not exist")
+        if target.is_dir():
+            raise ValueError("path is a directory")
+        revision = self._select_revision(kind, target, revision_id=revision_id)
+        revision_body = revision.read_bytes()
+        current_body = target.read_bytes()
+        resolved_revision_id = revision.stem
+        relative_asset_path = _relative_asset_path(self._kind_directory(kind), target)
+        diff_text = _unified_diff(
+            revision_body.decode("utf-8", errors="replace"),
+            current_body.decode("utf-8", errors="replace"),
+            fromfile=f"{kind}/{relative_asset_path}@{resolved_revision_id}",
+            tofile=f"{kind}/{relative_asset_path}",
+            context_lines=context_lines,
+        )
+        encoded = diff_text.encode("utf-8")
+        visible = encoded[:max_bytes]
+        return {
+            "kind": kind,
+            "path": relative_asset_path,
+            "revision_id": resolved_revision_id,
+            "from_sha256": hashlib.sha256(revision_body).hexdigest(),
+            "to_sha256": hashlib.sha256(current_body).hexdigest(),
+            "diff": visible.decode("utf-8", errors="replace"),
+            "bytes": len(visible),
+            "truncated": len(encoded) > max_bytes,
+        }
+
     def search(
         self,
         kind: str,
@@ -274,6 +319,24 @@ class RuntimeWorkspace:
             directory = directory / part
         return directory
 
+    def _select_revision(self, kind: str, target: Path, *, revision_id: str) -> Path:
+        revision_directory = self._revision_directory(kind, target)
+        if not revision_directory.exists():
+            raise ValueError("revision does not exist")
+        revisions = sorted(
+            path
+            for path in revision_directory.iterdir()
+            if path.is_file() and not path.is_symlink()
+        )
+        if not revisions:
+            raise ValueError("revision does not exist")
+        if revision_id:
+            for revision in revisions:
+                if revision.stem == revision_id:
+                    return revision
+            raise ValueError("revision does not exist")
+        return revisions[-1]
+
     def _record_revision(self, kind: str, target: Path) -> None:
         if target.is_symlink():
             raise ValueError("path must not traverse symlinks")
@@ -290,6 +353,28 @@ class RuntimeWorkspace:
             revision_directory / f"{revision_id}.txt",
             body.decode("utf-8", errors="replace"),
         )
+
+
+def _unified_diff(
+    previous: str,
+    current: str,
+    *,
+    fromfile: str,
+    tofile: str,
+    context_lines: int,
+) -> str:
+    lines = difflib.unified_diff(
+        previous.splitlines(),
+        current.splitlines(),
+        fromfile=fromfile,
+        tofile=tofile,
+        n=context_lines,
+        lineterm="",
+    )
+    body = "\n".join(lines)
+    if body:
+        return body + "\n"
+    return ""
 
 
 def _safe_relative_parts(relative_path: str | Path) -> tuple[str, ...]:

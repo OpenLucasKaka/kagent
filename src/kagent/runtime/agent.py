@@ -66,6 +66,8 @@ Use only tools that are available to you.
     "Use memory_remember and memory_recall for configured text-based long-term "
     "semantic memory. Use memory_upsert and memory_search only when you have "
     "explicit embedding vectors.\n"
+    "Use workspace_history and workspace_diff when reviewing virtual workspace changes, "
+    "policy drafts, reports, logs, or persisted working assets.\n"
     "Use shell_command for bounded non-interactive local CLI checks; it is "
     "policy-gated and may require explicit approval before execution.\n"
     "If the latest previous observation failed, do not return final_answer with "

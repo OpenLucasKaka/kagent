@@ -96,6 +96,48 @@ def test_workspace_tools_write_read_list_search_and_history_virtual_assets(
     assert history.output["revisions"][0]["content"] == "# Summary\n\nready\n"
 
 
+def test_workspace_diff_tool_compares_latest_revision_with_current_asset(
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.setenv("KAGENT_RUNTIME_WORKSPACE_DIR", str(tmp_path / "runtime-assets"))
+    execute_runtime_tool(
+        default_runtime_tools(),
+        "workspace_write",
+        {
+            "kind": "reports",
+            "path": "pilot/summary.md",
+            "content": "# Summary\n\nready\n",
+        },
+        action_id="step-1",
+    )
+    current = execute_runtime_tool(
+        default_runtime_tools(),
+        "workspace_write",
+        {
+            "kind": "reports",
+            "path": "pilot/summary.md",
+            "content": "# Summary\n\nready v2\n",
+        },
+        action_id="step-2",
+    )
+
+    diff = execute_runtime_tool(
+        default_runtime_tools(),
+        "workspace_diff",
+        {"kind": "reports", "path": "pilot/summary.md", "context_lines": 1},
+        action_id="step-3",
+    )
+
+    assert diff.status == "ok"
+    assert diff.output["kind"] == "reports"
+    assert diff.output["path"] == "pilot/summary.md"
+    assert diff.output["to_sha256"] == current.output["sha256"]
+    assert "-ready" in diff.output["diff"]
+    assert "+ready v2" in diff.output["diff"]
+    assert diff.output["truncated"] is False
+
+
 def test_workspace_tools_reject_virtual_directory_escape(tmp_path, monkeypatch):
     monkeypatch.setenv("KAGENT_RUNTIME_WORKSPACE_DIR", str(tmp_path / "runtime-assets"))
 
@@ -1570,6 +1612,7 @@ def test_registered_runtime_tool_metadata_includes_input_schemas():
         "task_list",
         "task_transition",
         "transform_text",
+        "workspace_diff",
         "workspace_history",
         "workspace_list",
         "workspace_read",
@@ -1623,6 +1666,18 @@ def test_registered_runtime_tool_metadata_includes_input_schemas():
     ]
     assert by_name["workspace_history"]["approval_required_by_default"] == "false"
     assert by_name["workspace_history"]["input_schema"]["required"] == ["kind", "path"]
+    assert by_name["workspace_diff"]["approval_required_by_default"] == "false"
+    assert by_name["workspace_diff"]["input_schema"]["required"] == ["kind", "path"]
+    assert by_name["workspace_diff"]["output_schema"]["required"] == [
+        "kind",
+        "path",
+        "revision_id",
+        "from_sha256",
+        "to_sha256",
+        "diff",
+        "bytes",
+        "truncated",
+    ]
     assert by_name["workspace_read"]["approval_required_by_default"] == "false"
     assert by_name["workspace_read"]["input_schema"]["required"] == ["kind", "path"]
     assert by_name["workspace_list"]["approval_required_by_default"] == "false"
@@ -2415,6 +2470,10 @@ def test_default_policy_allows_workspace_read_tools():
     )
     assert (
         policy.authorize("workspace_history", {"kind": "reports", "path": "x.md"}).status
+        == "allowed"
+    )
+    assert (
+        policy.authorize("workspace_diff", {"kind": "reports", "path": "x.md"}).status
         == "allowed"
     )
     assert policy.authorize("workspace_list", {"kind": "reports"}).status == "allowed"

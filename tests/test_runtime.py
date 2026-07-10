@@ -692,6 +692,18 @@ def test_runtime_agent_prompts_file_observation_before_file_changes():
     assert '"name": "list_files"' in user_prompt
 
 
+def test_runtime_agent_prompts_workspace_diff_for_asset_change_review():
+    provider = FakeLLMProvider('{"actions":[],"final_answer":"ok"}')
+
+    run_runtime_agent("review the latest policy workspace change", provider=provider)
+
+    system_prompt = provider.calls[0]["system"]
+    user_prompt = provider.calls[0]["user"]
+    assert "workspace_diff" in system_prompt
+    assert "reviewing virtual workspace changes" in system_prompt
+    assert '"name": "workspace_diff"' in user_prompt
+
+
 class SequentialLLMProvider:
     def __init__(self, responses):
         self.responses = list(responses)

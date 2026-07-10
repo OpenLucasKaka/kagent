@@ -554,6 +554,31 @@ _WORKSPACE_HISTORY_OUTPUT_SCHEMA = {
     "additionalProperties": False,
 }
 
+_WORKSPACE_DIFF_OUTPUT_SCHEMA = {
+    "type": "object",
+    "required": [
+        "kind",
+        "path",
+        "revision_id",
+        "from_sha256",
+        "to_sha256",
+        "diff",
+        "bytes",
+        "truncated",
+    ],
+    "properties": {
+        "kind": {"type": "string", "enum": list(VIRTUAL_WORKSPACE_KINDS)},
+        "path": {"type": "string"},
+        "revision_id": {"type": "string"},
+        "from_sha256": {"type": "string"},
+        "to_sha256": {"type": "string"},
+        "diff": {"type": "string"},
+        "bytes": {"type": "number", "minimum": 0},
+        "truncated": {"type": "boolean"},
+    },
+    "additionalProperties": False,
+}
+
 _MEMORY_PUT_OUTPUT_SCHEMA = {
     "type": "object",
     "required": ["backend", "namespace", "key", "stored", "ttl_seconds"],
@@ -1131,6 +1156,38 @@ def default_runtime_tools(
                 "additionalProperties": False,
             },
             output_schema=_WORKSPACE_HISTORY_OUTPUT_SCHEMA,
+        ),
+        "workspace_diff": RuntimeToolSpec(
+            name="workspace_diff",
+            description=(
+                "Compare the current UTF-8 text asset in the runtime virtual "
+                "workspace against a saved previous version and return a bounded "
+                "unified diff."
+            ),
+            handler=lambda payload: _workspace_diff(
+                payload,
+                runtime_workspace_dir=runtime_workspace_dir,
+            ),
+            input_schema={
+                "type": "object",
+                "required": ["kind", "path"],
+                "properties": {
+                    "kind": {
+                        "type": "string",
+                        "enum": list(VIRTUAL_WORKSPACE_KINDS),
+                    },
+                    "path": {"type": "string", "minLength": 1, "maxLength": 2048},
+                    "revision_id": {"type": "string", "maxLength": 120},
+                    "context_lines": {"type": "number", "minimum": 0, "maximum": 20},
+                    "max_bytes": {
+                        "type": "number",
+                        "minimum": 1,
+                        "maximum": _READ_FILE_MAX_BYTES,
+                    },
+                },
+                "additionalProperties": False,
+            },
+            output_schema=_WORKSPACE_DIFF_OUTPUT_SCHEMA,
         ),
         "workspace_list": RuntimeToolSpec(
             name="workspace_list",
@@ -1842,6 +1899,29 @@ def _workspace_history(
         kind,
         relative_path.strip(),
         limit=int(input_payload.get("limit", 20)),
+        max_bytes=int(input_payload.get("max_bytes", _READ_FILE_MAX_BYTES)),
+    )
+
+
+def _workspace_diff(
+    input_payload: Dict[str, Any],
+    *,
+    runtime_workspace_dir: str = "",
+) -> Dict[str, Any]:
+    kind = input_payload.get("kind")
+    relative_path = input_payload.get("path")
+    revision_id = input_payload.get("revision_id", "")
+    if not isinstance(kind, str):
+        raise ValueError("kind must be a string")
+    if not isinstance(relative_path, str) or not relative_path.strip():
+        raise ValueError("path must be a non-empty string")
+    if not isinstance(revision_id, str):
+        raise ValueError("revision_id must be a string")
+    return _runtime_workspace(runtime_workspace_dir).diff(
+        kind,
+        relative_path.strip(),
+        revision_id=revision_id.strip(),
+        context_lines=int(input_payload.get("context_lines", 3)),
         max_bytes=int(input_payload.get("max_bytes", _READ_FILE_MAX_BYTES)),
     )
 

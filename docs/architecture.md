@@ -94,8 +94,9 @@ self-review primitive for pass/fail criteria, score percentages, failed
 criteria, and blocking failures. `task_list` gives the runtime a structured
 planning artifact with normalized statuses, priorities, owners, due labels, and
 status counts. `workspace_write`, `workspace_read`, `workspace_list`,
-`workspace_search`, and `workspace_history` provide bounded virtual-workspace asset creation,
-retrieval, listing, text search, and overwrite history for reports, logs,
+`workspace_search`, `workspace_history`, and `workspace_diff` provide bounded
+virtual-workspace asset creation, retrieval, listing, text search, bounded
+overwrite history, and unified change review. These assets cover reports, logs,
 policies, and memory snapshots.
 `http_request` returns bounded response metadata and body text
 only after the policy layer has produced explicit approval for the action.

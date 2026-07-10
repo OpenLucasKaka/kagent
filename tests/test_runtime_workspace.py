@@ -153,6 +153,25 @@ def test_runtime_workspace_preserves_previous_versions_on_overwrite(tmp_path):
     assert history["truncated"] is False
 
 
+def test_runtime_workspace_diffs_latest_revision_against_current_file(tmp_path):
+    workspace = RuntimeWorkspace(tmp_path / "runtime-workspace")
+    first = workspace.write_text("reports", "pilot/summary.md", "v1\nstable\n")
+    second = workspace.write_text("reports", "pilot/summary.md", "v2\nstable\n")
+
+    diff = workspace.diff("reports", "pilot/summary.md", context_lines=1)
+
+    assert diff["kind"] == "reports"
+    assert diff["path"] == "pilot/summary.md"
+    assert diff["from_sha256"] == first["sha256"]
+    assert diff["to_sha256"] == second["sha256"]
+    assert diff["revision_id"]
+    assert "--- reports/pilot/summary.md@" in diff["diff"]
+    assert "+++ reports/pilot/summary.md" in diff["diff"]
+    assert "-v1" in diff["diff"]
+    assert "+v2" in diff["diff"]
+    assert diff["truncated"] is False
+
+
 def test_runtime_workspace_rejects_unknown_kind(tmp_path):
     workspace = RuntimeWorkspace(tmp_path / "runtime-workspace")
 
