@@ -20,6 +20,7 @@ def test_service_error_catalog_lists_stable_error_codes():
         "full_trace_disabled",
         "goal_too_large",
         "idempotency_key_conflict",
+        "idempotency_request_in_progress",
         "method_not_allowed",
         "missing_goal",
         "not_found",

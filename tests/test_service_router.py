@@ -6563,6 +6563,10 @@ def test_service_router_reports_idempotency_cache_activity_in_metrics():
     assert payload["idempotency_cache_conflicts"] == "1"
     assert payload["idempotency_cache_stores"] == "1"
     assert payload["idempotency_cache_evictions"] == "0"
+    assert payload["idempotency_cache_claims"] == "1"
+    assert payload["idempotency_cache_waits"] == "0"
+    assert payload["idempotency_cache_wait_timeouts"] == "0"
+    assert payload["idempotency_cache_takeovers"] == "0"
 
 
 def test_idempotency_cache_reports_evictions_when_capacity_is_exceeded():

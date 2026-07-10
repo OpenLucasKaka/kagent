@@ -16,6 +16,7 @@ INVALID_REQUEST_BODY = "invalid_request_body"
 FULL_TRACE_DISABLED = "full_trace_disabled"
 GOAL_TOO_LARGE = "goal_too_large"
 IDEMPOTENCY_KEY_CONFLICT = "idempotency_key_conflict"
+IDEMPOTENCY_REQUEST_IN_PROGRESS = "idempotency_request_in_progress"
 METHOD_NOT_ALLOWED = "method_not_allowed"
 MISSING_GOAL = "missing_goal"
 NOT_FOUND = "not_found"
@@ -44,6 +45,7 @@ ERROR_CODES = (
     FULL_TRACE_DISABLED,
     GOAL_TOO_LARGE,
     IDEMPOTENCY_KEY_CONFLICT,
+    IDEMPOTENCY_REQUEST_IN_PROGRESS,
     METHOD_NOT_ALLOWED,
     MISSING_GOAL,
     NOT_FOUND,

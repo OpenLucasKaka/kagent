@@ -32,7 +32,8 @@ def test_service_contract_reports_openapi_paths_and_allowed_methods():
         "description"
     ] == "Runtime trace could not be read"
     assert payload["paths"]["/run"]["post"]["responses"]["409"]["description"] == (
-        "Idempotency key was reused with a different request body"
+        "Idempotency key conflicts with another request body or the matching "
+        "request is still in progress"
     )
     assert payload["paths"]["/run"]["post"]["responses"]["408"]["description"] == (
         "Request body read timed out"
@@ -61,6 +62,9 @@ def test_service_contract_documents_structured_error_response_schema():
     assert error_schema["required"] == ["status", "error_code", "error"]
     assert error_schema["properties"]["error_code"]["type"] == "string"
     assert error_schema["properties"]["error_code"]["enum"] == list(ERROR_CODES)
+    assert "idempotency_request_in_progress" in error_schema["properties"][
+        "error_code"
+    ]["enum"]
     assert error_schema["properties"]["retry_after_seconds"] == {
         "type": "string",
         "pattern": r"^[1-9]\d*$",
@@ -188,10 +192,12 @@ def test_service_contract_documents_named_success_schemas():
         payload["paths"]["/run"]["post"]["parameters"][0]
     )
     assert payload["paths"]["/runtime/run"]["post"]["responses"]["409"]["description"] == (
-        "Idempotency key was reused with a different request body"
+        "Idempotency key conflicts with another request body or the matching "
+        "request is still in progress"
     )
     assert payload["paths"]["/runtime/resume"]["post"]["responses"]["409"]["description"] == (
-        "Idempotency key was reused with a different request body"
+        "Idempotency key conflicts with another request body or the matching "
+        "request is still in progress"
     )
     assert payload["paths"]["/health"]["get"]["responses"]["200"]["content"] == {
         "application/json": {"schema": {"$ref": "#/components/schemas/HealthResponse"}}

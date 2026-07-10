@@ -1079,7 +1079,8 @@ def service_openapi() -> Dict[str, Any]:
                             },
                         ),
                         "409": _error_response(
-                            "Idempotency key was reused with a different request body"
+                            "Idempotency key conflicts with another request body or the "
+                            "matching request is still in progress"
                         ),
                         "413": _error_response("Request body is too large"),
                         "415": _error_response(
@@ -1148,7 +1149,8 @@ def service_openapi() -> Dict[str, Any]:
                         "400": _error_response("Malformed runtime request or provider config"),
                         "401": _error_response("Missing or invalid bearer token"),
                         "409": _error_response(
-                            "Idempotency key was reused with a different request body"
+                            "Idempotency key conflicts with another request body or the "
+                            "matching request is still in progress"
                         ),
                         "413": _error_response("Request body is too large"),
                         "415": _error_response(
@@ -1206,7 +1208,8 @@ def service_openapi() -> Dict[str, Any]:
                         "401": _error_response("Missing or invalid bearer token"),
                         "404": _error_response("Persisted runtime run was not found"),
                         "409": _error_response(
-                            "Idempotency key was reused with a different request body"
+                            "Idempotency key conflicts with another request body or the "
+                            "matching request is still in progress"
                         ),
                         "413": _error_response("Request body is too large"),
                         "415": _error_response(

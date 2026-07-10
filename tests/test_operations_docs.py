@@ -166,6 +166,13 @@ def test_operations_runbook_documents_continuous_iteration_and_failure_triage():
     assert "expectation_failed" in runbook
     assert "`Expect`" in runbook
     assert "idempotency_key_conflict" in runbook
+    assert "idempotency_request_in_progress" in runbook
+    assert "kagent_idempotency_cache_claims" in runbook
+    assert "kagent_idempotency_cache_waits" in runbook
+    assert "kagent_idempotency_cache_wait_timeouts" in runbook
+    assert "kagent_idempotency_cache_takeovers" in runbook
+    assert "kagentIdempotencyWaitTimeouts" in runbook
+    assert "kagentIdempotencyTakeovers" in runbook
     assert "invalid_idempotency_key" in runbook
     assert "`Content-Type`" in runbook
     assert "single-valued `application/json`" in runbook

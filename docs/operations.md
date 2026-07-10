@@ -1182,6 +1182,28 @@ leave it empty for the in-memory per-process cache. When this path is set,
 `idempotency_cache_persistence` by initializing the SQLite file before the
 service accepts traffic.
 
+Matching concurrent requests use single-flight execution. The first request
+claims ownership, and later requests with the same scoped key and body wait for
+its result. The lease and wait window are bounded by the configured execution
+and request timeouts. If the owner completes, waiters receive the same response,
+including the same `run_id`; if the wait window expires first, the waiter gets
+`409 idempotency_request_in_progress`. A caller may take over an expired lease,
+and the old owner cannot overwrite the takeover result. In-memory ownership is
+process-local; use the SQLite backend on storage shared by all replicas when
+single-flight behavior must span service processes.
+
+Monitor `kagent_idempotency_cache_claims`,
+`kagent_idempotency_cache_waits`,
+`kagent_idempotency_cache_wait_timeouts`, and
+`kagent_idempotency_cache_takeovers`. `kagentIdempotencyWaitTimeouts` means
+matching retries waited through the full single-flight window: inspect agent or
+provider latency, owner process health, request timeout alignment, and shared
+SQLite I/O before increasing timeouts. `kagentIdempotencyTakeovers` means a
+claim lease expired: correlate replica restarts, termination events, long agent
+runs, SQLite lock latency, and run timeout metrics. Repeated takeovers without
+restarts usually indicate the lease window is shorter than real execution time
+or an owner is failing to release claims.
+
 ### Error Code Catalog
 
 - `agent_run_failed`: the agent runner raised an unexpected exception.
@@ -1194,6 +1216,9 @@ service accepts traffic.
   continue-style request body negotiation.
 - `idempotency_key_conflict`: `Idempotency-Key` was reused with a different
   request body on the same execution route.
+- `idempotency_request_in_progress`: a matching request still owns the scoped
+  idempotency key after the single-flight wait window expired; retry with the
+  same key and body after a bounded delay.
 - `incomplete_request_body`: client closed the request before sending the
   declared `Content-Length` bytes.
 - `invalid_idempotency_key`: `Idempotency-Key` is duplicated, empty, too long,
@@ -1259,7 +1284,8 @@ execution route and authenticated internal subject for `/run`, `/runtime/run`,
 and `/runtime/resume`. Anonymous traffic uses a separate anonymous scope.
 `/config`, `/metrics`, and `/metrics.prom` expose whether the idempotency cache
 backend is `memory` or `sqlite` without exposing the SQLite path. Cache entries,
-hits, misses, conflicts, stores, and evictions help operators
+hits, misses, conflicts, stores, evictions, claims, waits, wait timeouts, and
+takeovers help operators
 distinguish healthy retry reuse from key misuse and undersized cache capacity.
 Rising evictions during the expected client retry window usually means the
 cache size is too small or retry traffic is being spread across too many

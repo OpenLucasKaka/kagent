@@ -386,7 +386,7 @@ def test_prometheus_alert_rules_cover_service_and_agent_health():
     )
     assert "groups:" in rules
     assert "  - name: kagent.rules" in rules
-    assert alert_count == 36
+    assert alert_count == 38
     assert "kagentServiceDown" in rules
     assert "kagentHighErrorRate" in rules
     assert "kagentHighRequestLatency" in rules
@@ -448,6 +448,10 @@ def test_prometheus_alert_rules_cover_service_and_agent_health():
     assert "too_many_concurrent_runs" in rules
     assert "idempotency_key_conflict" in rules
     assert "kagent_idempotency_cache_evictions" in rules
+    assert "kagentIdempotencyWaitTimeouts" in rules
+    assert "kagent_idempotency_cache_wait_timeouts" in rules
+    assert "kagentIdempotencyTakeovers" in rules
+    assert "kagent_idempotency_cache_takeovers" in rules
     assert "request_body_timeout" in rules
     assert "invalid_content_length" in rules
     assert "incomplete_request_body" in rules

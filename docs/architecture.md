@@ -441,6 +441,20 @@ internal subjects; unauthenticated traffic uses an anonymous scope. The default
 backend is an in-memory per-process LRU cache, while
 `KAGENT_SERVICE_IDEMPOTENCY_CACHE_PATH` enables a stdlib SQLite cache
 for restart-safe and same-volume replica retry reuse.
+Each cache backend implements single-flight ownership for matching concurrent
+requests. The first caller claims a pending record; later callers with the same
+key and body wait for that owner and reuse its completed status and payload
+instead of running the agent again. A different body conflicts immediately.
+Claims have a bounded lease derived from the execution and request timeouts, so
+another caller can take over after an owner stalls or disappears. Claim tokens
+prevent the stale owner from overwriting the takeover result. If the matching
+request remains pending beyond the wait window, the route returns structured
+`409 idempotency_request_in_progress` rather than starting duplicate work.
+Pending records are not capacity-eviction candidates. JSON metrics expose
+`idempotency_cache_claims`, `idempotency_cache_waits`,
+`idempotency_cache_wait_timeouts`, and `idempotency_cache_takeovers`;
+Prometheus exports the corresponding `kagent_` counters for contention and
+owner-recovery monitoring.
 Runtime trace reads follow the same internal boundary: the primary bearer token
 acts as an operator/admin diagnostic token, while subject-mapped bearer tokens
 can list or inspect only persisted runtime traces with the same `auth_subject`;

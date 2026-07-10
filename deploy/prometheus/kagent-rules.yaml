@@ -358,6 +358,26 @@ groups:
           summary: kagent idempotency cache is evicting entries
           description: Idempotency cache entries are being evicted during the retry window.
 
+      - alert: kagentIdempotencyWaitTimeouts
+        expr: |
+          sum(increase(kagent_idempotency_cache_wait_timeouts[10m])) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: kagent idempotent requests are timing out while waiting
+          description: Matching concurrent requests exceeded the single-flight wait window before the owner completed.
+
+      - alert: kagentIdempotencyTakeovers
+        expr: |
+          sum(increase(kagent_idempotency_cache_takeovers[10m])) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: kagent idempotency claim leases are being taken over
+          description: Pending request owners exceeded their lease or disappeared, causing another replica or thread to take ownership.
+
       - alert: kagentRequestBodyTimeouts
         expr: |
           sum(rate(

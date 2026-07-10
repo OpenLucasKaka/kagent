@@ -1,19 +1,19 @@
 from __future__ import annotations
 
 import json
-import sqlite3
 import time
-from collections import OrderedDict
-from copy import deepcopy
 from dataclasses import dataclass, field
-from hashlib import sha256
 from math import ceil
 from os import environ
-from pathlib import Path
 from threading import BoundedSemaphore, Lock
 from typing import Any, Callable, Dict, Mapping, Optional, Tuple
 
-from kagent.utils.json_output import json_ready
+from kagent.service.idempotency import (
+    ServiceIdempotencyCache as ServiceIdempotencyCache,
+)
+from kagent.service.idempotency import (
+    SqliteServiceIdempotencyCache as SqliteServiceIdempotencyCache,
+)
 
 _KNOWN_HTTP_METHODS = {"GET", "HEAD", "OPTIONS", "POST"}
 _UNKNOWN_METRICS_LABEL = "__unknown__"
@@ -792,199 +792,6 @@ class ServiceMetrics:
                 ),
                 "uptime_seconds": f"{max(0.0, current_time - self._started_at):.4f}",
             }
-
-
-class ServiceIdempotencyCache:
-    def __init__(self, *, max_entries: int) -> None:
-        if max_entries < 0:
-            raise ValueError("max_entries must be non-negative")
-        self._max_entries = max_entries
-        self._lock = Lock()
-        self._records: "OrderedDict[str, Tuple[str, int, Any]]" = OrderedDict()
-        self._hits = 0
-        self._misses = 0
-        self._conflicts = 0
-        self._stores = 0
-        self._evictions = 0
-
-    def lookup(self, key: str, body: bytes) -> Tuple[str, Optional[Tuple[int, Any]]]:
-        if self._max_entries == 0:
-            return "disabled", None
-        fingerprint = _request_body_fingerprint(body)
-        with self._lock:
-            record = self._records.get(key)
-            if record is None:
-                self._misses += 1
-                return "miss", None
-            cached_fingerprint, status_code, payload = record
-            self._records.move_to_end(key)
-            if cached_fingerprint != fingerprint:
-                self._conflicts += 1
-                return "conflict", None
-            self._hits += 1
-            return "hit", (status_code, deepcopy(payload))
-
-    def store(self, key: str, body: bytes, status_code: int, payload: Any) -> None:
-        if self._max_entries == 0:
-            return
-        with self._lock:
-            self._records[key] = (_request_body_fingerprint(body), status_code, deepcopy(payload))
-            self._records.move_to_end(key)
-            self._stores += 1
-            while len(self._records) > self._max_entries:
-                self._records.popitem(last=False)
-                self._evictions += 1
-
-    def snapshot(self) -> Dict[str, str]:
-        with self._lock:
-            return {
-                "idempotency_cache_entries": str(len(self._records)),
-                "idempotency_cache_size": str(self._max_entries),
-                "idempotency_cache_hits": str(self._hits),
-                "idempotency_cache_misses": str(self._misses),
-                "idempotency_cache_conflicts": str(self._conflicts),
-                "idempotency_cache_stores": str(self._stores),
-                "idempotency_cache_evictions": str(self._evictions),
-            }
-
-
-class SqliteServiceIdempotencyCache:
-    def __init__(self, *, max_entries: int, database_path: str) -> None:
-        if max_entries < 0:
-            raise ValueError("max_entries must be non-negative")
-        if not database_path:
-            raise ValueError("database_path is required")
-        self._max_entries = max_entries
-        self._database_path = Path(database_path)
-        self._lock = Lock()
-        self._hits = 0
-        self._misses = 0
-        self._conflicts = 0
-        self._stores = 0
-        self._evictions = 0
-        self._initialize_database()
-
-    def lookup(self, key: str, body: bytes) -> Tuple[str, Optional[Tuple[int, Any]]]:
-        if self._max_entries == 0:
-            return "disabled", None
-        fingerprint = _request_body_fingerprint(body)
-        with self._lock:
-            with self._connect() as connection:
-                row = connection.execute(
-                    (
-                        "SELECT fingerprint, status_code, payload_json "
-                        "FROM idempotency_cache WHERE cache_key = ?"
-                    ),
-                    (key,),
-                ).fetchone()
-                if row is None:
-                    self._misses += 1
-                    return "miss", None
-                cached_fingerprint, status_code, payload_json = row
-                if cached_fingerprint != fingerprint:
-                    self._conflicts += 1
-                    return "conflict", None
-                connection.execute(
-                    "UPDATE idempotency_cache SET updated_at_ns = ? WHERE cache_key = ?",
-                    (time.time_ns(), key),
-                )
-                self._hits += 1
-                return "hit", (int(status_code), json.loads(str(payload_json)))
-
-    def store(self, key: str, body: bytes, status_code: int, payload: Any) -> None:
-        if self._max_entries == 0:
-            return
-        payload_json = json.dumps(json_ready(payload), sort_keys=True)
-        with self._lock:
-            with self._connect() as connection:
-                connection.execute("BEGIN IMMEDIATE")
-                connection.execute(
-                    (
-                        "INSERT INTO idempotency_cache "
-                        "(cache_key, fingerprint, status_code, payload_json, updated_at_ns) "
-                        "VALUES (?, ?, ?, ?, ?) "
-                        "ON CONFLICT(cache_key) DO UPDATE SET "
-                        "fingerprint = excluded.fingerprint, "
-                        "status_code = excluded.status_code, "
-                        "payload_json = excluded.payload_json, "
-                        "updated_at_ns = excluded.updated_at_ns"
-                    ),
-                    (
-                        key,
-                        _request_body_fingerprint(body),
-                        int(status_code),
-                        payload_json,
-                        time.time_ns(),
-                    ),
-                )
-                self._stores += 1
-                self._evict_over_capacity(connection)
-
-    def snapshot(self) -> Dict[str, str]:
-        with self._lock:
-            with self._connect() as connection:
-                row = connection.execute(
-                    "SELECT COUNT(*) FROM idempotency_cache",
-                ).fetchone()
-                entry_count = int(row[0]) if row is not None else 0
-            return {
-                "idempotency_cache_backend": "sqlite",
-                "idempotency_cache_entries": str(entry_count),
-                "idempotency_cache_size": str(self._max_entries),
-                "idempotency_cache_hits": str(self._hits),
-                "idempotency_cache_misses": str(self._misses),
-                "idempotency_cache_conflicts": str(self._conflicts),
-                "idempotency_cache_stores": str(self._stores),
-                "idempotency_cache_evictions": str(self._evictions),
-            }
-
-    def _initialize_database(self) -> None:
-        self._database_path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-        with self._connect() as connection:
-            connection.execute("PRAGMA journal_mode=WAL")
-            connection.execute("PRAGMA busy_timeout=5000")
-            connection.execute(
-                (
-                    "CREATE TABLE IF NOT EXISTS idempotency_cache ("
-                    "cache_key TEXT PRIMARY KEY, "
-                    "fingerprint TEXT NOT NULL, "
-                    "status_code INTEGER NOT NULL, "
-                    "payload_json TEXT NOT NULL, "
-                    "updated_at_ns INTEGER NOT NULL"
-                    ")"
-                )
-            )
-            connection.execute(
-                (
-                    "CREATE INDEX IF NOT EXISTS "
-                    "idx_idempotency_cache_updated_at "
-                    "ON idempotency_cache(updated_at_ns, cache_key)"
-                )
-            )
-        self._database_path.chmod(0o600)
-
-    def _connect(self) -> sqlite3.Connection:
-        return sqlite3.connect(str(self._database_path), timeout=5.0)
-
-    def _evict_over_capacity(self, connection: sqlite3.Connection) -> None:
-        row = connection.execute("SELECT COUNT(*) FROM idempotency_cache").fetchone()
-        entry_count = int(row[0]) if row is not None else 0
-        overflow = max(0, entry_count - self._max_entries)
-        if overflow == 0:
-            return
-        rows = connection.execute(
-            (
-                "SELECT cache_key FROM idempotency_cache "
-                "ORDER BY updated_at_ns ASC, cache_key ASC LIMIT ?"
-            ),
-            (overflow,),
-        ).fetchall()
-        for (cache_key,) in rows:
-            connection.execute(
-                "DELETE FROM idempotency_cache WHERE cache_key = ?",
-                (cache_key,),
-            )
-            self._evictions += 1
 
 
 class ServiceRateLimiter:
@@ -1814,6 +1621,14 @@ def prometheus_metrics_text(snapshot: Mapping[str, Any]) -> str:
         ("idempotency_cache_conflicts", "counter", "Total idempotency key conflicts."),
         ("idempotency_cache_stores", "counter", "Total idempotency cache stores."),
         ("idempotency_cache_evictions", "counter", "Total idempotency cache evictions."),
+        ("idempotency_cache_claims", "counter", "Total idempotency execution claims."),
+        ("idempotency_cache_waits", "counter", "Total idempotency claim waits."),
+        (
+            "idempotency_cache_wait_timeouts",
+            "counter",
+            "Total idempotency claim wait timeouts.",
+        ),
+        ("idempotency_cache_takeovers", "counter", "Total expired claim takeovers."),
     ]
     for name, metric_type, help_text in scalar_metrics:
         if name in snapshot:
@@ -2094,10 +1909,6 @@ def _mapping_value(snapshot: Mapping[str, Any], name: str) -> Mapping[str, Any]:
 
 def _prometheus_label(value: Any) -> str:
     return str(value).replace("\\", "\\\\").replace("\n", "\\n").replace('"', '\\"')
-
-
-def _request_body_fingerprint(body: bytes) -> str:
-    return sha256(body).hexdigest()
 
 
 def _noop_release() -> None:

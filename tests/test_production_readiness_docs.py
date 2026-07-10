@@ -60,6 +60,10 @@ def test_production_readiness_checklist_documents_release_gates():
     assert "KAGENT_SERVICE_IDEMPOTENCY_CACHE_PATH" in readiness
     assert "same-volume replica retry reuse" in readiness
     assert "idempotency_cache_persistence" in readiness
+    assert "idempotency_request_in_progress" in readiness
+    assert "single-flight" in readiness
+    assert "wait timeout" in readiness
+    assert "takeover" in readiness
     assert "KAGENT_SERVICE_RUNTIME_ALLOWED_TOOLS" in readiness
     assert "KAGENT_SERVICE_RUNTIME_ALLOWED_TOOLS_BY_SUBJECT" in readiness
     assert "runtime tool execution policy" in readiness

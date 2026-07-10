@@ -33,10 +33,10 @@ from kagent.service import (
 )
 from kagent.service.active_runs import ActiveRunRegistry, ExecutionSlotLease
 from kagent.service.contract import service_openapi
+from kagent.service.idempotency import IdempotencyCache
 from kagent.service.runtime import (
     ServiceConcurrencyLimiter,
     ServiceConfig,
-    ServiceIdempotencyCache,
     ServiceMetrics,
     ServiceRateLimiter,
     prometheus_metrics_text,
@@ -54,7 +54,7 @@ def handle_request(
     rate_limiter: Optional[ServiceRateLimiter] = None,
     concurrency_limiter: Optional[ServiceConcurrencyLimiter] = None,
     active_run_registry: Optional[ActiveRunRegistry] = None,
-    idempotency_cache: Optional[ServiceIdempotencyCache] = None,
+    idempotency_cache: Optional[IdempotencyCache] = None,
     remote_addr: str = "",
     agent_runner: Optional[Callable[[str, Any], Dict[str, Any]]] = None,
 ) -> Tuple[int, Any]:
@@ -296,7 +296,7 @@ def metrics_snapshot(
     metrics: Optional[ServiceMetrics],
     concurrency_limiter: Optional[ServiceConcurrencyLimiter],
     rate_limiter: Optional[ServiceRateLimiter],
-    idempotency_cache: Optional[ServiceIdempotencyCache] = None,
+    idempotency_cache: Optional[IdempotencyCache] = None,
     config: Optional[ServiceConfig] = None,
 ) -> Dict[str, Any]:
     payload = (metrics or ServiceMetrics()).snapshot()
@@ -519,7 +519,7 @@ def _handle_run_route(
     metrics: Optional[ServiceMetrics],
     rate_limiter: Optional[ServiceRateLimiter],
     concurrency_limiter: Optional[ServiceConcurrencyLimiter],
-    idempotency_cache: Optional[ServiceIdempotencyCache],
+    idempotency_cache: Optional[IdempotencyCache],
     remote_addr: str,
     agent_runner: Optional[Callable[[str, Any], Dict[str, Any]]],
     active_run_registry: Optional[ActiveRunRegistry],
@@ -562,7 +562,7 @@ def _handle_execution_route(
     metrics: Optional[ServiceMetrics],
     rate_limiter: Optional[ServiceRateLimiter],
     concurrency_limiter: Optional[ServiceConcurrencyLimiter],
-    idempotency_cache: Optional[ServiceIdempotencyCache],
+    idempotency_cache: Optional[IdempotencyCache],
     remote_addr: str,
     idempotency_scope: str,
     include_auth_admin: bool,
@@ -606,12 +606,21 @@ def _handle_execution_route(
         idempotency_key,
         auth_subject,
     )
+    claim_token = ""
     if (
         idempotency_key
         and config.idempotency_cache_size > 0
         and idempotency_cache is not None
     ):
-        cache_status, cached_response = idempotency_cache.lookup(scoped_idempotency_key, body)
+        single_flight_seconds = (
+            config.run_timeout_seconds + config.request_timeout_seconds
+        )
+        cache_status, cached_response, claim_token = idempotency_cache.acquire(
+            scoped_idempotency_key,
+            body,
+            lease_seconds=single_flight_seconds,
+            wait_timeout_seconds=single_flight_seconds,
+        )
         if cache_status == "hit" and cached_response is not None:
             return cached_response
         if cache_status == "conflict":
@@ -619,61 +628,78 @@ def _handle_execution_route(
                 service_errors.IDEMPOTENCY_KEY_CONFLICT,
                 "idempotency key was already used with a different request body",
             )
-    rate_limit_key = service_safety.rate_limit_key(
-        headers,
-        remote_addr,
-        trust_forwarded_for=config.trust_forwarded_for,
-        auth_token=config.auth_token,
-        auth_tokens=config.auth_tokens,
-        auth_subject=auth_subject,
-    )
-    if rate_limiter is not None and not rate_limiter.allow(rate_limit_key):
-        payload = service_errors.failure_payload(
-            service_errors.RATE_LIMIT_EXCEEDED,
-            "rate limit exceeded",
-        )
-        payload["retry_after_seconds"] = str(
-            rate_limiter.retry_after_seconds(rate_limit_key)
-        )
-        return 429, payload
-    release_run_slot = (
-        concurrency_limiter.try_acquire()
-        if concurrency_limiter is not None and acquire_run_slot
-        else None
-    )
-    if acquire_run_slot and concurrency_limiter is not None and release_run_slot is None:
-        payload = service_errors.failure_payload(
-            service_errors.TOO_MANY_CONCURRENT_RUNS,
-            "too many concurrent runs",
-        )
-        payload["retry_after_seconds"] = "1"
-        return 503, payload
-    execution_slot_lease = ExecutionSlotLease(release_run_slot)
-    try:
-        started_at = time.perf_counter()
-        status_code, payload = execute_request(
-            body,
-            config,
-            auth_subject,
-            auth_is_admin,
-            execution_slot_lease,
-        )
-        if (
-            status_code == 200
-            and idempotency_key
-            and config.idempotency_cache_size > 0
-            and idempotency_cache is not None
-        ):
-            idempotency_cache.store(scoped_idempotency_key, body, status_code, payload)
-        if metrics is not None:
-            metrics.record_agent_run(
-                status=agent_run_status(status_code, payload),
-                duration_seconds=time.perf_counter() - started_at,
+        if cache_status == "in_progress":
+            payload = service_errors.failure_payload(
+                service_errors.IDEMPOTENCY_REQUEST_IN_PROGRESS,
+                "an identical request with this idempotency key is still running",
             )
-            _record_runtime_run_metrics(metrics, status_code, payload)
-        return status_code, payload
+            payload["retry_after_seconds"] = "1"
+            return 409, payload
+    try:
+        rate_limit_key = service_safety.rate_limit_key(
+            headers,
+            remote_addr,
+            trust_forwarded_for=config.trust_forwarded_for,
+            auth_token=config.auth_token,
+            auth_tokens=config.auth_tokens,
+            auth_subject=auth_subject,
+        )
+        if rate_limiter is not None and not rate_limiter.allow(rate_limit_key):
+            payload = service_errors.failure_payload(
+                service_errors.RATE_LIMIT_EXCEEDED,
+                "rate limit exceeded",
+            )
+            payload["retry_after_seconds"] = str(
+                rate_limiter.retry_after_seconds(rate_limit_key)
+            )
+            return 429, payload
+        release_run_slot = (
+            concurrency_limiter.try_acquire()
+            if concurrency_limiter is not None and acquire_run_slot
+            else None
+        )
+        if acquire_run_slot and concurrency_limiter is not None and release_run_slot is None:
+            payload = service_errors.failure_payload(
+                service_errors.TOO_MANY_CONCURRENT_RUNS,
+                "too many concurrent runs",
+            )
+            payload["retry_after_seconds"] = "1"
+            return 503, payload
+        execution_slot_lease = ExecutionSlotLease(release_run_slot)
+        try:
+            started_at = time.perf_counter()
+            status_code, payload = execute_request(
+                body,
+                config,
+                auth_subject,
+                auth_is_admin,
+                execution_slot_lease,
+            )
+            if (
+                status_code == 200
+                and claim_token
+                and idempotency_cache is not None
+                and idempotency_cache.complete(
+                    scoped_idempotency_key,
+                    body,
+                    claim_token,
+                    status_code,
+                    payload,
+                )
+            ):
+                claim_token = ""
+            if metrics is not None:
+                metrics.record_agent_run(
+                    status=agent_run_status(status_code, payload),
+                    duration_seconds=time.perf_counter() - started_at,
+                )
+                _record_runtime_run_metrics(metrics, status_code, payload)
+            return status_code, payload
+        finally:
+            execution_slot_lease.release_if_owned()
     finally:
-        execution_slot_lease.release_if_owned()
+        if claim_token and idempotency_cache is not None:
+            idempotency_cache.release(scoped_idempotency_key, claim_token)
 
 
 def _scoped_idempotency_key(scope: str, key: str, auth_subject: str = "") -> str:

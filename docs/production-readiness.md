@@ -305,8 +305,11 @@ ready for SRE review.
   per-subject runtime outcome metrics.
 - Optional SQLite-backed idempotency cache via
   `KAGENT_SERVICE_IDEMPOTENCY_CACHE_PATH` for restart-safe and
-  same-volume replica retry reuse; leave unset for the in-memory per-process
-  cache. `/ready` and `kagent-doctor` validate
+  same-volume replica retry reuse and cross-process single-flight claims; leave
+  unset for the in-memory per-process cache. Matching concurrent requests wait
+  for one owner, expired leases can be taken over without allowing stale owners
+  to overwrite results, and exhausted wait windows return structured
+  `409 idempotency_request_in_progress`. `/ready` and `kagent-doctor` validate
   `idempotency_cache_persistence` so bad cache volumes fail before traffic.
 - Configurable runtime tool execution policy via
   `KAGENT_SERVICE_RUNTIME_ALLOWED_TOOLS`; leave unset for the default
@@ -382,8 +385,9 @@ ready for SRE review.
 - `/metrics` runtime counters by path/status code, error code, average/max
   request duration, agent run outcomes/duration, uptime, active/max concurrent
   run gauges, active rate-limit window gauges, authenticated internal subject
-  usage counters, idempotency cache activity and eviction gauges, bind host and
-  bind port audit fields, max request bytes gauges, trusted-forwarded-for
+  usage counters, idempotency cache activity, single-flight claim/wait/timeout/
+  takeover counters, and eviction gauges, bind host and bind port audit fields,
+  max request bytes gauges, trusted-forwarded-for
   rollout state, and redacted runtime build info.
 - `/metrics.prom` Prometheus-compatible text exposition for scrape-based
   monitoring, including a request duration histogram, an agent run duration histogram,
@@ -426,7 +430,8 @@ ready for SRE review.
   runtime tool failure/approval pressure, runtime tool execution timeout,
   trace persistence failure,
   rate-limit, concurrency saturation,
-  idempotency conflict, request body timeout, malformed run request,
+  idempotency conflict, idempotency wait timeout and lease takeover,
+  request body timeout, malformed run request,
   oversized run request, suspicious HTTP framing, and unknown route alerting.
 - `deploy/prometheus/kagent-servicemonitor.yaml` for
   Prometheus Operator clusters that scrape targets through `ServiceMonitor`

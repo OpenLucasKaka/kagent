@@ -1312,6 +1312,14 @@ def test_service_prometheus_metrics_endpoint_reports_text_exposition(monkeypatch
     assert "# TYPE kagent_active_concurrent_runs gauge" in payload
     assert "# HELP kagent_idempotency_cache_hits" in payload
     assert "# TYPE kagent_idempotency_cache_hits counter" in payload
+    assert "# HELP kagent_idempotency_cache_claims" in payload
+    assert "# TYPE kagent_idempotency_cache_claims counter" in payload
+    assert "# HELP kagent_idempotency_cache_waits" in payload
+    assert "# TYPE kagent_idempotency_cache_waits counter" in payload
+    assert "# HELP kagent_idempotency_cache_wait_timeouts" in payload
+    assert "# TYPE kagent_idempotency_cache_wait_timeouts counter" in payload
+    assert "# HELP kagent_idempotency_cache_takeovers" in payload
+    assert "# TYPE kagent_idempotency_cache_takeovers counter" in payload
     assert "kagent_requests_total 2" in payload
     assert 'kagent_responses_total{status="200"} 1' in payload
     assert 'kagent_error_responses_total{error_code="not_found"} 1' in payload
