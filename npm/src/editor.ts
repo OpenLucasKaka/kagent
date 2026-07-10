@@ -28,24 +28,13 @@ export function createEditorState(history: string[] = []): EditorState {
 
 export function insertInput<T extends EditorBuffer>(state: T, rawInput: string): T {
   const characters = splitGraphemes(state.value);
-  let cursor = clampCursor(state.cursor, characters.length);
+  const cursor = clampCursor(state.cursor, characters.length);
+  const before = characters.slice(0, cursor).join("");
+  const inserted = splitGraphemes(rawInput).filter(isPrintableGrapheme).join("");
+  const after = characters.slice(cursor).join("");
+  const prefix = before + inserted;
 
-  for (const character of splitGraphemes(rawInput)) {
-    if (character === "\b" || character === "\x7f") {
-      if (cursor > 0) {
-        characters.splice(cursor - 1, 1);
-        cursor -= 1;
-      }
-      continue;
-    }
-    if ((character.codePointAt(0) || 0) < 32) {
-      continue;
-    }
-    characters.splice(cursor, 0, character);
-    cursor += 1;
-  }
-
-  return editBuffer(state, characters.join(""), cursor);
+  return editBuffer(state, prefix + after, splitGraphemes(prefix).length);
 }
 
 export function deleteBeforeCursor<T extends EditorBuffer>(state: T): T {
@@ -159,4 +148,9 @@ function isEditorState(state: EditorBuffer): state is EditorState {
 
 function clampCursor(cursor: number, length: number): number {
   return Math.min(Math.max(cursor, 0), length);
+}
+
+function isPrintableGrapheme(character: string): boolean {
+  const codePoint = character.codePointAt(0) || 0;
+  return codePoint >= 32 && codePoint !== 127;
 }

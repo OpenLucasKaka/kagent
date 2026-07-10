@@ -22,22 +22,12 @@ function createEditorState(history = []) {
 }
 function insertInput(state, rawInput) {
     const characters = splitGraphemes(state.value);
-    let cursor = clampCursor(state.cursor, characters.length);
-    for (const character of splitGraphemes(rawInput)) {
-        if (character === "\b" || character === "\x7f") {
-            if (cursor > 0) {
-                characters.splice(cursor - 1, 1);
-                cursor -= 1;
-            }
-            continue;
-        }
-        if ((character.codePointAt(0) || 0) < 32) {
-            continue;
-        }
-        characters.splice(cursor, 0, character);
-        cursor += 1;
-    }
-    return editBuffer(state, characters.join(""), cursor);
+    const cursor = clampCursor(state.cursor, characters.length);
+    const before = characters.slice(0, cursor).join("");
+    const inserted = splitGraphemes(rawInput).filter(isPrintableGrapheme).join("");
+    const after = characters.slice(cursor).join("");
+    const prefix = before + inserted;
+    return editBuffer(state, prefix + after, splitGraphemes(prefix).length);
 }
 function deleteBeforeCursor(state) {
     const characters = splitGraphemes(state.value);
@@ -130,4 +120,8 @@ function isEditorState(state) {
 }
 function clampCursor(cursor, length) {
     return Math.min(Math.max(cursor, 0), length);
+}
+function isPrintableGrapheme(character) {
+    const codePoint = character.codePointAt(0) || 0;
+    return codePoint >= 32 && codePoint !== 127;
 }

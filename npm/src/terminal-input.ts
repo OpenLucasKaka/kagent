@@ -1,5 +1,9 @@
 import { emitKeypressEvents, type Key as ReadlineKey } from "node:readline";
 import { PassThrough } from "node:stream";
+import { StringDecoder } from "node:string_decoder";
+
+const BRACKETED_PASTE_START = "\x1b[200~";
+const BRACKETED_PASTE_END = "\x1b[201~";
 
 export type TerminalKey = {
   sequence: string;
@@ -18,6 +22,9 @@ export type TerminalInputBridge = {
 
 export function createTerminalInputBridge(handler: TerminalInputHandler): TerminalInputBridge {
   const input = new PassThrough();
+  const decoder = new StringDecoder("utf8");
+  let pendingInput = "";
+  let pastedInput: string | null = null;
   input.setEncoding("utf8");
   emitKeypressEvents(input);
 
@@ -29,16 +36,79 @@ export function createTerminalInputBridge(handler: TerminalInputHandler): Termin
       meta: Boolean(key.meta),
       shift: Boolean(key.shift),
     };
-    const input = terminalKey.ctrl ? terminalKey.name || "" : printableInput(character);
-    handler(input, terminalKey);
+    const value = terminalKey.ctrl ? terminalKey.name || "" : printableInput(character);
+    handler(value, terminalKey);
   };
 
   input.on("keypress", handleKeypress);
+
+  const emitPaste = (value: string, sequence: string): void => {
+    const normalized = normalizePastedInput(value);
+    if (!normalized) {
+      return;
+    }
+    handler(normalized, {
+      sequence,
+      ctrl: false,
+      meta: false,
+      shift: false,
+    });
+  };
+
+  const writeParsedInput = (value: string): void => {
+    if (value.length > 1 && !value.includes("\x1b") && /[\r\n]/.test(value)) {
+      emitPaste(value, value);
+      return;
+    }
+    input.write(value);
+  };
+
+  const consume = (value: string): void => {
+    let remaining = pendingInput + value;
+    pendingInput = "";
+
+    while (remaining) {
+      if (pastedInput !== null) {
+        const combined = pastedInput + remaining;
+        const endIndex = combined.indexOf(BRACKETED_PASTE_END);
+        if (endIndex === -1) {
+          pastedInput = combined;
+          return;
+        }
+        const completedPaste = combined.slice(0, endIndex);
+        emitPaste(
+          completedPaste,
+          BRACKETED_PASTE_START + completedPaste + BRACKETED_PASTE_END,
+        );
+        pastedInput = null;
+        remaining = combined.slice(endIndex + BRACKETED_PASTE_END.length);
+        continue;
+      }
+
+      const startIndex = remaining.indexOf(BRACKETED_PASTE_START);
+      if (startIndex !== -1) {
+        writeParsedInput(remaining.slice(0, startIndex));
+        pastedInput = "";
+        remaining = remaining.slice(startIndex + BRACKETED_PASTE_START.length);
+        continue;
+      }
+
+      const suffixLength = pasteStartSuffixLength(remaining);
+      const parsedEnd = suffixLength > 1 ? remaining.length - suffixLength : remaining.length;
+      writeParsedInput(remaining.slice(0, parsedEnd));
+      pendingInput = remaining.slice(parsedEnd);
+      return;
+    }
+  };
+
   return {
     write(chunk) {
-      input.write(chunk);
+      consume(typeof chunk === "string" ? chunk : decoder.write(chunk));
     },
     close() {
+      consume(decoder.end());
+      writeParsedInput(pendingInput);
+      pendingInput = "";
       input.removeListener("keypress", handleKeypress);
       input.end();
     },
@@ -51,4 +121,20 @@ function printableInput(character: string | undefined): string {
   }
   const codePoint = character.codePointAt(0) || 0;
   return codePoint < 32 || codePoint === 127 ? "" : character;
+}
+
+function normalizePastedInput(value: string): string {
+  return value
+    .replace(/\r\n|\r|\n/g, " ")
+    .replace(/[\u0000-\u001f\u007f]/g, "");
+}
+
+function pasteStartSuffixLength(value: string): number {
+  const maxLength = Math.min(value.length, BRACKETED_PASTE_START.length - 1);
+  for (let length = maxLength; length > 1; length -= 1) {
+    if (value.endsWith(BRACKETED_PASTE_START.slice(0, length))) {
+      return length;
+    }
+  }
+  return 0;
 }

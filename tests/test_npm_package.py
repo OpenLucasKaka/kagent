@@ -114,6 +114,17 @@ const {isSessionCommandInput} = require("./npm/lib/App");
 
 assert.deepEqual(splitGraphemes("你👍🏽e\u0301"), ["你", "👍🏽", "e\u0301"]);
 
+let composed = insertInput(createEditorState(), "👍");
+composed = insertInput(composed, "🏽");
+assert.deepEqual([composed.value, composed.cursor], ["👍🏽", 1]);
+composed = moveCursor(composed, -1);
+composed = deleteAtCursor(composed);
+assert.deepEqual([composed.value, composed.cursor], ["", 0]);
+
+let combining = insertInput(createEditorState(), "e");
+combining = insertInput(combining, "\u0301");
+assert.deepEqual([combining.value, combining.cursor], ["e\u0301", 1]);
+
 let state = insertInput(createEditorState(), "你👍🏽e\u0301");
 assert.equal(state.value, "你👍🏽e\u0301");
 assert.equal(state.cursor, 3);
@@ -204,6 +215,12 @@ for (const sequence of [
 ]) {
   bridge.write(sequence);
 }
+bridge.write("z\x1b[D\x7f\r");
+bridge.write("first\nsecond");
+bridge.write("\x1b[20");
+bridge.write("0~third\r\n");
+bridge.write("fourth\n👍\x1b[20");
+bridge.write("1~");
 bridge.close();
 
 assert.deepEqual(events, [
@@ -219,6 +236,12 @@ assert.deepEqual(events, [
   ["e", "e", true],
   ["c", "c", true],
   ["你", undefined, false],
+  ["z", "z", false],
+  ["", "left", false],
+  ["", "backspace", false],
+  ["", "return", false],
+  ["first second", undefined, false],
+  ["third fourth 👍", undefined, false],
 ]);
 """
     subprocess.run([node, "-e", script], check=True)
@@ -300,11 +323,133 @@ inputEvents.emit("input", "\x1b[3~");
 assert.deepEqual([editor().value, editor().cursor], ["a", 1]);
 inputEvents.emit("input", "\x1b[H你\x1b[F!\x01X\x05Y\x1b[D\x1b[C");
 assert.deepEqual([editor().value, editor().cursor], ["X你a!Y", 5]);
+inputEvents.emit("input", "👍");
+inputEvents.emit("input", "🏽");
+assert.deepEqual([editor().value, editor().cursor], ["X你a!Y👍🏽", 6]);
+inputEvents.emit("input", "\x1b[D\x1b[3~");
+assert.deepEqual([editor().value, editor().cursor], ["X你a!Y", 5]);
+inputEvents.emit("input", "first\nsecond");
+assert.deepEqual([editor().value, editor().cursor], ["X你a!Yfirst second", 17]);
 inputEvents.emit("input", "\x03");
 assert.equal(exits, 1);
 
 cleanup();
 assert.deepEqual(rawModes, [true, false]);
+assert.equal(inputEvents.listenerCount("input"), 0);
+"""
+    subprocess.run([node, "-e", script], check=True)
+
+
+def test_npm_ink_app_preserves_composed_graphemes_in_provider_setup():
+    node = shutil.which("node")
+    if node is None:
+        return
+
+    script = r"""
+const assert = require("node:assert/strict");
+const {EventEmitter} = require("node:events");
+const {KagentInkApp} = require("./npm/lib/App");
+
+const states = [];
+const refs = [];
+let effects = [];
+let stateCursor = 0;
+let refCursor = 0;
+let lifecycleHandler;
+
+const React = {
+  createElement(type, props, ...children) {
+    return {type, props, children};
+  },
+  useEffect(effect) {
+    effects.push(effect);
+  },
+  useRef(value) {
+    const index = refCursor++;
+    if (!refs[index]) refs[index] = {current: value};
+    return refs[index];
+  },
+  useState(initial) {
+    const index = stateCursor++;
+    if (!(index in states)) {
+      states[index] = typeof initial === "function" ? initial() : initial;
+    }
+    return [states[index], (update) => {
+      states[index] = typeof update === "function" ? update(states[index]) : update;
+    }];
+  },
+};
+
+const inputEvents = new EventEmitter();
+const Ink = {
+  Box: "Box",
+  Text: "Text",
+  useApp() {
+    return {exit() {}};
+  },
+  useStdin() {
+    return {
+      internal_eventEmitter: inputEvents,
+      setRawMode() {},
+    };
+  },
+};
+const runtime = {
+  subscribe(handler) {
+    lifecycleHandler = handler;
+    return () => {};
+  },
+  close() {},
+  cancel() {},
+};
+
+function render() {
+  stateCursor = 0;
+  refCursor = 0;
+  effects = [];
+  KagentInkApp({React, Ink, runtimeSessionFactory: () => runtime});
+}
+
+render();
+const inputCleanup = effects[0]();
+const runtimeCleanup = effects[1]();
+lifecycleHandler({
+  type: "runtime_ready",
+  provider: {
+    configured: false,
+    provider: "test",
+    display_name: "Test",
+    base_url_configured: false,
+    model: "model",
+    api_key_configured: false,
+  },
+  provider_options: [{
+    provider: "test",
+    label: "Test",
+    base_url: "x",
+    model: "model",
+    api_key_required: false,
+  }],
+});
+render();
+
+inputEvents.emit("input", "\r");
+render();
+inputEvents.emit("input", "👍");
+inputEvents.emit("input", "🏽");
+assert.deepEqual(
+  [states[9].editor.value, states[9].editor.cursor],
+  ["x👍🏽", 2],
+);
+inputEvents.emit("input", "e");
+inputEvents.emit("input", "\u0301");
+assert.deepEqual(
+  [states[9].editor.value, states[9].editor.cursor],
+  ["x👍🏽e\u0301", 3],
+);
+
+inputCleanup();
+runtimeCleanup();
 assert.equal(inputEvents.listenerCount("input"), 0);
 """
     subprocess.run([node, "-e", script], check=True)
