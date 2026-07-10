@@ -1,6 +1,8 @@
 import json
+import os
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 
@@ -57,10 +59,167 @@ def test_npm_ink_source_uses_jsonl_runtime_protocol():
     combined = "\n".join(path.read_text(encoding="utf-8") for path in source_paths)
 
     assert "run_request" in combined
+    assert "runtime_ready" in combined
+    assert "runtime_unavailable" in combined
     assert "run_progress" in combined
+    assert "approval_required" in combined
+    assert "approval_response" in combined
     assert "run_completed" in combined
     assert "kagent.cli.stdio_runtime" in combined
     assert "--classic" not in Path("npm/src/runtime-client.ts").read_text(encoding="utf-8")
+
+
+def test_npm_ink_runtime_keeps_one_session_and_hides_internal_tool_names():
+    app = Path("npm/src/App.tsx").read_text(encoding="utf-8")
+    client = Path("npm/src/runtime-client.ts").read_text(encoding="utf-8")
+
+    assert "createRuntimeSessionClient" in app
+    assert "respondToApproval" in app
+    assert "Permission required" in app
+    assert "approval.title" in app
+    assert "approval.target" in app
+    assert "approval.tool" not in app
+    assert "child.stdin.end" not in client
+    assert "approval_response" in client
+    assert "runtime session is busy" in client
+
+
+def test_npm_ink_editor_handles_unicode_graphemes():
+    node = shutil.which("node")
+    if node is None:
+        return
+
+    script = r"""
+const assert = require("node:assert/strict");
+const {
+  applyInput,
+  deleteBeforeCursor,
+  moveCursor,
+  splitGraphemes,
+} = require("./npm/lib/App");
+
+assert.deepEqual(splitGraphemes("你👍🏽e\u0301"), ["你", "👍🏽", "e\u0301"]);
+
+let state = applyInput({value: "", cursor: 0}, "你好👍🏽");
+assert.deepEqual(state, {value: "你好👍🏽", cursor: 3});
+
+state = moveCursor(state, -1);
+state = applyInput(state, "，");
+assert.deepEqual(state, {value: "你好，👍🏽", cursor: 3});
+
+state = deleteBeforeCursor(state);
+assert.deepEqual(state, {value: "你好👍🏽", cursor: 2});
+
+state = applyInput(state, "e\u0301\x7fA");
+assert.deepEqual(state, {value: "你好A👍🏽", cursor: 3});
+"""
+    subprocess.run([node, "-e", script], check=True)
+
+
+def test_npm_runtime_client_reuses_python_session_and_handles_approval(tmp_path):
+    node = shutil.which("node")
+    if node is None:
+        return
+
+    script = r"""
+const assert = require("node:assert/strict");
+const childProcess = require("node:child_process");
+
+const runnerPath = require.resolve("./npm/lib/python-runner");
+require.cache[runnerPath] = {
+  id: runnerPath,
+  filename: runnerPath,
+  loaded: true,
+  exports: {
+    spawnPythonModule(moduleName, args = []) {
+      return childProcess.spawn(
+        process.env.KAGENT_TEST_PYTHON,
+        ["-m", moduleName, ...args],
+        {
+          cwd: process.cwd(),
+          env: process.env,
+          stdio: ["pipe", "pipe", "pipe"],
+        },
+      );
+    },
+  },
+};
+
+const {createRuntimeSessionClient} = require("./npm/lib/runtime-client");
+const client = createRuntimeSessionClient();
+
+function run(goal, plan) {
+  return new Promise((resolve, reject) => {
+    const events = [];
+    client.run(goal, (event) => {
+      events.push(event);
+      if (event.type === "client_failed" || event.type === "run_failed") {
+        reject(new Error(event.message));
+      }
+      if (event.type === "run_completed") {
+        resolve(events);
+      }
+    }, {runtimePlan: JSON.stringify(plan)});
+  });
+}
+
+async function main() {
+  const first = await run("first", {actions: [], final_answer: "first answer"});
+  const second = await run("second", {actions: [], final_answer: "second answer"});
+  assert.equal(first.at(-1).answer, "first answer");
+  assert.equal(second.at(-1).answer, "second answer");
+
+  const approvalEvents = await new Promise((resolve, reject) => {
+    const events = [];
+    client.run("open github", (event) => {
+      events.push(event);
+      if (event.type === "approval_required") {
+        assert.equal(event.title, "Open a website");
+        assert.equal(event.target, "https://github.com");
+        assert.equal(Object.hasOwn(event, "tool"), false);
+        client.respondToApproval(event.action_id, false);
+      }
+      if (event.type === "client_failed" || event.type === "run_failed") {
+        reject(new Error(event.message));
+      }
+      if (event.type === "run_completed") {
+        resolve(events);
+      }
+    }, {
+      runtimePlan: JSON.stringify({
+        actions: [{
+          id: "open-github",
+          tool: "open_url",
+          input: {url: "https://github.com"},
+          reason: "requested",
+        }],
+      }),
+    });
+  });
+  assert.equal(approvalEvents.at(-1).status, "cancelled");
+  client.close();
+}
+
+main().catch((error) => {
+  client.close();
+  console.error(error);
+  process.exitCode = 1;
+});
+"""
+    completed = subprocess.run(
+        [node, "-e", script],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        env={
+            **dict(os.environ),
+            "KAGENT_TEST_PYTHON": sys.executable,
+            "KAGENT_SESSION_MEMORY_PATH": str(tmp_path / "session-memory.json"),
+        },
+    )
+
+    assert completed.returncode == 0, completed.stderr
 
 
 def test_npm_bin_scripts_are_executable_node_wrappers():

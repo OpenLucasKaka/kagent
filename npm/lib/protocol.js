@@ -1,6 +1,15 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.parseRuntimeProtocolLine = parseRuntimeProtocolLine;
+const EVENT_TYPES = new Set([
+    "runtime_ready",
+    "runtime_unavailable",
+    "run_started",
+    "run_progress",
+    "approval_required",
+    "run_completed",
+    "run_failed",
+]);
 function parseRuntimeProtocolLine(line) {
     const trimmed = line.trim();
     if (!trimmed) {
@@ -9,6 +18,9 @@ function parseRuntimeProtocolLine(line) {
     const payload = JSON.parse(trimmed);
     if (!payload || typeof payload !== "object" || typeof payload.type !== "string") {
         throw new Error("runtime event must include a type");
+    }
+    if (!EVENT_TYPES.has(payload.type)) {
+        throw new Error(`unsupported runtime event: ${payload.type}`);
     }
     return payload;
 }
