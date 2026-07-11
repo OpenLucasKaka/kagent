@@ -7,8 +7,9 @@ from kagent.service import router as service_router
 from kagent.service import runtime_cancel as service_runtime_cancel
 from kagent.service import runtime_resume as service_runtime_resume
 from kagent.service import runtime_run as service_runtime_run
-from kagent.service.active_runs import ActiveRunRegistry
+from kagent.service.active_runs import ActiveRunRegistry, ActiveRunSnapshot
 from kagent.service.runtime import ServiceConcurrencyLimiter, ServiceConfig
+from kagent.service.runtime_lifecycle import persist_cancelled_runtime_trace
 from kagent.service.trace_store import load_trace_by_run_id, persist_trace
 
 
@@ -60,6 +61,43 @@ def test_runtime_timeout_waits_for_worker_cleanup_before_response(tmp_path, monk
     persisted = json.loads(Path(payload["trace_path"]).read_text())
     assert persisted["status"] == "cancelled"
     assert persisted["error_code"] == "agent_run_timeout"
+
+
+def test_timed_out_trace_upgrades_worker_cancelled_result(tmp_path):
+    run_id = "timed-out-worker-result"
+    persist_trace(
+        {
+            "trace_type": "codex_runtime",
+            "run_id": run_id,
+            "status": "cancelled",
+            "goal": "slow run",
+            "events": [],
+            "observations": [{"status": "ok", "output": {"partial": True}}],
+        },
+        str(tmp_path),
+    )
+
+    persisted = persist_cancelled_runtime_trace(
+        run_id=run_id,
+        trace_dir=str(tmp_path),
+        active_run=ActiveRunSnapshot(
+            run_id=run_id,
+            owner_auth_subject="",
+            state="timed_out",
+            started_at="2026-07-11T00:00:00+00:00",
+            cancel_reason="runtime run timed out",
+            cancelled_at="2026-07-11T00:00:01+00:00",
+        ),
+        error_code="agent_run_timeout",
+        error="agent run timed out",
+    )
+
+    assert persisted["status"] == "cancelled"
+    assert persisted["error_code"] == "agent_run_timeout"
+    assert persisted["error"] == "agent run timed out"
+    assert persisted["observations"] == [
+        {"status": "ok", "output": {"partial": True}}
+    ]
 
 
 def test_runtime_timeout_tracks_uncooperative_worker_until_it_exits(

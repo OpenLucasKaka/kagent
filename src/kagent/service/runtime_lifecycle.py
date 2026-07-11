@@ -68,7 +68,11 @@ def persist_cancelled_runtime_trace(
             "started_at": active_run.started_at,
             "events": [],
         }
-        if str(trace.get("status", "")) in _CANCELLATION_PROTECTED_STATUSES:
+        current_status = str(trace.get("status", ""))
+        timeout_upgrade = (
+            active_run.state == "timed_out" and current_status == "cancelled"
+        )
+        if current_status in _CANCELLATION_PROTECTED_STATUSES and not timeout_upgrade:
             return _with_trace_path(trace, run_id, trace_dir)
         cancelled_at = active_run.cancelled_at or _utc_timestamp()
         trace["status"] = "cancelled"
