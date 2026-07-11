@@ -112,6 +112,7 @@ export type ApprovalRequiredEvent = {
   title: string;
   reason: string;
   target: string;
+  details?: string[];
 };
 
 export type RunCompletedEvent = {

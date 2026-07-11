@@ -11,7 +11,7 @@ from typing import Iterator
 
 
 @dataclass(frozen=True)
-class _FileSnapshot:
+class TextFileState:
     content: str | None
     mode: int
 
@@ -37,8 +37,12 @@ def workspace_transaction(workspace_root: Path) -> Iterator[None]:
 def commit_text_changes(
     workspace_root: Path,
     staged_contents: dict[Path, str | None],
+    *,
+    original_states: dict[Path, TextFileState] | None = None,
+    target_modes: dict[Path, int] | None = None,
 ) -> None:
-    snapshots = {target: _snapshot(target) for target in staged_contents}
+    snapshots = original_states or capture_text_states(staged_contents)
+    resolved_target_modes = target_modes or {}
     created_directories: list[Path] = []
     try:
         for target, content in staged_contents.items():
@@ -53,7 +57,7 @@ def commit_text_changes(
                 target.parent,
                 created_directories=created_directories,
             )
-            _atomic_write_text(target, content)
+            _atomic_write_text(target, content, mode=resolved_target_modes.get(target))
     except Exception as commit_error:
         try:
             _rollback(
@@ -68,12 +72,22 @@ def commit_text_changes(
         raise
 
 
-def _snapshot(target: Path) -> _FileSnapshot:
+def capture_text_states(paths) -> dict[Path, TextFileState]:
+    return {target: _snapshot(target) for target in paths}
+
+
+def validate_workspace_targets(workspace_root: Path, paths) -> None:
+    for target in paths:
+        target.relative_to(workspace_root)
+        _reject_symlink_parts(workspace_root, target)
+
+
+def _snapshot(target: Path) -> TextFileState:
     if not target.exists():
-        return _FileSnapshot(content=None, mode=0o600)
+        return TextFileState(content=None, mode=0o600)
     if not target.is_file():
         raise ValueError("path is not a regular file")
-    return _FileSnapshot(
+    return TextFileState(
         content=target.read_text(encoding="utf-8"),
         mode=stat.S_IMODE(target.stat().st_mode),
     )
@@ -81,7 +95,7 @@ def _snapshot(target: Path) -> _FileSnapshot:
 
 def _rollback(
     workspace_root: Path,
-    snapshots: dict[Path, _FileSnapshot],
+    snapshots: dict[Path, TextFileState],
     *,
     created_directories: list[Path],
 ) -> None:

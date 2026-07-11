@@ -21,7 +21,11 @@ from kagent.providers.embeddings import (
     EmbeddingProviderConfig,
     OpenAICompatibleEmbeddingProvider,
 )
-from kagent.runtime.file_transaction import commit_text_changes, workspace_transaction
+from kagent.runtime.file_transaction import capture_text_states, workspace_transaction
+from kagent.runtime.patch_checkpoints import (
+    PatchCheckpointStore,
+    commit_checkpointed_text_changes,
+)
 from kagent.runtime.policy import RuntimePolicy
 from kagent.runtime.redaction import redact_runtime_payload
 from kagent.runtime.sandbox import run_shell_sandboxed
@@ -201,6 +205,49 @@ _APPLY_PATCH_OUTPUT_SCHEMA = {
     "type": "object",
     "required": ["changed_files", "file_count"],
     "properties": {
+        "changed_files": {
+            "type": "array",
+            "items": _APPLY_PATCH_CHANGED_FILE_OUTPUT_SCHEMA,
+        },
+        "file_count": {"type": "number", "minimum": 0},
+    },
+    "additionalProperties": False,
+}
+
+_PATCH_HISTORY_OUTPUT_SCHEMA = {
+    "type": "object",
+    "required": ["checkpoints", "checkpoint_count"],
+    "properties": {
+        "checkpoints": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "required": ["checkpoint_id", "created_at", "file_count", "paths"],
+                "properties": {
+                    "checkpoint_id": {"type": "string"},
+                    "created_at": {"type": "string"},
+                    "file_count": {"type": "number", "minimum": 0},
+                    "paths": {"type": "array", "items": {"type": "string"}},
+                },
+                "additionalProperties": False,
+            },
+        },
+        "checkpoint_count": {"type": "number", "minimum": 0},
+    },
+    "additionalProperties": False,
+}
+
+_REVERT_PATCH_OUTPUT_SCHEMA = {
+    "type": "object",
+    "required": [
+        "checkpoint_id",
+        "reverted_checkpoint_id",
+        "changed_files",
+        "file_count",
+    ],
+    "properties": {
+        "checkpoint_id": {"type": "string"},
+        "reverted_checkpoint_id": {"type": "string"},
         "changed_files": {
             "type": "array",
             "items": _APPLY_PATCH_CHANGED_FILE_OUTPUT_SCHEMA,
@@ -863,6 +910,51 @@ def default_runtime_tools(
                 "additionalProperties": False,
             },
             output_schema=_APPLY_PATCH_OUTPUT_SCHEMA,
+        ),
+        "patch_history": RuntimeToolSpec(
+            name="patch_history",
+            description=(
+                "List committed file-change checkpoints for the current workspace. "
+                "Use this before revert_patch and pass back the exact checkpoint ID "
+                "and paths selected by the user."
+            ),
+            handler=_patch_history,
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "limit": {"type": "number", "minimum": 1, "maximum": 100},
+                },
+                "additionalProperties": False,
+            },
+            output_schema=_PATCH_HISTORY_OUTPUT_SCHEMA,
+        ),
+        "revert_patch": RuntimeToolSpec(
+            name="revert_patch",
+            description=(
+                "Restore files from a reviewed patch checkpoint. The exact paths from "
+                "patch_history are required and current file SHA-256 values must still "
+                "match the checkpoint. The revert creates a new checkpoint for redo."
+            ),
+            handler=_revert_patch,
+            input_schema={
+                "type": "object",
+                "required": ["checkpoint_id", "paths"],
+                "properties": {
+                    "checkpoint_id": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 120,
+                    },
+                    "paths": {
+                        "type": "array",
+                        "minItems": 1,
+                        "maxItems": 200,
+                        "items": {"type": "string", "minLength": 1},
+                    },
+                },
+                "additionalProperties": False,
+            },
+            output_schema=_REVERT_PATCH_OUTPUT_SCHEMA,
         ),
         "artifact": RuntimeToolSpec(
             name="artifact",
@@ -2491,13 +2583,16 @@ def _apply_patch(input_payload: Dict[str, Any]) -> Dict[str, Any]:
         raise ValueError("patch must be a non-empty string")
     operations = _parse_workspace_patch(patch)
     workspace_root = Path.cwd().resolve()
+    store = PatchCheckpointStore.from_environment()
+    store.recover_prepared(workspace_root)
     with workspace_transaction(workspace_root):
-        return _stage_and_commit_workspace_patch(workspace_root, operations)
+        return _stage_and_commit_workspace_patch(workspace_root, operations, store)
 
 
 def _stage_and_commit_workspace_patch(
     workspace_root: Path,
     operations: list[_PatchOperation],
+    store: PatchCheckpointStore,
 ) -> Dict[str, Any]:
     staged_contents: dict[Path, str | None] = {}
     changed_files = []
@@ -2570,8 +2665,84 @@ def _stage_and_commit_workspace_patch(
             }
         )
 
-    commit_text_changes(workspace_root, staged_contents)
+    commit_checkpointed_text_changes(
+        store,
+        workspace_root,
+        staged_contents,
+    )
     return {"changed_files": changed_files, "file_count": len(changed_files)}
+
+
+def _patch_history(input_payload: Dict[str, Any]) -> Dict[str, Any]:
+    limit = int(input_payload.get("limit", 20))
+    workspace_root = Path.cwd().resolve()
+    store = PatchCheckpointStore.from_environment()
+    store.recover_prepared(workspace_root)
+    return store.history(workspace_root, limit=limit)
+
+
+def _revert_patch(input_payload: Dict[str, Any]) -> Dict[str, Any]:
+    checkpoint_id = input_payload.get("checkpoint_id")
+    paths = input_payload.get("paths")
+    if not isinstance(checkpoint_id, str) or not checkpoint_id.strip():
+        raise ValueError("checkpoint_id must be a non-empty string")
+    if not isinstance(paths, list) or not all(
+        isinstance(path, str) and path for path in paths
+    ):
+        raise ValueError("paths must be a non-empty string array")
+    workspace_root = Path.cwd().resolve()
+    store = PatchCheckpointStore.from_environment()
+    store.recover_prepared(workspace_root)
+    with workspace_transaction(workspace_root):
+        revert = store.load_revert(workspace_root, checkpoint_id.strip())
+        checkpoint_paths = [
+            target.relative_to(workspace_root).as_posix()
+            for target in revert.staged_contents
+        ]
+        if paths != checkpoint_paths:
+            raise ValueError("paths do not match the reviewed checkpoint")
+        for target in revert.staged_contents:
+            _reject_symlink_path_parts(
+                workspace_root,
+                target.relative_to(workspace_root),
+            )
+        current_states = capture_text_states(revert.expected_current)
+        for target, expected_content in revert.expected_current.items():
+            if current_states[target].content != expected_content:
+                relative_path = target.relative_to(workspace_root).as_posix()
+                raise ValueError(
+                    f"current SHA-256 does not match checkpoint: {relative_path}"
+                )
+        new_checkpoint_id = commit_checkpointed_text_changes(
+            store,
+            workspace_root,
+            revert.staged_contents,
+            target_modes=revert.target_modes,
+        )
+    changed_files = []
+    for target, content in revert.staged_contents.items():
+        previous_content = revert.expected_current[target]
+        if previous_content is None:
+            operation = "add"
+        elif content is None:
+            operation = "delete"
+        else:
+            operation = "update"
+        encoded = (content or "").encode("utf-8")
+        changed_files.append(
+            {
+                "path": target.relative_to(workspace_root).as_posix(),
+                "operation": operation,
+                "bytes": len(encoded),
+                "sha256": hashlib.sha256(encoded).hexdigest(),
+            }
+        )
+    return {
+        "checkpoint_id": new_checkpoint_id,
+        "reverted_checkpoint_id": checkpoint_id.strip(),
+        "changed_files": changed_files,
+        "file_count": len(changed_files),
+    }
 
 
 def _parse_workspace_patch(patch: str) -> list[_PatchOperation]:

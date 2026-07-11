@@ -471,6 +471,9 @@ def summarize_runtime_user_result(output: Any, *, tool: str = "") -> str:
     if normalized_tool == "apply_patch":
         changed = _summarize_changed_files(output.get("changed_files"))
         return f"Updated files {changed}" if changed else "Updated files"
+    if normalized_tool == "revert_patch":
+        changed = _summarize_changed_files(output.get("changed_files"))
+        return f"Restored files {changed}" if changed else "Restored files"
     if normalized_tool == "read_file":
         path = _short_runtime_value(output.get("path", ""))
         return f"Read {path}" if path else "Read file"
@@ -568,6 +571,7 @@ def _approval_action_label(tool: str) -> str:
         "http_request": "Fetch URL",
         "open_app": "Open app",
         "open_url": "Open URL",
+        "revert_patch": "Restore files",
         "shell_command": "Run command",
     }
     return labels.get(tool.strip(), tool.strip() or "Run action")
@@ -579,6 +583,7 @@ def _user_action_label(tool: str) -> str:
         "http_request": "Fetched URL",
         "open_app": "Opened app",
         "open_url": "Opened URL",
+        "revert_patch": "Restored files",
         "shell_command": "Ran command",
     }
     return labels.get(tool.strip(), "Completed action")
@@ -761,7 +766,7 @@ def _is_internal_progress_tool(tool: str) -> bool:
 
 def _summarize_runtime_output_for_tool(tool: str, output: dict) -> str:
     normalized_tool = tool.strip()
-    if normalized_tool == "apply_patch":
+    if normalized_tool in {"apply_patch", "revert_patch"}:
         return _summarize_changed_files(output.get("changed_files"))
     if normalized_tool == "open_url":
         return join_non_empty(

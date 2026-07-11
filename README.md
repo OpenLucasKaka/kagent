@@ -166,7 +166,7 @@ The runtime currently includes tools for:
 - approved bounded local shell commands for internal CLI checks, with
   destructive, secret-exposing, and network shell commands rejected;
 - creating, updating, moving, and deleting workspace files through an audited
-  `apply_patch` flow.
+  `apply_patch` flow with transactional rollback and approval-gated undo/redo.
 - maintaining versioned virtual-workspace assets with reviewed diff and
   approval-gated current/revision SHA-locked restore and redo.
 

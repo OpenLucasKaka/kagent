@@ -445,7 +445,7 @@ class StdioRuntimeSession:
                     "type": "run_completed",
                     "status": str(payload.get("status", "done")),
                     "answer": str(payload.get("answer", "")),
-                    "payload": payload,
+                    "payload": _completion_payload(payload),
                 },
             )
 
@@ -586,13 +586,17 @@ def _pending_approval_from_result(
 def _approval_event(action: Dict[str, Any]) -> Dict[str, Any]:
     action_input = action.get("input")
     safe_input = action_input if isinstance(action_input, dict) else {}
-    return {
+    event = {
         "type": "approval_required",
         "action_id": str(action.get("id", "")),
         "title": _approval_title(str(action.get("tool", ""))),
         "reason": _bounded_text(action.get("reason"), 500),
         "target": _approval_target(safe_input),
     }
+    details = _approval_details(safe_input)
+    if details:
+        event["details"] = details
+    return event
 
 
 def _approval_title(tool: str) -> str:
@@ -602,15 +606,42 @@ def _approval_title(tool: str) -> str:
         "http_request": "Contact an external service",
         "shell_command": "Run a system command",
         "apply_patch": "Modify workspace files",
+        "revert_patch": "Restore workspace files",
         "write_file": "Create or update a file",
     }.get(tool, "Perform an external action")
 
 
 def _approval_target(action_input: Dict[str, Any]) -> str:
+    paths = action_input.get("paths")
+    if isinstance(paths, list):
+        visible = [str(path) for path in paths[:3]]
+        suffix = f", +{len(paths) - len(visible)} more" if len(paths) > 3 else ""
+        return _bounded_text(
+            f"{len(paths)} files: {', '.join(visible)}{suffix}",
+            500,
+        )
     for key in ("url", "application", "path", "command", "query"):
         if key in action_input:
             return _bounded_text(action_input[key], 500)
     return ""
+
+
+def _approval_details(action_input: Dict[str, Any]) -> list[str]:
+    paths = action_input.get("paths")
+    if not isinstance(paths, list):
+        return []
+    return [_bounded_text(path, 500) for path in paths]
+
+
+def _completion_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
+    allowed_keys = (
+        "duration_seconds",
+        "iteration_count",
+        "max_iterations",
+        "run_id",
+        "status",
+    )
+    return {key: payload[key] for key in allowed_keys if key in payload}
 
 
 def _bounded_text(value: Any, limit: int) -> str:

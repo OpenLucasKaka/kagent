@@ -160,6 +160,7 @@ def _title_from_tool_payload(
         "open_app": "Opened" if completed else "Open",
         "open_url": "Opened" if completed else "Open",
         "read_file": "Read" if completed else "Read",
+        "revert_patch": "Restored files" if completed else "Restore files",
         "workspace_restore": "Restored" if completed else "Restore",
         "shell_command": "Ran command" if completed else "Run command",
     }.get(tool, "")
@@ -176,6 +177,8 @@ def _tool_target(tool: str, payload: Dict[str, Any]) -> str:
         return _short_value(payload.get("application", ""))
     if tool == "read_file":
         return _short_value(payload.get("path", ""))
+    if tool == "revert_patch":
+        return _changed_files_label(payload.get("paths"))
     if tool == "list_files":
         return _short_value(payload.get("root", ""))
     if tool == "shell_command":

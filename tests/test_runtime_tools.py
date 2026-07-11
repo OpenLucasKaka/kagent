@@ -3,6 +3,8 @@ import shlex
 import sys
 import time
 
+import pytest
+
 from kagent.runtime import file_transaction
 from kagent.runtime import tools as runtime_tools
 from kagent.runtime.policy import RuntimePolicy
@@ -12,6 +14,11 @@ from kagent.runtime.tools import (
     execute_runtime_tool,
     registered_runtime_tool_metadata,
 )
+
+
+@pytest.fixture(autouse=True)
+def isolate_patch_checkpoint_state(tmp_path, monkeypatch):
+    monkeypatch.setenv("KAGENT_PATCH_STATE_DIR", str(tmp_path / "patch-state"))
 
 
 def test_note_tool_returns_structured_observation():
@@ -992,6 +999,156 @@ def test_apply_patch_tool_restores_deleted_file_when_later_commit_fails(
     assert updated.read_text(encoding="utf-8") == "old\n"
 
 
+def test_apply_patch_records_checkpoint_and_revert_creates_redo_checkpoint(
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("KAGENT_PATCH_STATE_DIR", str(tmp_path / "patch-state"))
+    target = tmp_path / "notes.md"
+    target.write_text("before\n", encoding="utf-8")
+
+    applied = execute_runtime_tool(
+        default_runtime_tools(),
+        "apply_patch",
+        {
+            "patch": (
+                "*** Begin Patch\n"
+                "*** Update File: notes.md\n"
+                "@@\n"
+                "-before\n"
+                "+after\n"
+                "*** End Patch\n"
+            )
+        },
+        action_id="step-1",
+    )
+    history = execute_runtime_tool(
+        default_runtime_tools(),
+        "patch_history",
+        {},
+        action_id="step-2",
+    )
+    checkpoint_id = history.output["checkpoints"][0]["checkpoint_id"]
+    reverted = execute_runtime_tool(
+        default_runtime_tools(),
+        "revert_patch",
+        {"checkpoint_id": checkpoint_id, "paths": ["notes.md"]},
+        action_id="step-3",
+    )
+
+    assert applied.status == "ok"
+    assert history.status == "ok"
+    assert history.output["checkpoint_count"] == 1
+    assert history.output["checkpoints"][0]["paths"] == ["notes.md"]
+    assert reverted.status == "ok"
+    assert reverted.output["reverted_checkpoint_id"] == checkpoint_id
+    assert reverted.output["checkpoint_id"] != checkpoint_id
+    assert target.read_text(encoding="utf-8") == "before\n"
+    redo_history = execute_runtime_tool(
+        default_runtime_tools(),
+        "patch_history",
+        {},
+        action_id="step-4",
+    )
+    assert redo_history.output["checkpoint_count"] == 2
+
+
+def test_revert_patch_rejects_workspace_changes_after_checkpoint(
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("KAGENT_PATCH_STATE_DIR", str(tmp_path / "patch-state"))
+    target = tmp_path / "notes.md"
+    target.write_text("before\n", encoding="utf-8")
+    execute_runtime_tool(
+        default_runtime_tools(),
+        "apply_patch",
+        {
+            "patch": (
+                "*** Begin Patch\n"
+                "*** Update File: notes.md\n"
+                "@@\n"
+                "-before\n"
+                "+after\n"
+                "*** End Patch\n"
+            )
+        },
+        action_id="step-1",
+    )
+    history = execute_runtime_tool(
+        default_runtime_tools(),
+        "patch_history",
+        {},
+        action_id="step-2",
+    )
+    target.write_text("user edit\n", encoding="utf-8")
+
+    reverted = execute_runtime_tool(
+        default_runtime_tools(),
+        "revert_patch",
+        {
+            "checkpoint_id": history.output["checkpoints"][0]["checkpoint_id"],
+            "paths": ["notes.md"],
+        },
+        action_id="step-3",
+    )
+
+    assert reverted.status == "failed"
+    assert reverted.error_code == "invalid_tool_input"
+    assert "current SHA-256 does not match checkpoint" in reverted.error
+    assert target.read_text(encoding="utf-8") == "user edit\n"
+
+
+def test_revert_patch_rejects_workspace_symlink_without_touching_target(
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.chdir(tmp_path)
+    target = tmp_path / "notes.md"
+    outside = tmp_path.parent / f"{tmp_path.name}-outside.md"
+    target.write_text("before\n", encoding="utf-8")
+    execute_runtime_tool(
+        default_runtime_tools(),
+        "apply_patch",
+        {
+            "patch": (
+                "*** Begin Patch\n"
+                "*** Update File: notes.md\n"
+                "@@\n"
+                "-before\n"
+                "+after\n"
+                "*** End Patch\n"
+            )
+        },
+        action_id="step-1",
+    )
+    history = execute_runtime_tool(
+        default_runtime_tools(),
+        "patch_history",
+        {},
+        action_id="step-2",
+    )
+    target.unlink()
+    outside.write_text("after\n", encoding="utf-8")
+    target.symlink_to(outside)
+
+    reverted = execute_runtime_tool(
+        default_runtime_tools(),
+        "revert_patch",
+        {
+            "checkpoint_id": history.output["checkpoints"][0]["checkpoint_id"],
+            "paths": ["notes.md"],
+        },
+        action_id="step-3",
+    )
+
+    assert reverted.status == "failed"
+    assert reverted.error == "path must not be a symlink"
+    assert outside.read_text(encoding="utf-8") == "after\n"
+
+
 def test_runtime_tool_times_out_slow_handler():
     def slow_handler(_input_payload):
         time.sleep(0.05)
@@ -1790,7 +1947,9 @@ def test_registered_runtime_tool_metadata_includes_input_schemas():
         "note",
         "open_app",
         "open_url",
+        "patch_history",
         "read_file",
+        "revert_patch",
         "rubric_score",
         "shell_command",
         "skill_get",
@@ -1820,6 +1979,16 @@ def test_registered_runtime_tool_metadata_includes_input_schemas():
     assert by_name["apply_patch"]["output_schema"]["properties"]["changed_files"][
         "items"
     ]["properties"]["previous_path"] == {"type": "string"}
+    assert by_name["patch_history"]["approval_required_by_default"] == "false"
+    assert by_name["patch_history"]["output_schema"]["required"] == [
+        "checkpoints",
+        "checkpoint_count",
+    ]
+    assert by_name["revert_patch"]["approval_required_by_default"] == "true"
+    assert by_name["revert_patch"]["input_schema"]["required"] == [
+        "checkpoint_id",
+        "paths",
+    ]
     assert by_name["artifact"]["approval_required_by_default"] == "false"
     assert by_name["artifact"]["timeout_seconds"] == "30.0"
     assert by_name["artifact"]["input_schema"]["required"] == [

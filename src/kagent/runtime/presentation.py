@@ -18,6 +18,7 @@ def project_runtime_presentation(
     projectors = {
         "artifact": _project_artifact,
         "apply_patch": _project_apply_patch,
+        "revert_patch": _project_revert_patch,
         "workspace_diff": _project_workspace_diff,
         "workspace_restore": _project_workspace_restore,
         "open_url": _project_open_url,
@@ -72,6 +73,14 @@ def _project_apply_patch(output: Dict[str, Any]) -> Dict[str, Any]:
         path_detail += f", +{count - len(visible_paths)} more"
     label = "file" if count == 1 else "files"
     return _presentation("Updated files", f"{count} {label}: {path_detail}")
+
+
+def _project_revert_patch(output: Dict[str, Any]) -> Dict[str, Any]:
+    projected = _project_apply_patch(output)
+    if not projected:
+        return {}
+    projected["title"] = "Restored files"
+    return projected
 
 
 def _project_workspace_diff(output: Dict[str, Any]) -> Dict[str, Any]:

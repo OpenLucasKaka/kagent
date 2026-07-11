@@ -727,7 +727,18 @@ default. `apply_patch`
 supports audited add, update, move, and delete
 operations; move operations use `*** Move to: PATH` and report
 `operation=move`, changed-file `path`, `previous_path`, `bytes`, and `sha256`
-in observations.
+in observations. Multi-file patches use a workspace advisory lock, same-directory
+atomic replacement, and compensating rollback so a failed commit does not leave
+partially updated files. Each successful patch records an owner-only checkpoint
+under `${KAGENT_PATCH_STATE_DIR:-${XDG_STATE_HOME:-~/.local/state}/kagent/patches}`.
+Checkpoint manifests are authenticated with a generated owner-only HMAC key.
+If a process exits during a multi-file commit, the next patch history, apply, or
+revert operation detects the prepared journal and restores every file to its
+recorded before state; recovery stops without writing if any file has diverged.
+Use `patch_history` to inspect checkpoint IDs and affected paths, then
+`revert_patch` with those exact reviewed paths. Revert is approval-gated, rejects
+current SHA conflicts and symlink substitution, and records a new checkpoint so
+the same flow can redo the change.
 `decision_matrix` ranks options with weighted criteria for structured tradeoff
 decisions, `rubric_score` returns score percentages, failed criteria, and
 blocking failures for structured self-review, while `task_list` returns

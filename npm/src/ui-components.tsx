@@ -223,6 +223,19 @@ export function ApprovalPanel({
     React.createElement(Text, { bold: true, color: "yellow" }, "Permission required"),
     React.createElement(Text, { wrap: "wrap" }, approval.title),
     approval.target ? React.createElement(Text, { color: "cyan", wrap: "wrap" }, approval.target) : null,
+    showDetails && approval.details?.length
+      ? React.createElement(
+          Box,
+          { flexDirection: "column", marginTop: 1 },
+          ...approval.details.map((detail, index) =>
+            React.createElement(
+              Text,
+              { key: `${index}-${detail}`, color: "cyan", wrap: "wrap" },
+              `  ${detail}`,
+            ),
+          ),
+        )
+      : null,
     showDetails && approval.reason
       ? React.createElement(Text, { color: "gray", wrap: "wrap" }, approval.reason)
       : null,

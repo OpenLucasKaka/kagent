@@ -89,7 +89,9 @@ function TranscriptPosition({ React, Text, newerCount, }) {
     return React.createElement(Text, { color: "gray" }, `History · ${newerCount} newer`);
 }
 function ApprovalPanel({ React, Box, Text, approval, compact, showDetails, }) {
-    return React.createElement(Box, { flexDirection: "column", marginY: 1, paddingLeft: compact ? 0 : 2 }, React.createElement(Text, { bold: true, color: "yellow" }, "Permission required"), React.createElement(Text, { wrap: "wrap" }, approval.title), approval.target ? React.createElement(Text, { color: "cyan", wrap: "wrap" }, approval.target) : null, showDetails && approval.reason
+    return React.createElement(Box, { flexDirection: "column", marginY: 1, paddingLeft: compact ? 0 : 2 }, React.createElement(Text, { bold: true, color: "yellow" }, "Permission required"), React.createElement(Text, { wrap: "wrap" }, approval.title), approval.target ? React.createElement(Text, { color: "cyan", wrap: "wrap" }, approval.target) : null, showDetails && approval.details?.length
+        ? React.createElement(Box, { flexDirection: "column", marginTop: 1 }, ...approval.details.map((detail, index) => React.createElement(Text, { key: `${index}-${detail}`, color: "cyan", wrap: "wrap" }, `  ${detail}`)))
+        : null, showDetails && approval.reason
         ? React.createElement(Text, { color: "gray", wrap: "wrap" }, approval.reason)
         : null, React.createElement(Text, { color: "gray" }, "y allow · n deny · d details"));
 }

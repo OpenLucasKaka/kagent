@@ -27,6 +27,7 @@ class RuntimePolicy:
                 "memory_search",
                 "memory_upsert",
                 "note",
+                "patch_history",
                 "read_file",
                 "rubric_score",
                 "skill_get",

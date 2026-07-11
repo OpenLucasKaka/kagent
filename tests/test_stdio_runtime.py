@@ -84,7 +84,16 @@ def test_stdio_runtime_accepts_run_request_and_streams_jsonl_events(tmp_path):
     assert events[-1]["type"] == "run_completed"
     assert events[-1]["status"] == "done"
     assert events[-1]["answer"] == "stdio done"
-    assert events[-1]["payload"]["goal"] == "capture hello"
+    assert set(events[-1]["payload"]) <= {
+        "duration_seconds",
+        "iteration_count",
+        "max_iterations",
+        "run_id",
+        "status",
+    }
+    assert "goal" not in events[-1]["payload"]
+    assert "plans" not in events[-1]["payload"]
+    assert "observations" not in events[-1]["payload"]
 
 
 def test_stdio_runtime_reports_malformed_json_as_structured_error(tmp_path):
@@ -539,6 +548,49 @@ def test_stdio_runtime_resumes_pending_and_remaining_actions(monkeypatch, tmp_pa
     }
     assert events[-1]["type"] == "run_completed"
     assert events[-1]["status"] == "done"
+
+
+def test_stdio_runtime_revert_approval_names_paths_without_internal_tool():
+    event = stdio_runtime._approval_event(
+        {
+            "id": "restore-1",
+            "tool": "revert_patch",
+            "input": {
+                "checkpoint_id": "checkpoint-secret",
+                "paths": ["docs/plan.md", "notes.md"],
+            },
+            "reason": "Restore the reviewed files.",
+        }
+    )
+
+    assert event == {
+        "type": "approval_required",
+        "action_id": "restore-1",
+        "title": "Restore workspace files",
+        "reason": "Restore the reviewed files.",
+        "target": "2 files: docs/plan.md, notes.md",
+        "details": ["docs/plan.md", "notes.md"],
+    }
+    assert "revert_patch" not in json.dumps(event)
+    assert "checkpoint-secret" not in json.dumps(event)
+
+
+def test_stdio_runtime_revert_approval_summarizes_and_exposes_all_paths():
+    paths = [f"docs/file-{index}.md" for index in range(7)]
+
+    event = stdio_runtime._approval_event(
+        {
+            "id": "restore-1",
+            "tool": "revert_patch",
+            "input": {"checkpoint_id": "checkpoint-secret", "paths": paths},
+            "reason": "Restore the reviewed files.",
+        }
+    )
+
+    assert event["target"] == (
+        "7 files: docs/file-0.md, docs/file-1.md, docs/file-2.md, +4 more"
+    )
+    assert event["details"] == paths
 
 
 def test_stdio_runtime_rejection_never_executes_pending_action(monkeypatch, tmp_path):
