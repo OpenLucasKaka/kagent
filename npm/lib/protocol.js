@@ -6,6 +6,7 @@ const EVENT_TYPES = new Set([
     "runtime_unavailable",
     "run_started",
     "run_progress",
+    "run_cancel_requested",
     "approval_required",
     "run_completed",
     "run_failed",

@@ -3,6 +3,8 @@ import json
 import os
 import stat
 import subprocess
+import threading
+import time
 
 from kagent.cli import stdio_runtime
 
@@ -25,6 +27,15 @@ def _runtime_env(tmp_path):
     ):
         env.pop(name, None)
     return env
+
+
+def _wait_until(predicate, *, timeout: float = 2.0) -> bool:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if predicate():
+            return True
+        time.sleep(0.01)
+    return predicate()
 
 
 def test_stdio_runtime_accepts_run_request_and_streams_jsonl_events(tmp_path):
@@ -571,3 +582,107 @@ def test_stdio_runtime_rejection_never_executes_pending_action(monkeypatch, tmp_
     assert events[-1]["type"] == "run_completed"
     assert events[-1]["status"] == "cancelled"
     assert "not performed" in events[-1]["answer"]
+
+
+def test_stdio_runtime_cancels_active_run_cooperatively_and_reuses_session(
+    monkeypatch,
+    tmp_path,
+):
+    monkeypatch.setenv(
+        "KAGENT_SESSION_MEMORY_PATH",
+        str(tmp_path / "session-memory.json"),
+    )
+    entered = threading.Event()
+    release_legacy_call = threading.Event()
+    calls = []
+
+    def fake_run_runtime_agent(goal, **kwargs):
+        calls.append((goal, kwargs))
+        if len(calls) > 1:
+            return {"status": "done", "answer": "second answer", "goal": goal}
+
+        entered.set()
+        token = kwargs.get("cancellation_token")
+        if token is None:
+            release_legacy_call.wait(timeout=1)
+        else:
+            assert _wait_until(token.is_cancelled)
+        return {
+            "status": "cancelled",
+            "answer": "",
+            "goal": goal,
+            "cancel_reason": "user requested cancellation",
+        }
+
+    monkeypatch.setattr(stdio_runtime, "run_runtime_agent", fake_run_runtime_agent)
+    stdout = io.StringIO()
+    session = stdio_runtime.StdioRuntimeSession(
+        stdout,
+        memory_path=str(tmp_path / "session-memory.json"),
+    )
+    request_thread = threading.Thread(
+        target=session.handle,
+        args=({"type": "run_request", "goal": "first", "runtime_plan": "{}"},),
+    )
+
+    request_thread.start()
+    assert entered.wait(timeout=1)
+    session.handle(
+        {
+            "type": "cancel_request",
+            "reason": "user requested cancellation",
+        }
+    )
+    release_legacy_call.set()
+    request_thread.join(timeout=2)
+
+    assert _wait_until(
+        lambda: any(
+            event.get("type") == "run_completed"
+            for event in _jsonl(stdout.getvalue())
+        )
+    )
+    events = _jsonl(stdout.getvalue())
+    assert [event["type"] for event in events] == [
+        "run_started",
+        "run_cancel_requested",
+        "run_completed",
+    ]
+    assert events[1]["reason"] == "user requested cancellation"
+    assert events[2]["status"] == "cancelled"
+    assert calls[0][1]["cancellation_token"].is_cancelled()
+
+    session.handle({"type": "run_request", "goal": "second", "runtime_plan": "{}"})
+
+    assert _wait_until(
+        lambda: len(
+            [
+                event
+                for event in _jsonl(stdout.getvalue())
+                if event.get("type") == "run_completed"
+            ]
+        )
+        == 2
+    )
+    events = _jsonl(stdout.getvalue())
+    assert events[-1]["type"] == "run_completed"
+    assert events[-1]["status"] == "done"
+    assert events[-1]["answer"] == "second answer"
+
+
+def test_stdio_runtime_rejects_cancel_without_active_run(tmp_path):
+    stdout = io.StringIO()
+    session = stdio_runtime.StdioRuntimeSession(
+        stdout,
+        memory_path=str(tmp_path / "session-memory.json"),
+    )
+
+    session.handle({"type": "cancel_request"})
+
+    assert _jsonl(stdout.getvalue()) == [
+        {
+            "type": "run_failed",
+            "error_code": "no_active_run",
+            "message": "there is no active run to cancel",
+        }
+    ]

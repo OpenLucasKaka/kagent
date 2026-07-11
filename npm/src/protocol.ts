@@ -11,6 +11,11 @@ export type ApprovalResponseRequest = {
   approved: boolean;
 };
 
+export type CancelRequest = {
+  type: "cancel_request";
+  reason?: string;
+};
+
 export type ProviderConfigureRequest = {
   type: "provider_configure";
   provider: string;
@@ -27,6 +32,7 @@ export type SessionCommandRequest = {
 export type RuntimeRequest =
   | RunRequest
   | ApprovalResponseRequest
+  | CancelRequest
   | ProviderConfigureRequest
   | SessionCommandRequest;
 
@@ -74,6 +80,11 @@ export type RuntimeUnavailableEvent = {
 export type RunProgressEvent = {
   type: "run_progress";
   event: Record<string, unknown>;
+};
+
+export type RunCancelRequestedEvent = {
+  type: "run_cancel_requested";
+  reason: string;
 };
 
 export type ApprovalRequiredEvent = {
@@ -130,6 +141,7 @@ export type RuntimeProtocolEvent =
   | RuntimeUnavailableEvent
   | RunStartedEvent
   | RunProgressEvent
+  | RunCancelRequestedEvent
   | ApprovalRequiredEvent
   | RunCompletedEvent
   | RunFailedEvent
@@ -143,6 +155,7 @@ const EVENT_TYPES = new Set([
   "runtime_unavailable",
   "run_started",
   "run_progress",
+  "run_cancel_requested",
   "approval_required",
   "run_completed",
   "run_failed",

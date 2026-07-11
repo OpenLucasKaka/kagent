@@ -72,7 +72,7 @@ type AppProps = {
   runtimeSessionFactory?: typeof createRuntimeSessionClient;
 };
 
-type Status = "starting" | "idle" | "thinking" | "approval" | "error";
+type Status = "starting" | "idle" | "thinking" | "cancelling" | "approval" | "error";
 
 const FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
@@ -123,7 +123,12 @@ export function KagentInkApp({
   }, [React, runtime]);
 
   React.useEffect(() => {
-    if (status !== "thinking" && status !== "starting" && setup?.stage !== "saving") {
+    if (
+      status !== "thinking" &&
+      status !== "cancelling" &&
+      status !== "starting" &&
+      setup?.stage !== "saving"
+    ) {
       return undefined;
     }
     const timer = setInterval(() => {
@@ -145,11 +150,17 @@ export function KagentInkApp({
         app.exit();
         return;
       }
-      if (status === "thinking" || status === "approval") {
+      if (status === "thinking" || status === "cancelling") {
         runtime.cancel();
+        setStatus("cancelling");
+        setStatusText("Stopping");
+        return;
+      }
+      if (status === "approval" && approval) {
+        runtime.respondToApproval(approval.action_id, false);
         setApproval(null);
-        setStatus("idle");
-        setStatusText("");
+        setStatus("thinking");
+        setStatusText("Cancelling");
         return;
       }
       app.exit();
@@ -163,7 +174,7 @@ export function KagentInkApp({
       handleApprovalInput(value);
       return;
     }
-    if (status === "thinking") {
+    if (status === "thinking" || status === "cancelling") {
       return;
     }
     if (key.name === "return" || key.name === "enter") {
@@ -427,6 +438,11 @@ export function KagentInkApp({
       if (action) {
         setTranscript((current) => transcriptReducer(current, action));
       }
+      return;
+    }
+    if (event.type === "run_cancel_requested") {
+      setStatus("cancelling");
+      setStatusText("Stopping");
       return;
     }
     if (event.type === "approval_required") {
@@ -739,7 +755,7 @@ function StatusLine({
   status,
   statusText,
 }: StatusRenderProps & { frame: number; status: Status; statusText: string }) {
-  if (status !== "thinking" && status !== "starting") {
+  if (status !== "thinking" && status !== "cancelling" && status !== "starting") {
     return React.createElement(Text, null, "");
   }
   const label = status === "starting" ? "Starting runtime" : statusText;

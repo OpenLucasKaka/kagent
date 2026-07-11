@@ -49,7 +49,10 @@ function KagentInkApp({ React, Ink, runtimeSessionFactory = runtime_client_1.cre
         };
     }, [React, runtime]);
     React.useEffect(() => {
-        if (status !== "thinking" && status !== "starting" && setup?.stage !== "saving") {
+        if (status !== "thinking" &&
+            status !== "cancelling" &&
+            status !== "starting" &&
+            setup?.stage !== "saving") {
             return undefined;
         }
         const timer = setInterval(() => {
@@ -68,11 +71,17 @@ function KagentInkApp({ React, Ink, runtimeSessionFactory = runtime_client_1.cre
                 app.exit();
                 return;
             }
-            if (status === "thinking" || status === "approval") {
+            if (status === "thinking" || status === "cancelling") {
                 runtime.cancel();
+                setStatus("cancelling");
+                setStatusText("Stopping");
+                return;
+            }
+            if (status === "approval" && approval) {
+                runtime.respondToApproval(approval.action_id, false);
                 setApproval(null);
-                setStatus("idle");
-                setStatusText("");
+                setStatus("thinking");
+                setStatusText("Cancelling");
                 return;
             }
             app.exit();
@@ -86,7 +95,7 @@ function KagentInkApp({ React, Ink, runtimeSessionFactory = runtime_client_1.cre
             handleApprovalInput(value);
             return;
         }
-        if (status === "thinking") {
+        if (status === "thinking" || status === "cancelling") {
             return;
         }
         if (key.name === "return" || key.name === "enter") {
@@ -339,6 +348,11 @@ function KagentInkApp({ React, Ink, runtimeSessionFactory = runtime_client_1.cre
             }
             return;
         }
+        if (event.type === "run_cancel_requested") {
+            setStatus("cancelling");
+            setStatusText("Stopping");
+            return;
+        }
         if (event.type === "approval_required") {
             setApproval(event);
             setStatus("approval");
@@ -495,7 +509,7 @@ function CommandPalette({ React, Box, Text, menu, }) {
     }), React.createElement(Text, { color: "gray" }, "↑↓ choose  tab complete  enter run"));
 }
 function StatusLine({ React, Text, frame, status, statusText, }) {
-    if (status !== "thinking" && status !== "starting") {
+    if (status !== "thinking" && status !== "cancelling" && status !== "starting") {
         return React.createElement(Text, null, "");
     }
     const label = status === "starting" ? "Starting runtime" : statusText;

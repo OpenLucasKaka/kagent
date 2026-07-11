@@ -1021,6 +1021,132 @@ main().catch((error) => {
     assert saved["provider"] == "ollama_openai_compatible"
 
 
+def test_npm_runtime_client_cancels_without_restarting_python_session():
+    node = shutil.which("node")
+    if node is None:
+        return
+
+    script = r"""
+const assert = require("node:assert/strict");
+const {EventEmitter} = require("node:events");
+const {PassThrough} = require("node:stream");
+
+let spawnCount = 0;
+let killCount = 0;
+let child;
+const writes = [];
+const runnerPath = require.resolve("./npm/lib/python-runner");
+require.cache[runnerPath] = {
+  id: runnerPath,
+  filename: runnerPath,
+  loaded: true,
+  exports: {
+    spawnPythonModule() {
+      spawnCount += 1;
+      child = new EventEmitter();
+      child.stdout = new PassThrough();
+      child.stderr = new PassThrough();
+      child.stdin = new PassThrough();
+      child.stdin.on("data", (chunk) => writes.push(JSON.parse(chunk.toString("utf8"))));
+      child.killed = false;
+      child.exitCode = null;
+      child.signalCode = null;
+      child.kill = () => {
+        killCount += 1;
+        child.killed = true;
+      };
+      setImmediate(() => child.stdout.write(JSON.stringify({
+        type: "runtime_ready",
+        provider: {
+          configured: true,
+          provider: "test",
+          display_name: "Test",
+          base_url_configured: true,
+          model: "model",
+          api_key_configured: true,
+        },
+        provider_options: [],
+        session_commands: [],
+      }) + "\n"));
+      return child;
+    },
+  },
+};
+
+const {createRuntimeSessionClient} = require("./npm/lib/runtime-client");
+const client = createRuntimeSessionClient();
+
+async function waitFor(predicate) {
+  const deadline = Date.now() + 1000;
+  while (Date.now() < deadline) {
+    if (predicate()) return;
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+  assert.ok(predicate(), "condition did not become true");
+}
+
+async function main() {
+  await new Promise((resolve, reject) => client.subscribe((event) => {
+    if (event.type === "runtime_ready") resolve();
+    if (event.type === "client_failed") reject(new Error(event.message));
+  }));
+
+  const events = [];
+  client.run("first", (event) => events.push(event));
+  await waitFor(() => writes.length === 1);
+  child.stdout.write(JSON.stringify({
+    type: "run_started",
+    goal: "first",
+    max_iterations: "3",
+  }) + "\n");
+
+  client.cancel();
+  await waitFor(() => writes.length === 2);
+  assert.deepEqual(writes[1], {
+    type: "cancel_request",
+    reason: "user requested cancellation",
+  });
+  assert.equal(spawnCount, 1);
+  assert.equal(killCount, 0);
+
+  child.stdout.write(JSON.stringify({
+    type: "run_cancel_requested",
+    reason: "user requested cancellation",
+  }) + "\n");
+  child.stdout.write(JSON.stringify({
+    type: "run_completed",
+    status: "cancelled",
+    answer: "",
+    payload: {},
+  }) + "\n");
+  await waitFor(() => events.at(-1)?.type === "run_completed");
+
+  client.run("second", (event) => events.push(event));
+  await waitFor(() => writes.length === 3);
+  assert.equal(writes[2].type, "run_request");
+  assert.equal(writes[2].goal, "second");
+  assert.equal(spawnCount, 1);
+  assert.equal(killCount, 0);
+  client.close();
+}
+
+main().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});
+"""
+
+    completed = subprocess.run(
+        [node, "-e", script],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+
+
 def test_npm_bin_scripts_are_executable_node_wrappers():
     for script in (Path("npm/bin/kagent.js"), Path("npm/bin/kagent-serve.js")):
         text = script.read_text(encoding="utf-8")

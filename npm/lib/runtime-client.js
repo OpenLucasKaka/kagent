@@ -138,22 +138,6 @@ function createRuntimeSessionClient() {
         queuedRequest = null;
         handler?.({ type: "client_failed", message });
     }
-    function restart() {
-        generation += 1;
-        stdout?.close();
-        if (child && !child.killed) {
-            child.kill("SIGTERM");
-        }
-        child = null;
-        stdout = null;
-        ready = false;
-        queuedRequest = null;
-        startupFailure = "";
-        lastStderrLine = "";
-        if (!closed) {
-            spawn();
-        }
-    }
     spawn();
     return {
         subscribe(handler) {
@@ -259,9 +243,16 @@ function createRuntimeSessionClient() {
             if (!busy) {
                 return;
             }
-            busy = false;
-            currentHandler = null;
-            restart();
+            const request = {
+                type: "cancel_request",
+                reason: "user requested cancellation",
+            };
+            try {
+                send(request);
+            }
+            catch (error) {
+                failCurrent(errorMessage(error));
+            }
         },
         close() {
             if (closed) {

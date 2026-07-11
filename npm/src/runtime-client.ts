@@ -4,6 +4,7 @@ import readline from "node:readline";
 import {
   parseRuntimeProtocolLine,
   type ApprovalResponseRequest,
+  type CancelRequest,
   type ProviderConfigureRequest,
   type ProviderConfiguredEvent,
   type ProviderOption,
@@ -196,23 +197,6 @@ export function createRuntimeSessionClient(): RuntimeSessionClient {
     handler?.({ type: "client_failed", message });
   }
 
-  function restart(): void {
-    generation += 1;
-    stdout?.close();
-    if (child && !child.killed) {
-      child.kill("SIGTERM");
-    }
-    child = null;
-    stdout = null;
-    ready = false;
-    queuedRequest = null;
-    startupFailure = "";
-    lastStderrLine = "";
-    if (!closed) {
-      spawn();
-    }
-  }
-
   spawn();
 
   return {
@@ -314,9 +298,15 @@ export function createRuntimeSessionClient(): RuntimeSessionClient {
       if (!busy) {
         return;
       }
-      busy = false;
-      currentHandler = null;
-      restart();
+      const request: CancelRequest = {
+        type: "cancel_request",
+        reason: "user requested cancellation",
+      };
+      try {
+        send(request);
+      } catch (error) {
+        failCurrent(errorMessage(error));
+      }
     },
     close() {
       if (closed) {
