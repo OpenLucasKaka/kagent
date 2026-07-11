@@ -108,6 +108,7 @@ kagent
 ```
 
 TTY sessions show live progress and a compact operator transcript by default.
+Final answers stream into one stable transcript entry as provider chunks arrive.
 The Ink editor supports wrapped Chinese and emoji input, pasted graphemes,
 Backspace and forward Delete, Home/End, prompt history, and a responsive layout
 tested at 40 and 100 columns. PageUp/PageDown browse older conversation pages

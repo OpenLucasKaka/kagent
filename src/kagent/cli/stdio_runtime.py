@@ -337,6 +337,7 @@ class StdioRuntimeSession:
         runtime_goal: str,
         **run_kwargs: Any,
     ) -> None:
+        run_kwargs.setdefault("stream_answers", True)
         token = RuntimeCancellationToken()
         steering_buffer = RuntimeSteeringBuffer()
         with self._state_lock:

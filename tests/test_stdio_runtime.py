@@ -598,6 +598,7 @@ def test_stdio_runtime_cancels_active_run_cooperatively_and_reuses_session(
 
     def fake_run_runtime_agent(goal, **kwargs):
         calls.append((goal, kwargs))
+        assert kwargs["stream_answers"] is True
         if len(calls) > 1:
             return {"status": "done", "answer": "second answer", "goal": goal}
 
@@ -668,6 +669,43 @@ def test_stdio_runtime_cancels_active_run_cooperatively_and_reuses_session(
     assert events[-1]["type"] == "run_completed"
     assert events[-1]["status"] == "done"
     assert events[-1]["answer"] == "second answer"
+
+
+def test_stdio_runtime_streams_final_answer_progress(monkeypatch, tmp_path):
+    def fake_run_runtime_agent(goal, **kwargs):
+        assert kwargs["stream_answers"] is True
+        sink = kwargs["event_sink"]
+        sink({"type": "answer_started"})
+        sink({"type": "answer_delta", "delta": "你"})
+        sink({"type": "answer_delta", "delta": "好"})
+        sink({"type": "answer_completed"})
+        return {"status": "done", "answer": "你好", "goal": goal}
+
+    monkeypatch.setattr(stdio_runtime, "run_runtime_agent", fake_run_runtime_agent)
+    stdout = io.StringIO()
+    session = stdio_runtime.StdioRuntimeSession(
+        stdout,
+        memory_path=str(tmp_path / "session-memory.json"),
+    )
+
+    session.handle({"type": "run_request", "goal": "hello", "runtime_plan": "{}"})
+    session.wait_until_idle()
+
+    events = _jsonl(stdout.getvalue())
+    assert [event["type"] for event in events] == [
+        "run_started",
+        "run_progress",
+        "run_progress",
+        "run_progress",
+        "run_progress",
+        "run_completed",
+    ]
+    assert [
+        event["event"].get("delta")
+        for event in events
+        if event["type"] == "run_progress"
+        and event["event"]["type"] == "answer_delta"
+    ] == ["你", "好"]
 
 
 def test_stdio_runtime_queues_latest_steering_instruction_for_active_run(

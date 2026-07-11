@@ -519,6 +519,9 @@ identity, keeps the prompt visible below the transcript, and renders only
 user-facing answers, command results, permissions, and concise lifecycle
 status. Internal tool identifiers and raw JSON traces are not shown in the
 normal transcript.
+The private stdio runtime enables final-answer streaming. Only plans with an
+empty action list stream answer deltas, so executable plans never display a
+premature final answer before their actions complete.
 
 Run `kagent "goal"` for a one-shot runtime turn. Use `--deterministic` only for
 the legacy, LLM-free LangGraph regression path.
