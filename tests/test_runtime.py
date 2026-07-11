@@ -13,6 +13,7 @@ from kagent.runtime import (
     runtime_topology,
 )
 from kagent.runtime import tools as runtime_tools
+from kagent.runtime.approval import build_resumable_plan
 from kagent.runtime.policy import RuntimePolicy
 from kagent.runtime.tools import (
     RuntimeToolSpec,
@@ -337,6 +338,148 @@ def test_runtime_agent_events_include_dependency_status_metadata():
     assert dependent_executor_event["action_id"] == "step-2"
     assert dependent_executor_event["depends_on"] == ["step-1"]
     assert dependent_executor_event["dependency_statuses"] == {"step-1": "ok"}
+
+
+def test_runtime_agent_resolves_declared_dependency_output_into_tool_input():
+    provider = FakeLLMProvider(
+        '{"actions":['
+        '{"id":"step-1","tool":"note",'
+        '"input":{"text":"hello"},"reason":"capture"},'
+        '{"id":"step-2","tool":"note",'
+        '"input":{"text":{"$from_action":"step-1","pointer":"/text"}},'
+        '"reason":"reuse","depends_on":["step-1"]}'
+        "]}"
+    )
+
+    result = run_runtime_agent("capture then reuse", provider=provider)
+
+    assert result["observations"][1]["status"] == "ok"
+    assert result["observations"][1]["output"] == {"text": "hello"}
+
+
+def test_runtime_agent_stops_when_dependency_reference_is_missing():
+    provider = FakeLLMProvider(
+        '{"actions":['
+        '{"id":"step-1","tool":"note",'
+        '"input":{"text":"hello"},"reason":"capture"},'
+        '{"id":"step-2","tool":"note",'
+        '"input":{"text":{"$from_action":"step-1","pointer":"/missing"}},'
+        '"reason":"reuse","depends_on":["step-1"]}'
+        "]}"
+    )
+
+    result = run_runtime_agent(
+        "capture then reuse",
+        provider=provider,
+        max_iterations=1,
+    )
+
+    assert result["status"] == "failed"
+    assert result["observations"][1]["error_code"] == "dependency_resolution_failed"
+    assert "pointer does not exist" in result["observations"][1]["error"]
+
+
+def test_runtime_agent_rejects_undeclared_dependency_reference_before_execution():
+    provider = FakeLLMProvider(
+        '{"actions":['
+        '{"id":"step-1","tool":"note",'
+        '"input":{"text":"side effect"},"reason":"capture"},'
+        '{"id":"step-2","tool":"note",'
+        '"input":{"text":{"$from_action":"missing","pointer":"/text"}},'
+        '"reason":"reuse","depends_on":["step-1"]}'
+        "]}"
+    )
+
+    result = run_runtime_agent(
+        "reject invalid binding",
+        provider=provider,
+        max_iterations=1,
+    )
+
+    assert result["status"] == "failed"
+    assert result["error_code"] == "invalid_plan"
+    assert [observation["tool"] for observation in result["observations"]] == [
+        "planner"
+    ]
+
+
+def test_runtime_agent_persists_resolved_dependency_input_for_approval_resume():
+    provider = FakeLLMProvider(
+        '{"actions":['
+        '{"id":"step-1","tool":"note",'
+        '"input":{"text":"https://example.com"},"reason":"capture"},'
+        '{"id":"step-2","tool":"http_request",'
+        '"input":{"url":{"$from_action":"step-1","pointer":"/text"}},'
+        '"reason":"fetch","depends_on":["step-1"]}'
+        "]}"
+    )
+
+    result = run_runtime_agent("capture then fetch", provider=provider)
+
+    assert result["status"] == "requires_approval"
+    assert result["plan"]["actions"][1]["input"] == {
+        "url": "https://example.com"
+    }
+    assert result["pending_approval"]["input"] == {"url": "https://example.com"}
+    assert build_resumable_plan(result["plan"], result["pending_approval"]) == {
+        "actions": [
+            {
+                "id": "step-2",
+                "tool": "http_request",
+                "input": {"url": "https://example.com"},
+                "reason": "fetch",
+            }
+        ]
+    }
+
+
+def test_runtime_agent_materializes_completed_dependencies_in_actions_after_approval():
+    provider = FakeLLMProvider(
+        '{"actions":['
+        '{"id":"step-1","tool":"note",'
+        '"input":{"text":"https://example.com"},"reason":"capture"},'
+        '{"id":"step-2","tool":"http_request",'
+        '"input":{"url":{"$from_action":"step-1","pointer":"/text"}},'
+        '"reason":"fetch","depends_on":["step-1"]},'
+        '{"id":"step-3","tool":"note",'
+        '"input":{"text":{"$from_action":"step-1","pointer":"/text"}},'
+        '"reason":"reuse","depends_on":["step-1","step-2"]}'
+        "]}"
+    )
+
+    result = run_runtime_agent("capture, fetch, then reuse", provider=provider)
+    resumed = build_resumable_plan(result["plan"], result["pending_approval"])
+
+    assert resumed is not None
+    assert resumed["actions"][1] == {
+        "id": "step-3",
+        "tool": "note",
+        "input": {"text": "https://example.com"},
+        "reason": "reuse",
+        "depends_on": ["step-2"],
+    }
+
+
+def test_runtime_agent_fails_cleanly_when_later_approval_binding_is_missing():
+    provider = FakeLLMProvider(
+        '{"actions":['
+        '{"id":"step-1","tool":"note",'
+        '"input":{"text":"hello"},"reason":"capture"},'
+        '{"id":"step-2","tool":"http_request",'
+        '"input":{"url":"https://example.com"},'
+        '"reason":"fetch","depends_on":["step-1"]},'
+        '{"id":"step-3","tool":"note",'
+        '"input":{"text":{"$from_action":"step-1","pointer":"/missing"}},'
+        '"reason":"reuse","depends_on":["step-1","step-2"]}'
+        "]}"
+    )
+
+    result = run_runtime_agent("capture, fetch, then reuse", provider=provider)
+
+    assert result["status"] == "failed"
+    assert result["error_code"] == "dependency_resolution_failed"
+    assert "pointer does not exist" in result["error"]
+    assert "pending_approval" not in result
 
 
 def test_runtime_agent_planner_and_policy_events_include_timing_metadata():

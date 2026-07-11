@@ -433,7 +433,11 @@ The service intentionally keeps a narrow API:
   Actions may include `depends_on` references to prior action IDs; the parser
   rejects unknown, later, duplicate, or malformed dependencies as
   `invalid_plan` to keep execution, approval, and trace correlation
-  unambiguous. Policy and executor events for dependent actions include
+  unambiguous. A dependent action can bind prior output into any nested input
+  value with `{"$from_action":"step-1","pointer":"/field"}`. Resolution uses
+  JSON Pointer, accepts only declared successful dependencies, caps nesting and
+  reference count, and fails before policy or tool execution when a pointer is
+  missing. Policy and executor events for dependent actions include
   `depends_on` and compact `dependency_statuses` metadata so operators can
   reconstruct dependency-aware execution without loading tool outputs. The
   parser also rejects unknown top-level plan fields and unknown action fields

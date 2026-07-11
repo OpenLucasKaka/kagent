@@ -383,6 +383,12 @@ and trace correlation unambiguous.
 Use `depends_on` when an action depends on the output of earlier actions. Each
 dependency must reference a prior action ID in the same plan; unknown, later,
 duplicate, or malformed dependencies fail as `invalid_plan`.
+To pass dependency output into a later tool input, use a structured reference
+such as `{"$from_action":"step-1","pointer":"/content"}`. The pointer follows
+JSON Pointer rules and is resolved only from a declared dependency whose
+observation status is `ok`; missing paths fail as `dependency_resolution_failed`
+and stop the run without executing the dependent tool or replaying completed
+side effects.
 Policy and executor events for dependent actions include `depends_on` plus
 compact `dependency_statuses`, allowing trace timelines to explain dependency
 state without exposing dependency outputs.

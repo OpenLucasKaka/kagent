@@ -127,6 +127,7 @@ def parse_agent_plan(text: str) -> AgentPlan:
             action_payload.get("depends_on", []),
             seen_action_ids,
         )
+        _validate_dependency_references(action_input, set(depends_on))
         seen_action_ids.add(action_id)
         actions.append(
             AgentAction(
@@ -190,3 +191,50 @@ def _parse_action_dependencies(value: Any, seen_action_ids: set) -> List[str]:
         seen_dependencies.add(dependency)
         dependencies.append(dependency)
     return dependencies
+
+
+def _validate_dependency_references(
+    value: Any,
+    declared_dependencies: set[str],
+    *,
+    depth: int = 0,
+    reference_count: List[int] | None = None,
+) -> None:
+    if depth > 20:
+        raise ValueError("dependency input nesting exceeds 20 levels")
+    active_reference_count = reference_count or [0]
+    if isinstance(value, list):
+        for item in value:
+            _validate_dependency_references(
+                item,
+                declared_dependencies,
+                depth=depth + 1,
+                reference_count=active_reference_count,
+            )
+        return
+    if not isinstance(value, dict):
+        return
+    if "$from_action" in value:
+        if set(value) != {"$from_action", "pointer"}:
+            raise ValueError(
+                "dependency reference must contain only $from_action and pointer"
+            )
+        active_reference_count[0] += 1
+        if active_reference_count[0] > 50:
+            raise ValueError("action input contains more than 50 dependency references")
+        action_id = value.get("$from_action")
+        pointer = value.get("pointer")
+        if not isinstance(action_id, str) or action_id not in declared_dependencies:
+            raise ValueError("dependency reference must name a declared dependency")
+        if not isinstance(pointer, str) or (pointer and not pointer.startswith("/")):
+            raise ValueError(
+                "dependency reference pointer must be empty or start with /"
+            )
+        return
+    for item in value.values():
+        _validate_dependency_references(
+            item,
+            declared_dependencies,
+            depth=depth + 1,
+            reference_count=active_reference_count,
+        )

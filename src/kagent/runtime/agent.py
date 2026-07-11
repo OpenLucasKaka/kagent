@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import json
 import re
 import time
@@ -55,7 +56,9 @@ Use only tools that are available to you.
     f"Keep action reason at most {MAX_ACTION_REASON_CHARS} characters.\n"
     f"Keep final_answer at most {MAX_PLAN_FINAL_ANSWER_CHARS} characters; "
     "use artifact for long-form deliverables.\n"
-    "Use optional depends_on with prior action IDs when one action depends on earlier output.\n"
+    "Use optional depends_on with prior action IDs when one action depends on earlier output. "
+    "Reference dependency output inside input with "
+    '{"$from_action":"step-1","pointer":"/field"}; pointer is a JSON Pointer.\n'
     "Use open_app to open a local macOS application by application name. "
     "Use open_url to open a browser page; use http_request only to fetch URL "
     "content as an observation.\n"
@@ -708,12 +711,66 @@ def _run_runtime_agent_loop(
 
         should_replan = False
         iteration_observations: Dict[str, AgentObservation] = {}
-        for action in plan.actions:
+        for action_index, action in enumerate(plan.actions):
             if mark_cancelled():
+                break
+            dependency_metadata = _action_dependency_event_metadata(
+                action.depends_on,
+                iteration_observations,
+            )
+            resolution_started_at = _utc_timestamp()
+            resolution_timer = time.perf_counter()
+            try:
+                resolved_input = _resolve_dependency_input(
+                    action.input,
+                    action.depends_on,
+                    iteration_observations,
+                )
+            except ValueError as exc:
+                resolution_timing = _timing_fields(
+                    resolution_started_at,
+                    resolution_timer,
+                )
+                observation = AgentObservation(
+                    action_id=action.id,
+                    tool=action.tool,
+                    status="failed",
+                    output={},
+                    error_code="dependency_resolution_failed",
+                    error=str(exc),
+                    started_at=resolution_started_at,
+                    completed_at=resolution_timing["completed_at"],
+                    duration_seconds=resolution_timing["duration_seconds"],
+                )
+                observations.append(observation)
+                iteration_observations[action.id] = observation
+                events.append(
+                    {
+                        "node": "executor",
+                        "action_id": action.id,
+                        "tool": action.tool,
+                        "status": "failed",
+                        "iteration": iteration_label,
+                        **dependency_metadata,
+                        **resolution_timing,
+                    }
+                )
+                _emit_runtime_progress(
+                    emit_progress,
+                    "tool_completed",
+                    iteration=iteration_label,
+                    node="executor",
+                    action_id=action.id,
+                    tool=action.tool,
+                    status="failed",
+                    error_code="dependency_resolution_failed",
+                    duration_seconds=resolution_timing["duration_seconds"],
+                )
+                status = "failed"
                 break
             policy_started_at = _utc_timestamp()
             policy_timer = time.perf_counter()
-            decision = active_policy.authorize(action.tool, action.input)
+            decision = active_policy.authorize(action.tool, resolved_input)
             approved_by_id = decision.status != "allowed" and action.id in active_approvals
             if approved_by_id:
                 consumed_approved_action_ids.add(action.id)
@@ -721,10 +778,6 @@ def _run_runtime_agent_loop(
                 "approved"
                 if approved_by_id
                 else decision.status
-            )
-            dependency_metadata = _action_dependency_event_metadata(
-                action.depends_on,
-                iteration_observations,
             )
             events.append(
                 {
@@ -750,7 +803,58 @@ def _run_runtime_agent_loop(
                 duration_seconds=events[-1]["duration_seconds"],
             )
             if decision.status != "allowed" and action.id not in active_approvals:
-                pending_approval = action.to_dict()
+                latest_plan["actions"][action_index]["input"] = copy.deepcopy(
+                    resolved_input
+                )
+                materialization_failure: tuple[Any, ValueError] | None = None
+                for later_index in range(action_index + 1, len(plan.actions)):
+                    later_action = plan.actions[later_index]
+                    try:
+                        latest_plan["actions"][later_index]["input"] = (
+                            _materialize_available_dependency_input(
+                                later_action.input,
+                                iteration_observations,
+                            )
+                        )
+                    except ValueError as exc:
+                        materialization_failure = (later_action, exc)
+                        break
+                if materialization_failure is not None:
+                    failed_action, failure = materialization_failure
+                    failure_started_at = _utc_timestamp()
+                    failure_timing = _timing_fields(
+                        failure_started_at,
+                        time.perf_counter(),
+                    )
+                    failure_observation = AgentObservation(
+                        action_id=failed_action.id,
+                        tool=failed_action.tool,
+                        status="failed",
+                        output={},
+                        error_code="dependency_resolution_failed",
+                        error=str(failure),
+                        started_at=failure_started_at,
+                        completed_at=failure_timing["completed_at"],
+                        duration_seconds=failure_timing["duration_seconds"],
+                    )
+                    observations.append(failure_observation)
+                    events.append(
+                        {
+                            "node": "executor",
+                            "action_id": failed_action.id,
+                            "tool": failed_action.tool,
+                            "status": "failed",
+                            "iteration": iteration_label,
+                            **_action_dependency_event_metadata(
+                                failed_action.depends_on,
+                                iteration_observations,
+                            ),
+                            **failure_timing,
+                        }
+                    )
+                    status = "failed"
+                    break
+                pending_approval = {**action.to_dict(), "input": resolved_input}
                 approval_started_at = _utc_timestamp()
                 approval_timer = time.perf_counter()
                 observations.append(
@@ -789,7 +893,7 @@ def _run_runtime_agent_loop(
                             "iteration": iteration_label,
                             "action_id": action.id,
                             "tool": action.tool,
-                            "input": action.input,
+                            "input": resolved_input,
                             "reason": action.reason,
                             **dependency_metadata,
                         }
@@ -864,7 +968,7 @@ def _run_runtime_agent_loop(
             observation = execute_runtime_tool(
                 active_tools,
                 action.tool,
-                action.input,
+                resolved_input,
                 action_id=action.id,
             )
             observations.append(observation)
@@ -881,7 +985,7 @@ def _run_runtime_agent_loop(
                             "iteration": iteration_label,
                             "action_id": action.id,
                             "tool": action.tool,
-                            "input": action.input,
+                            "input": resolved_input,
                             "observation": observation.to_dict(),
                             **dependency_metadata,
                         }
@@ -1312,6 +1416,138 @@ def _action_dependency_event_metadata(
             if action_id in observations_by_action_id
         },
     }
+
+
+def _resolve_dependency_input(
+    value: Any,
+    depends_on: List[str],
+    observations_by_action_id: Dict[str, AgentObservation],
+) -> Dict[str, Any]:
+    reference_count = [0]
+    resolved = _resolve_dependency_value(
+        value,
+        set(depends_on),
+        observations_by_action_id,
+        reference_count=reference_count,
+        depth=0,
+    )
+    if not isinstance(resolved, dict):
+        raise ValueError("action input must resolve to an object")
+    return resolved
+
+
+def _materialize_available_dependency_input(
+    value: Any,
+    observations_by_action_id: Dict[str, AgentObservation],
+) -> Any:
+    if isinstance(value, list):
+        return [
+            _materialize_available_dependency_input(
+                item,
+                observations_by_action_id,
+            )
+            for item in value
+        ]
+    if not isinstance(value, dict):
+        return copy.deepcopy(value)
+    if "$from_action" in value:
+        action_id = value["$from_action"]
+        observation = observations_by_action_id.get(action_id)
+        if observation is None:
+            return copy.deepcopy(value)
+        if observation.status != "ok":
+            raise ValueError(f"dependency did not complete successfully: {action_id}")
+        return copy.deepcopy(
+            _resolve_json_pointer(
+                observation.output,
+                value["pointer"],
+                action_id=action_id,
+            )
+        )
+    return {
+        key: _materialize_available_dependency_input(
+            item,
+            observations_by_action_id,
+        )
+        for key, item in value.items()
+    }
+
+
+def _resolve_dependency_value(
+    value: Any,
+    declared_dependencies: Set[str],
+    observations_by_action_id: Dict[str, AgentObservation],
+    *,
+    reference_count: List[int],
+    depth: int,
+) -> Any:
+    if depth > 20:
+        raise ValueError("dependency input nesting exceeds 20 levels")
+    if isinstance(value, list):
+        return [
+            _resolve_dependency_value(
+                item,
+                declared_dependencies,
+                observations_by_action_id,
+                reference_count=reference_count,
+                depth=depth + 1,
+            )
+            for item in value
+        ]
+    if not isinstance(value, dict):
+        return copy.deepcopy(value)
+    if "$from_action" in value:
+        if set(value) != {"$from_action", "pointer"}:
+            raise ValueError(
+                "dependency reference must contain only $from_action and pointer"
+            )
+        reference_count[0] += 1
+        if reference_count[0] > 50:
+            raise ValueError("action input contains more than 50 dependency references")
+        action_id = value.get("$from_action")
+        pointer = value.get("pointer")
+        if not isinstance(action_id, str) or action_id not in declared_dependencies:
+            raise ValueError("dependency reference must name a declared dependency")
+        if not isinstance(pointer, str):
+            raise ValueError("dependency reference pointer must be a string")
+        observation = observations_by_action_id.get(action_id)
+        if observation is None or observation.status != "ok":
+            raise ValueError(f"dependency did not complete successfully: {action_id}")
+        return copy.deepcopy(
+            _resolve_json_pointer(observation.output, pointer, action_id=action_id)
+        )
+    return {
+        key: _resolve_dependency_value(
+            item,
+            declared_dependencies,
+            observations_by_action_id,
+            reference_count=reference_count,
+            depth=depth + 1,
+        )
+        for key, item in value.items()
+    }
+
+
+def _resolve_json_pointer(value: Any, pointer: str, *, action_id: str) -> Any:
+    if pointer == "":
+        return value
+    if not pointer.startswith("/"):
+        raise ValueError("dependency reference pointer must be empty or start with /")
+    current = value
+    for raw_part in pointer[1:].split("/"):
+        part = raw_part.replace("~1", "/").replace("~0", "~")
+        if isinstance(current, dict) and part in current:
+            current = current[part]
+            continue
+        if isinstance(current, list) and part.isdigit():
+            index = int(part)
+            if index < len(current):
+                current = current[index]
+                continue
+        raise ValueError(
+            f"dependency pointer does not exist: {action_id}{pointer}"
+        )
+    return current
 
 
 def _utc_timestamp() -> str:
