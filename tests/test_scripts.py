@@ -180,6 +180,7 @@ def test_run_checks_smoke_exercises_cli_introspection():
     assert "kagent-metrics" in run_checks
     assert "kagent-serve --help" in run_checks
     assert "npm run check" in run_checks
+    assert run_checks.index("npm run check") < run_checks.index("-m pytest")
     assert "KAGENT_LLM_CONFIG_PATH=/tmp/kagent-run-checks-provider-config.json" in run_checks
     assert "--version" in run_checks
     assert "--plan" in run_checks
