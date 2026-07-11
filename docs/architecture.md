@@ -644,9 +644,12 @@ inputs against the supported schema subset before invoking handlers, including
 required fields, enums, arrays, nested objects, and rejected additional
 properties. Handler outputs are validated against `output_schema`; violations
 become `invalid_tool_output` observations that can be fed into the next planner
-iteration. Handlers that exceed their declared timeout become
-`tool_execution_timeout` observations and can also be fed into bounded
-replanning. Previous observations are projected into a planner-safe view before
+iteration. I/O handlers enforce their own cancellable deadlines and raise
+`TimeoutError` only after the underlying operation has stopped; those failures
+become `tool_execution_timeout` observations for bounded replanning. The generic
+executor never abandons a live Python thread, so a timeout response cannot leave
+an untracked tool side effect running in the background. Previous observations
+are projected into a planner-safe view before
 replanning; artifact observations keep metadata such as `artifact_id`, title,
 kind, format, tags, and byte count with `content_omitted=true`, avoiding large
 artifact bodies in provider prompts while persisted traces retain the full

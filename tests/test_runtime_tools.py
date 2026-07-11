@@ -1149,9 +1149,13 @@ def test_revert_patch_rejects_workspace_symlink_without_touching_target(
     assert outside.read_text(encoding="utf-8") == "after\n"
 
 
-def test_runtime_tool_times_out_slow_handler():
+def test_runtime_tool_does_not_abandon_slow_handler_after_deadline():
+    side_effect_completed = False
+
     def slow_handler(_input_payload):
+        nonlocal side_effect_completed
         time.sleep(0.05)
+        side_effect_completed = True
         return {"text": "late"}
 
     registry = {
@@ -1176,10 +1180,35 @@ def test_runtime_tool_times_out_slow_handler():
         action_id="step-1",
     )
 
+    assert observation.status == "ok"
+    assert observation.output == {"text": "late"}
+    assert side_effect_completed is True
+    assert float(observation.duration_seconds) >= 0.05
+
+
+def test_runtime_tool_maps_handler_timeout_after_handler_stops():
+    def timeout_handler(_input_payload):
+        raise TimeoutError("provider deadline exceeded")
+
+    registry = {
+        "slow": RuntimeToolSpec(
+            name="slow",
+            description="slow tool",
+            handler=timeout_handler,
+            timeout_seconds=0.01,
+        )
+    }
+
+    observation = execute_runtime_tool(
+        registry,
+        "slow",
+        {},
+        action_id="step-1",
+    )
+
     assert observation.status == "failed"
     assert observation.error_code == "tool_execution_timeout"
-    assert observation.error == "tool execution exceeded timeout"
-    assert float(observation.duration_seconds) < 0.05
+    assert observation.error == "provider deadline exceeded"
 
 
 def test_http_request_tool_fetches_text_response_after_approval(monkeypatch):
@@ -1364,15 +1393,17 @@ def test_open_url_tool_opens_http_url_with_chrome_applescript_first(monkeypatch)
 
     class FakeSubprocess:
         CalledProcessError = RuntimeError
+        TimeoutExpired = TimeoutError
 
         @staticmethod
-        def run(args, *, check, capture_output, text):
+        def run(args, *, check, capture_output, text, timeout):
             calls.append(
                 {
                     "args": args,
                     "check": check,
                     "capture_output": capture_output,
                     "text": text,
+                    "timeout": timeout,
                 }
             )
 
@@ -1401,6 +1432,7 @@ def test_open_url_tool_opens_http_url_with_chrome_applescript_first(monkeypatch)
     assert calls[0]["check"] is True
     assert calls[0]["capture_output"] is True
     assert calls[0]["text"] is True
+    assert calls[0]["timeout"] == 10.0
 
 
 def test_open_url_tool_falls_back_when_chrome_applescript_fails(monkeypatch):
@@ -1411,9 +1443,10 @@ def test_open_url_tool_falls_back_when_chrome_applescript_fails(monkeypatch):
 
     class FakeSubprocess:
         CalledProcessError = FakeCalledProcessError
+        TimeoutExpired = TimeoutError
 
         @staticmethod
-        def run(args, *, check, capture_output, text):
+        def run(args, *, check, capture_output, text, timeout):
             calls.append(args)
             if args[0] == "osascript":
                 raise FakeCalledProcessError()
@@ -1484,15 +1517,17 @@ def test_open_app_tool_opens_local_app_by_name(monkeypatch):
 
     class FakeSubprocess:
         CalledProcessError = RuntimeError
+        TimeoutExpired = TimeoutError
 
         @staticmethod
-        def run(args, *, check, capture_output, text):
+        def run(args, *, check, capture_output, text, timeout):
             calls.append(
                 {
                     "args": args,
                     "check": check,
                     "capture_output": capture_output,
                     "text": text,
+                    "timeout": timeout,
                 }
             )
 
@@ -1518,8 +1553,35 @@ def test_open_app_tool_opens_local_app_by_name(monkeypatch):
             "check": True,
             "capture_output": True,
             "text": True,
+            "timeout": 10.0,
         }
     ]
+
+
+def test_open_app_tool_reports_timeout_after_process_is_stopped(monkeypatch):
+    class FakeTimeoutExpired(Exception):
+        pass
+
+    class FakeSubprocess:
+        CalledProcessError = RuntimeError
+        TimeoutExpired = FakeTimeoutExpired
+
+        @staticmethod
+        def run(args, *, check, capture_output, text, timeout):
+            raise FakeTimeoutExpired()
+
+    monkeypatch.setattr(runtime_tools, "subprocess", FakeSubprocess, raising=False)
+
+    observation = execute_runtime_tool(
+        default_runtime_tools(),
+        "open_app",
+        {"application": "Google Chrome"},
+        action_id="step-1",
+    )
+
+    assert observation.status == "failed"
+    assert observation.error_code == "tool_execution_timeout"
+    assert observation.error == "open app command timed out"
 
 
 def test_open_app_tool_rejects_path_like_application_names():

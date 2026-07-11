@@ -1,8 +1,12 @@
 import json
+import threading
+import time
 from concurrent.futures import TimeoutError as RunTimeoutError
 from pathlib import Path
 
-from kagent.service.run import execute_run_request
+import pytest
+
+from kagent.service.run import execute_run_request, run_with_timeout
 from kagent.service.runtime import ServiceConfig
 
 
@@ -164,6 +168,28 @@ def test_execute_run_request_timeout_response_includes_stable_error_code(monkeyp
 
     assert status_code == 504
     assert payload["error_code"] == "agent_run_timeout"
+
+
+def test_run_with_timeout_waits_for_cancelled_worker_to_finish():
+    cancelled = threading.Event()
+    worker_finished = threading.Event()
+
+    def call():
+        assert cancelled.wait(timeout=1)
+        time.sleep(0.005)
+        worker_finished.set()
+        return {"status": "cancelled"}
+
+    started = time.perf_counter()
+    with pytest.raises(RunTimeoutError):
+        run_with_timeout(
+            call,
+            timeout_seconds=0.01,
+            on_timeout=cancelled.set,
+        )
+
+    assert worker_finished.is_set()
+    assert time.perf_counter() - started >= 0.015
 
 
 def test_execute_run_request_rejects_non_integer_run_config_values():

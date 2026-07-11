@@ -12,7 +12,60 @@ from kagent.service.runtime import ServiceConcurrencyLimiter, ServiceConfig
 from kagent.service.trace_store import load_trace_by_run_id, persist_trace
 
 
-def test_runtime_timeout_keeps_concurrency_slot_until_worker_exits(tmp_path, monkeypatch):
+def test_runtime_timeout_waits_for_worker_cleanup_before_response(tmp_path, monkeypatch):
+    worker_started = threading.Event()
+    worker_finished = threading.Event()
+
+    def fake_run_runtime_agent(goal, **kwargs):
+        token = kwargs["cancellation_token"]
+        worker_started.set()
+        while not token.is_cancelled():
+            time.sleep(0.005)
+        worker_finished.set()
+        return {
+            "trace_type": "codex_runtime",
+            "run_id": kwargs["run_id"],
+            "status": "cancelled",
+            "goal": goal,
+            "events": [],
+            "observations": [],
+        }
+
+    monkeypatch.setattr(
+        service_runtime_run,
+        "run_runtime_agent",
+        fake_run_runtime_agent,
+    )
+    limiter = ServiceConcurrencyLimiter(max_concurrent_runs=1)
+    registry = ActiveRunRegistry()
+
+    status_code, payload = service_router.handle_request(
+        "POST",
+        "/runtime/run",
+        b'{"goal":"slow run","plan":{"actions":[],"final_answer":"done"}}',
+        config=ServiceConfig(
+            trace_dir=str(tmp_path),
+            run_timeout_seconds=0.01,
+        ),
+        concurrency_limiter=limiter,
+        active_run_registry=registry,
+    )
+
+    assert worker_started.is_set()
+    assert worker_finished.is_set()
+    assert status_code == 504
+    assert payload["run_id"]
+    assert limiter.snapshot()["active_concurrent_runs"] == "0"
+    assert registry.get(payload["run_id"]) is None
+    persisted = json.loads(Path(payload["trace_path"]).read_text())
+    assert persisted["status"] == "cancelled"
+    assert persisted["error_code"] == "agent_run_timeout"
+
+
+def test_runtime_timeout_tracks_uncooperative_worker_until_it_exits(
+    tmp_path,
+    monkeypatch,
+):
     worker_started = threading.Event()
     worker_finish = threading.Event()
 
@@ -50,20 +103,13 @@ def test_runtime_timeout_keeps_concurrency_slot_until_worker_exits(tmp_path, mon
 
     assert worker_started.is_set()
     assert status_code == 504
-    assert payload["run_id"]
     assert limiter.snapshot()["active_concurrent_runs"] == "1"
     assert registry.get(payload["run_id"]).state == "timed_out"
-    persisted = json.loads(Path(payload["trace_path"]).read_text())
-    assert persisted["status"] == "cancelled"
-    assert persisted["error_code"] == "agent_run_timeout"
 
     worker_finish.set()
     _wait_until(lambda: limiter.snapshot()["active_concurrent_runs"] == "0")
 
     assert registry.get(payload["run_id"]) is None
-    persisted_after_worker = json.loads(Path(payload["trace_path"]).read_text())
-    assert persisted_after_worker["status"] == "cancelled"
-    assert persisted_after_worker["error_code"] == "agent_run_timeout"
 
 
 def test_active_runtime_cancel_bypasses_full_run_concurrency_slot(tmp_path, monkeypatch):

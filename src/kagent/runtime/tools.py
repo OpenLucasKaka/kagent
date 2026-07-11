@@ -6,7 +6,6 @@ import os
 import re
 import socket
 import subprocess
-import threading
 import time
 import urllib.error
 import urllib.parse
@@ -129,6 +128,7 @@ _EMBEDDING_RETRY_BACKOFF_ENV_VAR = "KAGENT_EMBEDDING_RETRY_BACKOFF_SECONDS"
 _EXTERNAL_BACKEND_TIMEOUT_ENV_VAR = "KAGENT_EXTERNAL_BACKEND_TIMEOUT_SECONDS"
 _APP_NAME_MAX_LENGTH = 120
 _APP_NAME_ALLOWED_PATTERN = re.compile(r"^[\w .+()#&-]+$", re.UNICODE)
+_OPEN_COMMAND_TIMEOUT_SECONDS = 10.0
 
 
 @dataclass(frozen=True)
@@ -152,10 +152,6 @@ class RuntimeToolSpec:
     def __post_init__(self) -> None:
         if self.timeout_seconds <= 0:
             raise ValueError("timeout_seconds must be positive")
-
-
-class _ToolExecutionTimeout(Exception):
-    pass
 
 
 _TEXT_OUTPUT_SCHEMA = {
@@ -1838,14 +1834,14 @@ def execute_runtime_tool(
     try:
         _validate_tool_input(input_payload, tool.input_schema)
         output = _run_tool_handler(tool, input_payload)
-    except _ToolExecutionTimeout:
+    except TimeoutError as exc:
         return AgentObservation(
             action_id=action_id,
             tool=tool_name,
             status="failed",
             output={},
             error_code="tool_execution_timeout",
-            error="tool execution exceeded timeout",
+            error=str(exc) or "tool execution exceeded timeout",
             started_at=started_at,
             completed_at=_utc_timestamp(),
             duration_seconds=_duration_since(started_timer),
@@ -1903,27 +1899,7 @@ def _run_tool_handler(
     tool: RuntimeToolSpec,
     input_payload: Dict[str, Any],
 ) -> Dict[str, Any]:
-    result: Dict[str, Any] = {}
-    failure: Dict[str, BaseException] = {}
-
-    def target() -> None:
-        try:
-            result["output"] = tool.handler(input_payload)
-        except BaseException as exc:  # pragma: no cover - re-raised in caller thread
-            failure["error"] = exc
-
-    thread = threading.Thread(
-        target=target,
-        name=f"runtime-tool-{tool.name}",
-        daemon=True,
-    )
-    thread.start()
-    thread.join(tool.timeout_seconds)
-    if thread.is_alive():
-        raise _ToolExecutionTimeout()
-    if "error" in failure:
-        raise failure["error"]
-    output = result.get("output")
+    output = tool.handler(input_payload)
     if not isinstance(output, dict):
         raise ValueError("output must be an object")
     return output
@@ -3008,6 +2984,7 @@ def _open_url(input_payload: Dict[str, Any]) -> Dict[str, Any]:
                 check=True,
                 capture_output=True,
                 text=True,
+                timeout=_OPEN_COMMAND_TIMEOUT_SECONDS,
             )
             return {
                 "url": normalized_url,
@@ -3015,6 +2992,8 @@ def _open_url(input_payload: Dict[str, Any]) -> Dict[str, Any]:
                 "application": application,
                 "command": command_label,
             }
+        except subprocess.TimeoutExpired as exc:
+            raise TimeoutError("open url command timed out") from exc
         except (OSError, subprocess.CalledProcessError) as exc:
             last_error = exc
             continue
@@ -3033,7 +3012,10 @@ def _open_app(input_payload: Dict[str, Any]) -> Dict[str, Any]:
             check=True,
             capture_output=True,
             text=True,
+            timeout=_OPEN_COMMAND_TIMEOUT_SECONDS,
         )
+    except subprocess.TimeoutExpired as exc:
+        raise TimeoutError("open app command timed out") from exc
     except (OSError, subprocess.CalledProcessError) as exc:
         raise ValueError("open app failed") from exc
     return {

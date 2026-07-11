@@ -399,8 +399,10 @@ ready for SRE review.
   monitoring, including a request duration histogram, an agent run duration histogram,
   a runtime run duration histogram, and `kagent_build_info` for
   rollout audits.
-- runtime tool timeout enforcement with planner-visible `timeout_seconds` and
-  structured `tool_execution_timeout` observations for bounded replanning.
+- operation-specific timeout enforcement with planner-visible `timeout_seconds`,
+  structured `tool_execution_timeout` observations, no abandoned tool threads,
+  and tracked service workers that retain their concurrency slot if they outlive
+  the bounded cancellation grace after a runtime tool timeout or service timeout.
 - Policy-gated `http_request` applies SSRF defense in depth by rejecting
   private, loopback, and link-local targets before opening a socket.
 - Runtime URL tools reject url credentials and secret-like query or fragment

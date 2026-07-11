@@ -128,12 +128,18 @@ def run_with_timeout(
     try:
         try:
             return future.result(timeout=timeout_seconds)
-        except TimeoutError:
+        except TimeoutError as timeout_error:
             if future.done():
                 return future.result()
             if on_timeout is not None:
                 on_timeout()
-            raise
+            try:
+                future.result(timeout=timeout_seconds)
+            except TimeoutError:
+                pass
+            except Exception:
+                pass
+            raise timeout_error
     finally:
         if not future.done():
             future.cancel()

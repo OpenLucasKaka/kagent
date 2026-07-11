@@ -751,9 +751,13 @@ handlers, so undeclared fields, missing required values, invalid enum values,
 malformed nested items, and non-numeric `number` fields return
 `invalid_tool_input`. Handler outputs are validated against `output_schema`;
 tool contract violations return `invalid_tool_output` and can trigger bounded
-replanning while iteration budget remains. Slow handlers that exceed their
-declared `timeout_seconds` return `tool_execution_timeout`, preserving the
-overall runtime run instead of letting one tool block the planner loop.
+replanning while iteration budget remains. Network, provider, shell, and backend
+handlers enforce cancellable operation-specific deadlines and raise
+`tool_execution_timeout` only after the underlying work has stopped. The generic
+executor does not abandon live Python threads. Service run timeouts request
+cooperative cancellation and wait through a bounded cleanup grace. Workers that
+still do not exit remain registered and retain their concurrency slot until
+completion, so operators can see and contain post-response execution.
 Runtime observations and planner, policy, and executor events include
 action-level timing (`started_at`, `completed_at`, and `duration_seconds`),
 which lets operators separate slow provider calls, policy checks, and tool calls
