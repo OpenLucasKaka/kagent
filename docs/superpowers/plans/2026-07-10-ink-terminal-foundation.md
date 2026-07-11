@@ -17,17 +17,17 @@
 - Modify: `npm/src/App.tsx`
 - Test: `tests/test_npm_package.py`
 
-- [ ] Add a Node behavioral test that imports editor functions and verifies
+- [x] Add a Node behavioral test that imports editor functions and verifies
   grapheme insertion, left/right movement, Backspace, forward Delete, Home,
   End, and submitted-input history traversal.
-- [ ] Run `npm run build:cli && pytest tests/test_npm_package.py -k editor -q` and
+- [x] Run `npm run build:cli && pytest tests/test_npm_package.py -k editor -q` and
   confirm the new expectations fail before implementation.
-- [ ] Move `EditorState`, segmentation, insertion, and movement into
+- [x] Move `EditorState`, segmentation, insertion, and movement into
   `npm/src/editor.ts`; add `deleteAtCursor`, `moveToBoundary`, and a pure
   `EditorHistory` transition function.
-- [ ] Update `App.tsx` to import the editor model and map Ink key events to the
+- [x] Update `App.tsx` to import the editor model and map Ink key events to the
   correct operation.
-- [ ] Re-run the focused build and tests, then commit as
+- [x] Re-run the focused build and tests, then commit as
   `refactor: extract terminal editor model`.
 
 ### Task 2: Add command discovery state
@@ -37,14 +37,14 @@
 - Modify: `npm/src/App.tsx`
 - Test: `tests/test_npm_package.py`
 
-- [ ] Add behavioral tests for command filtering, stable selection, Up/Down
+- [x] Add behavioral tests for command filtering, stable selection, Up/Down
   navigation, and Tab completion.
-- [ ] Define one typed command catalog containing `/help`, `/status`, `/config`,
+- [x] Define one typed command catalog containing `/help`, `/status`, `/config`,
   `/tools`, `/memory`, `/compact-memory`, `/clear`, `/reset`, `/cwd`, and
   `/export-trace` with user-facing descriptions only.
-- [ ] Add pure command-menu state transitions and wire them into the input
+- [x] Add pure command-menu state transitions and wire them into the input
   handler without exposing runtime tool identifiers.
-- [ ] Verify build and focused tests, then commit as
+- [x] Verify build and focused tests, then commit as
   `feat: add terminal command palette`.
 
 ### Task 3: Build the transcript reducer and viewport
@@ -54,16 +54,16 @@
 - Modify: `npm/src/App.tsx`
 - Test: `tests/test_npm_package.py`
 
-- [ ] Add tests proving streamed deltas update one assistant message, final
+- [x] Add tests proving streamed deltas update one assistant message, final
   completion does not duplicate it, cancellation is represented distinctly,
   and viewport selection preserves the newest complete message.
-- [ ] Implement typed transcript entries with stable IDs and pure reducers for
+- [x] Implement typed transcript entries with stable IDs and pure reducers for
   user submission, command results, runtime progress, final completion, and
   errors.
-- [ ] Add bounded transcript retention and terminal-height-aware viewport
+- [x] Add bounded transcript retention and terminal-height-aware viewport
   selection with conservative row estimation for wide Unicode text.
-- [ ] Replace direct `setMessages` branches in `App.tsx` with reducer actions.
-- [ ] Verify build and focused tests, then commit as
+- [x] Replace direct `setMessages` branches in `App.tsx` with reducer actions.
+- [x] Verify build and focused tests, then commit as
   `refactor: add terminal transcript model`.
 
 ### Task 4: Add cooperative stdio cancellation
@@ -75,18 +75,18 @@
 - Test: `tests/test_stdio_runtime.py`
 - Test: `tests/test_npm_package.py`
 
-- [ ] Add a Python protocol test using a blocking fake runtime and prove a
+- [x] Add a Python protocol test using a blocking fake runtime and prove a
   `cancel_request` is handled before the worker returns.
-- [ ] Add a Node/Python integration test proving cancellation emits
+- [x] Add a Node/Python integration test proving cancellation emits
   `run_cancel_requested`, completes with `status=cancelled`, keeps the same
   child process, and permits a subsequent run.
-- [ ] Introduce a locked stdout emitter and an active-run record containing the
+- [x] Introduce a locked stdout emitter and an active-run record containing the
   worker thread and `RuntimeCancellationToken`.
-- [ ] Move only run and approved-resume execution to worker threads; keep state
+- [x] Move only run and approved-resume execution to worker threads; keep state
   mutation and request validation synchronized in the session.
-- [ ] Add typed cancel request/event protocol definitions and change
+- [x] Add typed cancel request/event protocol definitions and change
   `RuntimeSessionClient.cancel()` to send the request instead of restarting.
-- [ ] Verify `pytest tests/test_stdio_runtime.py tests/test_npm_package.py -q`
+- [x] Verify `pytest tests/test_stdio_runtime.py tests/test_npm_package.py -q`
   and `npm run check`, then commit as
   `feat: cooperatively cancel terminal runs`.
 
@@ -97,15 +97,15 @@
 - Modify: `npm/src/App.tsx`
 - Test: `tests/test_npm_package.py`
 
-- [ ] Add Ink render tests for 40-column and 100-column layouts containing long
+- [x] Add Ink render tests for 40-column and 100-column layouts containing long
   Chinese input, streamed output, command suggestions, and approval details.
-- [ ] Extract banner, transcript, status line, approval prompt, command menu,
+- [x] Extract banner, transcript, status line, approval prompt, command menu,
   provider setup, and prompt components into `ui-components.tsx`.
-- [ ] Keep the prompt and status regions outside the transcript viewport and
+- [x] Keep the prompt and status regions outside the transcript viewport and
   render `Cancelling` separately from `Thinking`.
-- [ ] Use restrained Claude Code-style hierarchy: compact product identity,
+- [x] Use restrained Claude Code-style hierarchy: compact product identity,
   low-noise status, visible user/assistant roles, and details only on demand.
-- [ ] Verify build and render tests, then commit as
+- [x] Verify build and render tests, then commit as
   `refactor: modularize ink terminal views`.
 
 ### Task 6: Harden runtime recovery and diagnostics
@@ -116,13 +116,13 @@
 - Modify: `npm/src/protocol.ts`
 - Test: `tests/test_npm_package.py`
 
-- [ ] Add tests for child failure while idle, child failure during a run, one
+- [x] Add tests for child failure while idle, child failure during a run, one
   controlled restart, and preserved UI transcript after restart.
-- [ ] Separate recoverable runtime lifecycle failures from request failures and
+- [x] Separate recoverable runtime lifecycle failures from request failures and
   emit a typed restart lifecycle event.
-- [ ] Prevent restart loops with a single-attempt guard and show a concise user
+- [x] Prevent restart loops with a single-attempt guard and show a concise user
   message with a debug hint rather than raw stderr.
-- [ ] Verify focused tests and commit as
+- [x] Verify focused tests and commit as
   `fix: recover terminal runtime sessions safely`.
 
 ### Task 7: Documentation and release verification
@@ -133,12 +133,12 @@
 - Modify: `docs/operations.md`
 - Modify: `docs/iteration_log.md`
 
-- [ ] Document the Ink/Python process boundary, cooperative cancellation,
+- [x] Document the Ink/Python process boundary, cooperative cancellation,
   streaming transcript, command palette, and classic fallback.
-- [ ] Run `npm run check` and focused Python/Node tests.
-- [ ] Run `ruff check src tests` and `git diff --check`.
-- [ ] Run the complete `scripts/run_checks.sh` gate and inspect all output.
-- [ ] Run a real PTY smoke session at narrow and normal widths, then commit as
+- [x] Run `npm run check` and focused Python/Node tests.
+- [x] Run `ruff check src tests` and `git diff --check`.
+- [x] Run the complete `scripts/run_checks.sh` gate and inspect all output.
+- [x] Run a real PTY smoke session at narrow and normal widths, then commit as
   `docs: document terminal runtime foundation`.
 
 ## Self-review

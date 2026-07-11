@@ -174,14 +174,32 @@ clients get an audit signal without replaying the bad identity claim.
 
 ## Application entrypoints
 
-`cli/main.py` owns the local operator CLI flow: argument parsing, the
-interactive shell loop, in-process session memory, JSON debug mode, and
-approval prompt flow. `cli/ui.py` owns terminal presentation: the compact
-status/answer/tool view, hidden internal `note` observations, session-memory
-printing, last-run replay, one-shot trace printing, help text, color decisions,
-and approval prompt copy. The `cli` package exposes only the CLI entrypoint and
-`python -m kagent.cli` support, keeping UI code out of
-the package root.
+The npm `kagent` entrypoint owns the default terminal experience. It launches
+the React/Ink client in `npm/src/`, while Python remains the LangGraph execution
+engine behind a line-delimited JSON protocol implemented by
+`cli/stdio_runtime.py`.
+
+The Ink client separates deterministic terminal behavior into focused modules:
+
+- `editor.ts` owns grapheme-aware editing and prompt history transitions.
+- `commands.ts` owns slash-command filtering, selection, and completion.
+- `transcript.ts` owns streamed assistant messages and viewport selection.
+- `ui-components.tsx` owns responsive terminal presentation.
+- `runtime-client.ts` owns the Python child lifecycle, typed request routing,
+  cooperative cancellation, and one bounded crash recovery attempt.
+
+The Python stdio main thread keeps reading requests while one non-daemon worker
+runs the active agent call. `cancel_request` sets a runtime cancellation token
+without killing the child process. Terminal events are flushed under a stdout
+lock before the active run becomes idle, preventing JSONL interleaving and
+interpreter-shutdown races. Conversation memory and the React transcript both
+survive cooperative cancellation; the React transcript also survives the one
+controlled child restart.
+
+`cli/main.py` and `cli/ui.py` remain the classic Python CLI path for one-shot
+automation, JSON diagnostics, and environments where Ink cannot start. The
+`cli` package exposes the CLI entrypoint and `python -m kagent.cli` support
+without moving UI implementation into the package root.
 
 ## State and traces
 

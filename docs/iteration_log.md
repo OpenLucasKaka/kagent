@@ -1,5 +1,25 @@
 # Iteration Log
 
+## 2026-07-11
+
+- Extracted grapheme-aware terminal editing, slash-command discovery,
+  transcript reduction, and responsive Ink rendering from the application
+  composition root.
+- Added behavioral coverage for wrapped Chinese input, emoji and pasted
+  graphemes, Backspace/Delete, Home/End, history navigation, 40-column and
+  100-column layouts, command selection, and completion.
+- Replaced child-process termination on Ctrl-C with cooperative stdio runtime
+  cancellation and verified that one Python session can execute a later turn.
+- Added one bounded recovery attempt for idle and active Python child crashes,
+  preserving the React transcript and preventing restart loops.
+- Fixed the stdio worker shutdown race by flushing completion, approval, or
+  failure events before the active run becomes idle and by using non-daemon
+  workers.
+- Reduced first-run npm noise by capturing quiet pip installation output and
+  surfacing only bounded diagnostics when bootstrap fails.
+- Documented the Ink/Python boundary and kept the classic Python CLI as an
+  explicit fallback instead of mixing both terminal behaviors.
+
 ## 2026-06-15
 
 - Created `kagent/` as an isolated LangGraph agent lab.

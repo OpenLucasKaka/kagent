@@ -513,33 +513,39 @@ curl -s -X POST http://127.0.0.1:8000/runtime/resume \
   -d '{"run_id":"<pending-run-id>","approved_action_ids":["step-1"]}'
 ```
 
-The CLI defaults to the Codex-style runtime for both one-shot goals and TTY
-sessions: run `kagent "goal"` for a single turn, or run `kagent` or
-`.venv/bin/python -m kagent.cli` with no goal to start the kagent terminal agent. Use
-`--deterministic` only for the legacy LangGraph regression path. Sessions start with
-a `kagent` banner, the `[K]` terminal companion mark, and `/help` guidance.
-They print live progress while the planner and tools run, and then use a
-compact operator transcript by default: status first, answer second, and
-user-facing external effects under `Results`.
-Internal `note` observations stay hidden in the default view so the shell reads
-like an agent session instead of a debug trace. Use `/json` inside the shell
-for full trace output, `/compact` to return to the operator view, `/last` to
-replay the most recent compact result, `/trace` to print the most recent full
-JSON trace once, `/save-trace PATH` to write that last full trace to an
-owner-only `0600` file for handoff or support debugging, `/status` to inspect
-cwd, output mode, memory count, last run status, and trace persistence,
-`/doctor` to inspect local provider, memory, history, line editor, and trace
-diagnostics without printing secrets or the full Base URL, `/config` to inspect
-redacted provider settings, `/tools` to list available actions and their
-default approval posture, `/pwd` to show the current working directory,
-`/cd PATH` to change where later file actions run, `/memory` to inspect the
-current compact session memory, `/compact-memory` to force immediate memory
-compaction, `/clear` to clear it, `/reset` to clear current memory plus
-persisted prompt history, and `/help` to list shell commands. Unknown
-slash commands and known commands with invalid arguments are intercepted
-locally with suggestions or usage hints and are not sent to the model as
-runtime goals, which keeps command typos out of provider prompts. The default
-turn budget is three planning iterations; add
+The installed `kagent` command opens the React/Ink terminal client by default.
+It launches one private Python stdio runtime, displays a compact `◆ kagent`
+identity, keeps the prompt visible below the transcript, and renders only
+user-facing answers, command results, permissions, and concise lifecycle
+status. Internal tool identifiers and raw JSON traces are not shown in the
+normal transcript.
+
+Run `kagent "goal"` for a one-shot runtime turn. Use `--deterministic` only for
+the legacy, LLM-free LangGraph regression path.
+
+The input editor is grapheme-aware, so long Chinese text, emoji, pasted text,
+Backspace, forward Delete, Home, End, and history navigation remain usable when
+the prompt wraps. Typing `/` opens the command palette; Up/Down changes the
+selection, Tab completes it, and Enter runs it. The layout is responsive down
+to a 40-column terminal. Ctrl-C during a run requests cooperative cancellation
+without discarding the Python session; Ctrl-C at a permission prompt denies the
+action; Ctrl-C while idle exits.
+
+External effects are permission-gated in the Ink client. The prompt shows a
+human title and target, accepts `y` to allow, `n` to deny, and `d` to reveal the
+reason, without exposing the internal tool name. If the Python child crashes,
+the client reports a concise failure and attempts one controlled restart while
+preserving the visible transcript. Repeated crashes stop recovery instead of
+looping indefinitely.
+
+Use `kagent --classic` or `.venv/bin/python -m kagent.cli` for the classic
+Python terminal and its detailed operator commands such as `/json`, `/compact`,
+`/last`, `/trace`, `/save-trace PATH`, and `/doctor`. Both terminal paths share
+the same provider config, runtime policy, session commands, and persisted
+memory. Unknown slash commands and invalid arguments are handled locally and
+are not sent to the model as runtime goals.
+
+The default turn budget is three planning iterations; add
 `--max-iterations N` only when a workflow needs a
 different budget. TTY sessions persist compact memory across shell restarts by
 default at `${XDG_STATE_HOME:-~/.local/state}/kagent/session-memory.json`;

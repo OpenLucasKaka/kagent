@@ -2,21 +2,35 @@
 
 ## Context
 
-The current Ink terminal client is functional, but most behavior lives in a
-single `npm/src/App.tsx` file. Input editing, runtime lifecycle handling,
-provider setup, approvals, transcript rendering, and status rendering share
-the same component state. The Python stdio runtime is synchronous, so the Node
-client implements Ctrl-C cancellation by terminating and restarting the whole
-Python process.
+Before this foundation was implemented, most Ink behavior lived in one
+`npm/src/App.tsx` file and Ctrl-C cancellation terminated the Python child.
+That baseline lost runtime continuity, mixed pure editor behavior with process
+lifecycle state, and made narrow-terminal regressions difficult to isolate.
 
-This structure blocks production-quality terminal behavior. It loses pending
-state during cancellation, cannot render answer deltas as a stable streaming
-message, retains only a fixed tail of messages, and is difficult to test below
-the full application level.
+The implemented foundation now separates editor, command, transcript,
+responsive view, protocol, and child-process responsibilities. The Python
+stdio runtime accepts cancellation while an agent worker is active, flushes
+terminal events before declaring the worker idle, and keeps the same process
+available for the next turn.
 
 This design is the first sub-project in the broader Claude Code-style Kagent
 experience. Later phases will add richer permission modes, session selection,
 task views, extensibility, and background execution on top of these boundaries.
+
+## Implementation status
+
+The foundation was completed across commits `393a775` through `cdd8a8c`:
+
+- grapheme-safe editor extraction and terminal input decoding;
+- command palette and transcript reducers;
+- cooperative Python/Node cancellation;
+- responsive Ink components and real 40/100-column frame tests;
+- one-attempt Python child crash recovery with transcript preservation;
+- terminal-event shutdown ordering and quiet npm Python bootstrap.
+
+This is a verified foundation, not a claim of complete Claude Code feature
+parity. Session browsing, background jobs, plugin UX, richer permission modes,
+and terminal scrollback remain separate follow-on work.
 
 ## Goals
 
@@ -97,17 +111,20 @@ not drift.
 ### Cancellation semantics
 
 Ctrl-C during a run sends one cooperative cancellation request and changes the
-UI status to `Cancelling`. A second Ctrl-C may force-close only after a bounded
-grace period; the initial implementation exposes the state but does not kill
-the child immediately. Ctrl-C while idle exits. Ctrl-C during provider setup
-returns to the previous setup stage or exits from the first stage.
+UI status to `Cancelling`. Repeated Ctrl-C requests remain cooperative and do
+not kill the child process. Ctrl-C while idle exits. Ctrl-C at an approval
+prompt denies the pending action. Ctrl-C during provider setup exits, except
+while settings are being saved, where it cancels and returns to the previous
+setup stage.
 
 ## Error handling
 
 - Invalid JSONL remains a protocol error without terminating the session.
-- Duplicate cancel requests are idempotent.
+- Duplicate cancel requests reuse the active token and cannot interleave JSONL
+  output.
 - Cancel with no active run returns a typed failure event.
-- Worker exceptions are converted to `run_failed` and clear active-run state.
+- Worker exceptions are converted to `run_failed`; the failure event is flushed
+  before active-run state is cleared.
 - A child-process crash produces a visible system message and one controlled
   restart; it must not silently erase transcript state.
 - Provider secrets never enter transcript messages, protocol diagnostics, or

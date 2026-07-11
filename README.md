@@ -108,12 +108,20 @@ kagent
 ```
 
 TTY sessions show live progress and a compact operator transcript by default.
-Use `/pwd`, `/cd PATH`, `/status`, `/doctor`, `/config`, `/tools`, `/json`,
-`/compact`, `/last`, `/trace`, `/save-trace PATH`, `/memory`,
-`/compact-memory`, `/clear`, `/reset`, and `/help` inside the shell; prompt-toolkit terminals support
-slash-command completion with Tab. Unknown slash commands and known commands
-with invalid arguments are handled locally with suggestions or usage hints and
-are not sent to the model as goals.
+The Ink editor supports wrapped Chinese and emoji input, pasted graphemes,
+Backspace and forward Delete, Home/End, prompt history, and a responsive layout
+tested at 40 and 100 columns. Type `/` to open the command palette, use Up/Down
+to select, Tab to complete, and Enter to run. Ctrl-C cooperatively cancels an
+active run without restarting the Python session. Permission prompts show the
+user-facing action and target while keeping internal tool identifiers out of
+the normal transcript.
+
+Use `/pwd`, `/cd PATH`, `/status`, `/config`, `/tools`, `/memory`,
+`/compact-memory`, `/clear`, `/reset`, and `/help` in the Ink terminal. The
+classic Python terminal additionally provides `/doctor`, `/json`, `/compact`,
+`/last`, `/trace`, and `/save-trace PATH`. Unknown slash commands and known
+commands with invalid arguments are handled locally with suggestions or usage
+hints and are not sent to the model as goals.
 Persisted session memory is owner-only on read and write,
 uses `0700` parent directories, rejects symlink memory files or parent
 directories, and redacts common API keys, bearer tokens, and URL credentials

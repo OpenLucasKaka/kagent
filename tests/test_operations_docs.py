@@ -25,10 +25,10 @@ def test_operations_runbook_documents_continuous_iteration_and_failure_triage():
     assert "evidence_secret_findings" in runbook
     assert "kagent-trace-prune" in runbook
     assert "kagent-trace-replay" in runbook
-    assert "a `kagent` banner" in runbook
-    assert "the `[K]` terminal companion mark" in runbook
-    assert "live progress" in runbook
-    assert "compact operator" in runbook
+    assert "compact `◆ kagent`" in runbook
+    assert "grapheme-aware" in runbook
+    assert "command palette" in runbook
+    assert "cooperative cancellation" in runbook
     assert "--session-memory PATH" in runbook
     assert "KAGENT_SESSION_MEMORY_PATH" in runbook
     assert "session-memory.json" in runbook
