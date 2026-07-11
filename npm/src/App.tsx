@@ -570,6 +570,8 @@ export function KagentInkApp({
           cursor: editor.cursor,
           input: editor.value,
           disabled: status === "cancelling" || status === "approval",
+          columns: layout.promptColumns,
+          maxRows: layout.promptRowLimit,
         }),
   );
 }

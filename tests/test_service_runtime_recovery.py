@@ -105,11 +105,14 @@ def test_reconcile_consumes_resuming_approval_when_child_trace_exists(tmp_path):
         str(tmp_path),
     )
     persist_trace(
-        _runtime_trace(
+        {
+            **_runtime_trace(
             run_id="resumed-child",
             status="running",
             runtime_instance_id="dead-instance",
-        ),
+            ),
+            "resumed_from_run_id": "pending-run",
+        },
         str(tmp_path),
     )
 
@@ -129,7 +132,8 @@ def test_reconcile_consumes_resuming_approval_when_child_trace_exists(tmp_path):
     assert original["resume_recovery"] == "approval_consumed_after_owner_loss"
     assert "pending_approval" not in original
     assert child["status"] == "failed"
-    assert child["error_code"] == RUNTIME_INTERRUPTED_ERROR_CODE
+    assert child["error_code"] == "approval_execution_interrupted"
+    assert child["events"][-1]["error_code"] == "approval_execution_interrupted"
 
 
 def test_reconcile_reopens_approval_when_resume_child_was_never_initialized(tmp_path):

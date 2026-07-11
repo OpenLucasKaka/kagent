@@ -33,7 +33,6 @@ function createRuntimeSessionClient() {
     let restartUsed = false;
     let queuedRequest = null;
     let startupFailure = "";
-    let lastStderrLine = "";
     let approvalExecutionUncertain = false;
     let recoveringActive = false;
     let recoveryFailureMessage = "";
@@ -43,7 +42,6 @@ function createRuntimeSessionClient() {
         generation += 1;
         const childGeneration = generation;
         ready = false;
-        lastStderrLine = "";
         let nextChild;
         try {
             nextChild = pythonRunner.spawnPythonModule("kagent.cli.stdio_runtime", [], {
@@ -138,16 +136,14 @@ function createRuntimeSessionClient() {
                 failCurrent(errorMessage(error));
             }
         });
-        nextChild.stderr.on("data", (chunk) => {
-            const text = chunk.toString("utf8");
-            lastStderrLine = lastNonEmptyLine(text) || lastStderrLine;
-            currentHandler?.({ type: "client_stderr", text });
+        nextChild.stderr.on("data", () => {
+            // Drain the child pipe, but never forward stderr into user-visible events.
         });
         nextChild.on("error", (error) => {
             recoverFromChildFailure(childGeneration, error.message);
         });
         nextChild.on("close", (code) => {
-            recoverFromChildFailure(childGeneration, lastStderrLine || `runtime exited with code ${code ?? 1}`);
+            recoverFromChildFailure(childGeneration, `runtime exited with code ${code ?? 1}`);
         });
     }
     function recoverFromChildFailure(childGeneration, message) {
@@ -441,11 +437,4 @@ function cleanupExpiredPendingApprovals(directory) {
 }
 function errorMessage(error) {
     return error instanceof Error ? error.message : String(error);
-}
-function lastNonEmptyLine(text) {
-    const lines = text
-        .split(/\r?\n/)
-        .map((line) => line.trim())
-        .filter(Boolean);
-    return lines.at(-1) ?? "";
 }

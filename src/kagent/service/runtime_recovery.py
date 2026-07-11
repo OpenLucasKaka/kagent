@@ -21,6 +21,7 @@ from kagent.service.trace_store import (
 )
 
 RUNTIME_INTERRUPTED_ERROR_CODE = AGENT_RUN_INTERRUPTED
+APPROVAL_EXECUTION_INTERRUPTED_ERROR_CODE = "approval_execution_interrupted"
 _INSTANCE_DIRECTORY = ".runtime-instances"
 
 
@@ -286,11 +287,24 @@ def _reconcile_running_trace(
                 if current is None or current.get("status") != "running":
                     return "unchanged"
                 completed_at = now.isoformat()
+                approval_execution_interrupted = bool(
+                    str(current.get("resumed_from_run_id", "")).strip()
+                )
+                error_code = (
+                    APPROVAL_EXECUTION_INTERRUPTED_ERROR_CODE
+                    if approval_execution_interrupted
+                    else RUNTIME_INTERRUPTED_ERROR_CODE
+                )
+                error = (
+                    "approved action execution was interrupted; side-effect state is uncertain"
+                    if approval_execution_interrupted
+                    else "runtime worker owner heartbeat expired"
+                )
                 current["status"] = "failed"
                 current["completed_at"] = completed_at
                 current["interrupted_at"] = completed_at
-                current["error_code"] = RUNTIME_INTERRUPTED_ERROR_CODE
-                current["error"] = "runtime worker owner heartbeat expired"
+                current["error_code"] = error_code
+                current["error"] = error
                 current["orphaned_runtime_instance_id"] = current.get(
                     "runtime_instance_id",
                     "",
@@ -498,8 +512,12 @@ def _append_recovery_event(trace: Dict[str, Any], completed_at: str) -> None:
             "started_at": completed_at,
             "completed_at": completed_at,
             "duration_seconds": "0.0000",
-            "error_code": RUNTIME_INTERRUPTED_ERROR_CODE,
-            "error": "runtime worker owner heartbeat expired",
+            "error_code": str(
+                trace.get("error_code", RUNTIME_INTERRUPTED_ERROR_CODE)
+            ),
+            "error": str(
+                trace.get("error", "runtime worker owner heartbeat expired")
+            ),
         }
     )
 

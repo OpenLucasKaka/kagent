@@ -153,6 +153,20 @@ current loop semantics. Every runtime trace carries `trace_type: "codex_runtime"
 `runtime_engine: "langgraph"` so persisted status, listing, and resume flows can
 distinguish Codex-style runtime traces from deterministic legacy `/run` traces
 stored in the same directory.
+The graph state contains only durable JSON-compatible values: goal, run ID,
+iteration budget, approved action IDs, metadata, tags, result, and graph phase
+timings. Live dependencies such as the provider, cancellation and steering
+objects, policy, tool handlers, hooks, event sink, backend clients, and secrets
+are supplied through LangGraph `Runtime` context and are never written into a
+checkpoint. `run_runtime_agent()` accepts an optional LangGraph checkpointer and
+binds `run_id` to `configurable.thread_id`. Known secret patterns are redacted
+before checkpoint writes and unsupported custom tool values are replaced with a
+typed placeholder instead of failing after a side effect. Reusing an existing
+checkpoint thread is rejected because implicit resume is not yet safe. This
+establishes the persistence boundary required for future node-level resume. The current `runtime_loop`
+remains one graph node, so a checkpoint does not yet authorize automatic replay
+after a crash inside a tool; owner-loss recovery still treats that boundary as
+interrupted or, for approval-resumed actions, explicitly uncertain.
 `runtime_topology()` exposes the same runtime graph shape for clients and
 operators, and `kagent --runtime --graph` prints that topology without requiring
 provider configuration or executing a user goal.

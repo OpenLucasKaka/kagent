@@ -1,8 +1,10 @@
 import json
 import shlex
 import sys
+import threading
 
 import pytest
+from langgraph.checkpoint.memory import InMemorySaver
 
 from kagent.providers.llm import FakeLLMProvider
 from kagent.runtime import (
@@ -48,15 +50,108 @@ def test_runtime_graph_runs_codex_style_runtime_through_langgraph():
     final_state = graph.invoke(
         {
             "goal": "capture hello",
-            "provider": provider,
+            "run_id": "direct-graph-run",
             "max_iterations": 1,
-        }
+        },
+        context={"provider": provider},
     )
 
     assert callable(getattr(graph, "invoke"))
     assert final_state["result"]["status"] == "done"
     assert final_state["result"]["runtime_engine"] == "langgraph"
     assert final_state["result"]["observations"][0]["output"] == {"text": "hello"}
+
+
+def test_runtime_checkpointer_persists_only_durable_graph_state():
+    checkpointer = InMemorySaver()
+    provider = FakeLLMProvider('{"actions":[],"final_answer":"done"}')
+
+    result = run_runtime_agent(
+        "persist safe state sk-checkpoint-secret",
+        provider=provider,
+        run_id="durable-state-run",
+        embedding_api_key="checkpoint-secret",
+        checkpointer=checkpointer,
+    )
+
+    checkpoints = list(
+        checkpointer.list(
+            {"configurable": {"thread_id": "durable-state-run"}},
+        )
+    )
+    assert result["status"] == "done"
+    assert checkpoints
+    for checkpoint_tuple in checkpoints:
+        channel_values = checkpoint_tuple.checkpoint["channel_values"]
+        serialized = json.dumps(channel_values, default=str)
+        assert "checkpoint-secret" not in serialized
+        assert "sk-checkpoint-secret" not in serialized
+        assert "FakeLLMProvider" not in serialized
+        assert "cancellation_token" not in channel_values
+        assert "event_sink" not in channel_values
+        assert "provider" not in channel_values
+        assert "tools" not in channel_values
+
+
+def test_runtime_checkpointer_normalizes_nonserializable_tool_output_once():
+    checkpointer = InMemorySaver()
+    side_effects = []
+    lock = threading.Lock()
+
+    def run_custom_tool(_input):
+        side_effects.append("executed")
+        return {"lock": lock}
+
+    tools = {
+        "custom": RuntimeToolSpec(
+            name="custom",
+            description="custom output",
+            handler=run_custom_tool,
+            output_schema={"type": "object"},
+        )
+    }
+    provider = FakeLLMProvider(
+        '{"actions":[{"id":"step-1","tool":"custom","input":{},'
+        '"reason":"run"}],"final_answer":"done"}'
+    )
+
+    result = run_runtime_agent(
+        "run custom tool",
+        provider=provider,
+        run_id="nonserializable-output-run",
+        tools=tools,
+        policy=RuntimePolicy(allowed_tools={"custom"}),
+        checkpointer=checkpointer,
+    )
+
+    assert side_effects == ["executed"]
+    assert result["status"] == "done"
+    assert result["observations"][0]["output"] == {
+        "lock": "[unsupported lock]"
+    }
+    for checkpoint_tuple in checkpointer.list(
+        {"configurable": {"thread_id": "nonserializable-output-run"}},
+    ):
+        json.dumps(checkpoint_tuple.checkpoint["channel_values"])
+
+
+def test_runtime_checkpointer_rejects_implicit_thread_reuse():
+    checkpointer = InMemorySaver()
+    provider = FakeLLMProvider('{"actions":[],"final_answer":"done"}')
+    run_runtime_agent(
+        "first run",
+        provider=provider,
+        run_id="reused-run-id",
+        checkpointer=checkpointer,
+    )
+
+    with pytest.raises(ValueError, match="checkpoint thread already exists"):
+        run_runtime_agent(
+            "second run",
+            provider=provider,
+            run_id="reused-run-id",
+            checkpointer=checkpointer,
+        )
 
 
 def test_runtime_steering_replans_with_latest_user_instruction():

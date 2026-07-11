@@ -21,7 +21,18 @@ export type TerminalLayout = {
   compact: boolean;
   horizontalPadding: number;
   commandLimit: number;
+  promptColumns: number;
+  promptRowLimit: number;
   reservedRows: number;
+};
+
+export type PromptViewport = {
+  before: string;
+  active: string;
+  after: string;
+  rendered: string;
+  prefixClipped: boolean;
+  suffixClipped: boolean;
 };
 
 export const TERMINAL_SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
@@ -35,21 +46,140 @@ export function createTerminalLayout(
   const safeRows = Math.max(10, rows || 24);
   const compact = safeColumns < 56;
   const horizontalPadding = compact ? 0 : 1;
-  const commandLimit = compact ? 4 : 6;
-  const promptColumns = Math.max(4, safeColumns - horizontalPadding * 2 - 2);
-  const promptRows = overlays.prompt
-    ? estimateTextRows(overlays.prompt, promptColumns)
-    : 1;
-  const baseRows = 5 + Math.max(0, promptRows - 1);
+  const defaultCommandLimit = compact ? 4 : 6;
   const approvalRows = overlays.approval ? (compact ? 6 : 7) : 0;
+  const commandCapacity = Math.max(
+    1,
+    safeRows - 1 - 4 - 1 - 2 - approvalRows,
+  );
+  const commandLimit = overlays.commandMenu
+    ? Math.min(defaultCommandLimit, commandCapacity)
+    : defaultCommandLimit;
+  const promptColumns = Math.max(4, safeColumns - horizontalPadding * 2 - 2);
   const commandRows = overlays.commandMenu ? commandLimit + 2 : 0;
+  const promptRowLimit = Math.max(
+    1,
+    Math.min(
+      compact ? 4 : 6,
+      safeRows - 1 - 4 - approvalRows - commandRows,
+    ),
+  );
+  const promptRows = Math.min(
+    promptRowLimit,
+    overlays.prompt ? estimateTextRows(overlays.prompt, promptColumns) : 1,
+  );
+  const baseRows = 4 + promptRows;
   return {
     columns: safeColumns,
     rows: safeRows,
     compact,
     horizontalPadding,
     commandLimit,
-    reservedRows: baseRows + approvalRows + commandRows,
+    promptColumns,
+    promptRowLimit,
+    reservedRows: Math.min(
+      safeRows - 1,
+      baseRows + approvalRows + commandRows,
+    ),
+  };
+}
+
+export function createPromptViewport(
+  input: string,
+  cursor: number,
+  columns: number,
+  maxRows: number,
+): PromptViewport {
+  const characters = splitGraphemes(input);
+  const safeCursor = Math.min(Math.max(cursor, 0), characters.length);
+  const safeColumns = Math.max(4, columns);
+  const safeRows = Math.max(1, maxRows);
+  const preserveActiveNewline = safeRows > 1;
+  let start = safeCursor;
+  let end = Math.min(characters.length, safeCursor + 1);
+
+  while (
+    start > 0 &&
+    promptViewportRows(
+      characters,
+      safeCursor,
+      start - 1,
+      end,
+      safeColumns,
+      preserveActiveNewline,
+    ) <= safeRows
+  ) {
+    start -= 1;
+  }
+  while (
+    end < characters.length &&
+    promptViewportRows(
+      characters,
+      safeCursor,
+      start,
+      end + 1,
+      safeColumns,
+      preserveActiveNewline,
+    ) <= safeRows
+  ) {
+    end += 1;
+  }
+  return promptViewportParts(
+    characters,
+    safeCursor,
+    start,
+    end,
+    preserveActiveNewline,
+  );
+}
+
+function promptViewportRows(
+  characters: string[],
+  cursor: number,
+  start: number,
+  end: number,
+  columns: number,
+  preserveActiveNewline: boolean,
+): number {
+  return estimateTextRows(
+    promptViewportParts(
+      characters,
+      cursor,
+      start,
+      end,
+      preserveActiveNewline,
+    ).rendered,
+    columns,
+  );
+}
+
+function promptViewportParts(
+  characters: string[],
+  cursor: number,
+  start: number,
+  end: number,
+  preserveActiveNewline: boolean,
+): PromptViewport {
+  const prefixClipped = start > 0;
+  const suffixClipped = end < characters.length;
+  const rawActive = characters[cursor] || " ";
+  const active =
+    rawActive === "\n" ? (preserveActiveNewline ? " " : "↵") : rawActive;
+  const before = `${prefixClipped ? "…" : ""}${characters
+    .slice(start, cursor)
+    .join("")}`;
+  const after = `${
+    rawActive === "\n" && preserveActiveNewline ? "\n" : ""
+  }${characters.slice(cursor + 1, end).join("")}${
+    suffixClipped ? "…" : ""
+  }`;
+  return {
+    before,
+    active,
+    after,
+    rendered: `${before}${active}${after}`,
+    prefixClipped,
+    suffixClipped,
   };
 }
 
@@ -307,20 +437,18 @@ export function PromptLine({
   input,
   placeholder = "Ask kagent",
   compact = false,
+  columns = 80,
+  maxRows = 6,
 }: RenderProps & {
   cursor: number;
   disabled: boolean;
   input: string;
   placeholder?: string;
   compact?: boolean;
+  columns?: number;
+  maxRows?: number;
 }) {
-  const characters = splitGraphemes(input);
-  const safeCursor = Math.min(Math.max(cursor, 0), characters.length);
-  const before = characters.slice(0, safeCursor).join("");
-  const active = characters[safeCursor] || " ";
-  const after = characters.slice(safeCursor + 1).join("");
-  const activeCharacter = active === "\n" ? " " : active;
-  const afterActive = active === "\n" ? `\n${after}` : after;
+  const viewport = createPromptViewport(input, cursor, columns, maxRows);
   return React.createElement(
     Box,
     { flexDirection: "row", marginTop: compact ? 0 : 1, alignItems: "flex-start" },
@@ -329,9 +457,9 @@ export function PromptLine({
       ? React.createElement(
           Text,
           { wrap: "wrap" },
-          before,
-          React.createElement(Text, { inverse: !disabled }, activeCharacter),
-          afterActive,
+          viewport.before,
+          React.createElement(Text, { inverse: !disabled }, viewport.active),
+          viewport.after,
         )
       : React.createElement(Text, { color: "gray" }, disabled ? "" : placeholder),
   );

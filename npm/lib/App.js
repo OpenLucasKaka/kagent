@@ -454,6 +454,8 @@ function KagentInkApp({ React, Ink, runtimeSessionFactory = runtime_client_1.cre
             cursor: editor.cursor,
             input: editor.value,
             disabled: status === "cancelling" || status === "approval",
+            columns: layout.promptColumns,
+            maxRows: layout.promptRowLimit,
         }));
 }
 function currentTerminalSize() {

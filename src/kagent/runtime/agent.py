@@ -19,7 +19,7 @@ from kagent.runtime.metadata import (
 )
 from kagent.runtime.policy import RuntimePolicy
 from kagent.runtime.presentation import project_runtime_presentation
-from kagent.runtime.redaction import redact_runtime_payload
+from kagent.runtime.redaction import redact_runtime_payload, redact_runtime_text
 from kagent.runtime.steering import RuntimeSteeringBuffer
 from kagent.runtime.steps import derive_runtime_steps
 from kagent.runtime.tools import (
@@ -95,15 +95,21 @@ RuntimeEventSink = Callable[[Dict[str, Any]], None]
 class RuntimeGraphState(TypedDict, total=False):
     goal: str
     run_id: str
-    cancellation_token: RuntimeCancellationToken
-    steering_buffer: RuntimeSteeringBuffer
+    max_iterations: int
+    approved_action_ids: List[str]
+    metadata: Dict[str, str]
+    tags: List[str]
+    result: Dict[str, Any]
+    graph_phases: List[Dict[str, str]]
+
+
+class RuntimeGraphContext(TypedDict, total=False):
+    goal: str
     provider: Any
     policy: RuntimePolicy
     tools: Dict[str, RuntimeToolSpec]
-    max_iterations: int
-    approved_action_ids: Set[str]
-    metadata: Dict[str, str]
-    tags: List[str]
+    cancellation_token: RuntimeCancellationToken
+    steering_buffer: RuntimeSteeringBuffer
     event_sink: RuntimeEventSink
     hooks: List[Any]
     runtime_workspace_dir: str
@@ -117,11 +123,9 @@ class RuntimeGraphState(TypedDict, total=False):
     embedding_retry_backoff_seconds: float
     external_backend_timeout_seconds: float
     stream_answers: bool
-    result: Dict[str, Any]
-    graph_phases: List[Dict[str, str]]
 
 
-def build_runtime_graph():
+def build_runtime_graph(*, checkpointer: Any = None):
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         try:
@@ -133,7 +137,7 @@ def build_runtime_graph():
         with suppress_langchain_deprecation_warning():
             from langgraph.graph import END, StateGraph
 
-    graph = StateGraph(RuntimeGraphState)
+    graph = StateGraph(RuntimeGraphState, context_schema=RuntimeGraphContext)
     graph.add_node("prepare", _runtime_prepare_graph_node)
     graph.add_node("runtime_loop", _runtime_loop_graph_node)
     graph.add_node("finalize", _runtime_finalize_graph_node)
@@ -141,7 +145,7 @@ def build_runtime_graph():
     graph.add_edge("prepare", "runtime_loop")
     graph.add_edge("runtime_loop", "finalize")
     graph.add_edge("finalize", END)
-    return graph.compile(name="kagent-runtime")
+    return graph.compile(checkpointer=checkpointer, name="kagent-runtime")
 
 
 def runtime_topology() -> Dict[str, List[str] | str]:
@@ -206,13 +210,27 @@ def run_runtime_agent(
     embedding_retry_backoff_seconds: float = 0.25,
     external_backend_timeout_seconds: float = 2.0,
     stream_answers: bool = False,
+    checkpointer: Any = None,
 ) -> Dict[str, Any]:
-    graph = build_runtime_graph()
+    resolved_run_id = run_id.strip() or str(uuid4())
+    normalized_metadata, metadata_error = validate_runtime_metadata(metadata)
+    if metadata_error:
+        raise ValueError(metadata_error)
+    normalized_tags, tags_error = validate_runtime_tags(tags)
+    if tags_error:
+        raise ValueError(tags_error)
+    graph = build_runtime_graph(checkpointer=checkpointer)
     state: RuntimeGraphState = {
-        "goal": goal,
-        "run_id": run_id,
-        "provider": provider,
+        "goal": redact_runtime_text(goal),
+        "run_id": resolved_run_id,
         "max_iterations": max_iterations,
+        "approved_action_ids": sorted(approved_action_ids or set()),
+        "metadata": normalized_metadata,
+        "tags": [redact_runtime_text(tag) for tag in normalized_tags],
+    }
+    context: RuntimeGraphContext = {
+        "goal": goal,
+        "provider": provider,
         "runtime_workspace_dir": runtime_workspace_dir,
         "redis_url": redis_url,
         "milvus_url": milvus_url,
@@ -226,34 +244,38 @@ def run_runtime_agent(
         "stream_answers": stream_answers,
     }
     if cancellation_token is not None:
-        state["cancellation_token"] = cancellation_token
+        context["cancellation_token"] = cancellation_token
     if steering_buffer is not None:
-        state["steering_buffer"] = steering_buffer
+        context["steering_buffer"] = steering_buffer
     if policy is not None:
-        state["policy"] = policy
+        context["policy"] = policy
     if tools is not None:
-        state["tools"] = tools
-    if approved_action_ids is not None:
-        state["approved_action_ids"] = approved_action_ids
-    if metadata is not None:
-        state["metadata"] = metadata
-    if tags is not None:
-        state["tags"] = tags
+        context["tools"] = tools
     if event_sink is not None:
-        state["event_sink"] = event_sink
+        context["event_sink"] = event_sink
     if hooks is not None:
-        state["hooks"] = hooks
-    final_state = graph.invoke(state)
+        context["hooks"] = hooks
+    config = {"configurable": {"thread_id": resolved_run_id}}
+    if checkpointer is not None and checkpointer.get_tuple(config) is not None:
+        raise ValueError("checkpoint thread already exists for run_id")
+    final_state = graph.invoke(
+        state,
+        config=config,
+        context=context,
+    )
     result = final_state.get("result")
     if not isinstance(result, dict):
         raise RuntimeError("runtime graph did not return a result")
     return result
 
 
-def _runtime_prepare_graph_node(state: RuntimeGraphState) -> RuntimeGraphState:
+def _runtime_prepare_graph_node(
+    state: RuntimeGraphState,
+    runtime: Any,
+) -> RuntimeGraphState:
     started_at = _utc_timestamp()
     started_timer = time.perf_counter()
-    if "provider" not in state:
+    if not runtime.context or "provider" not in runtime.context:
         raise ValueError("provider is required")
     return {
         "graph_phases": _append_graph_phase(
@@ -265,40 +287,49 @@ def _runtime_prepare_graph_node(state: RuntimeGraphState) -> RuntimeGraphState:
     }
 
 
-def _runtime_loop_graph_node(state: RuntimeGraphState) -> RuntimeGraphState:
+def _runtime_loop_graph_node(
+    state: RuntimeGraphState,
+    runtime: Any,
+) -> RuntimeGraphState:
     started_at = _utc_timestamp()
     started_timer = time.perf_counter()
-    result = _run_runtime_agent_loop(
-        str(state.get("goal", "")),
-        provider=state["provider"],
-        run_id=state.get("run_id", ""),
-        cancellation_token=state.get("cancellation_token"),
-        steering_buffer=state.get("steering_buffer"),
-        policy=state.get("policy"),
-        tools=state.get("tools"),
-        max_iterations=state.get("max_iterations", 1),
-        approved_action_ids=state.get("approved_action_ids"),
-        metadata=state.get("metadata"),
-        tags=state.get("tags"),
-        event_sink=state.get("event_sink"),
-        hooks=state.get("hooks"),
-        runtime_workspace_dir=state.get("runtime_workspace_dir", ""),
-        redis_url=state.get("redis_url", ""),
-        milvus_url=state.get("milvus_url", ""),
-        embedding_base_url=state.get("embedding_base_url", ""),
-        embedding_api_key=state.get("embedding_api_key", ""),
-        embedding_model=state.get("embedding_model", ""),
-        embedding_timeout_seconds=state.get("embedding_timeout_seconds", 30.0),
-        embedding_max_retries=state.get("embedding_max_retries", 2),
-        embedding_retry_backoff_seconds=state.get(
-            "embedding_retry_backoff_seconds",
-            0.25,
-        ),
-        external_backend_timeout_seconds=state.get(
-            "external_backend_timeout_seconds",
-            2.0,
-        ),
-        stream_answers=state.get("stream_answers", False),
+    context: RuntimeGraphContext = runtime.context or {}
+    result = _checkpoint_safe_value(
+        _run_runtime_agent_loop(
+            str(context.get("goal", state.get("goal", ""))),
+            provider=context["provider"],
+            run_id=state.get("run_id", ""),
+            cancellation_token=context.get("cancellation_token"),
+            steering_buffer=context.get("steering_buffer"),
+            policy=context.get("policy"),
+            tools=context.get("tools"),
+            max_iterations=state.get("max_iterations", 1),
+            approved_action_ids=set(state.get("approved_action_ids", [])),
+            metadata=state.get("metadata"),
+            tags=state.get("tags"),
+            event_sink=context.get("event_sink"),
+            hooks=context.get("hooks"),
+            runtime_workspace_dir=context.get("runtime_workspace_dir", ""),
+            redis_url=context.get("redis_url", ""),
+            milvus_url=context.get("milvus_url", ""),
+            embedding_base_url=context.get("embedding_base_url", ""),
+            embedding_api_key=context.get("embedding_api_key", ""),
+            embedding_model=context.get("embedding_model", ""),
+            embedding_timeout_seconds=context.get(
+                "embedding_timeout_seconds",
+                30.0,
+            ),
+            embedding_max_retries=context.get("embedding_max_retries", 2),
+            embedding_retry_backoff_seconds=context.get(
+                "embedding_retry_backoff_seconds",
+                0.25,
+            ),
+            external_backend_timeout_seconds=context.get(
+                "external_backend_timeout_seconds",
+                2.0,
+            ),
+            stream_answers=context.get("stream_answers", False),
+        )
     )
     return {
         "result": result,
@@ -309,6 +340,21 @@ def _runtime_loop_graph_node(state: RuntimeGraphState) -> RuntimeGraphState:
             started_timer,
         ),
     }
+
+
+def _checkpoint_safe_value(value: Any) -> Any:
+    if value is None or isinstance(value, (bool, int, float)):
+        return value
+    if isinstance(value, str):
+        return redact_runtime_text(value)
+    if isinstance(value, dict):
+        return {
+            redact_runtime_text(str(key)): _checkpoint_safe_value(item)
+            for key, item in value.items()
+        }
+    if isinstance(value, (list, tuple)):
+        return [_checkpoint_safe_value(item) for item in value]
+    return f"[unsupported {type(value).__name__}]"
 
 
 def _runtime_finalize_graph_node(state: RuntimeGraphState) -> RuntimeGraphState:

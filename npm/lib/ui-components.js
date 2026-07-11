@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.TERMINAL_SPINNER_FRAMES = void 0;
 exports.createTerminalLayout = createTerminalLayout;
+exports.createPromptViewport = createPromptViewport;
 exports.Header = Header;
 exports.ProviderSetupPanel = ProviderSetupPanel;
 exports.MessageList = MessageList;
@@ -19,21 +20,65 @@ function createTerminalLayout(columns, rows, overlays) {
     const safeRows = Math.max(10, rows || 24);
     const compact = safeColumns < 56;
     const horizontalPadding = compact ? 0 : 1;
-    const commandLimit = compact ? 4 : 6;
-    const promptColumns = Math.max(4, safeColumns - horizontalPadding * 2 - 2);
-    const promptRows = overlays.prompt
-        ? (0, terminal_width_1.estimateTextRows)(overlays.prompt, promptColumns)
-        : 1;
-    const baseRows = 5 + Math.max(0, promptRows - 1);
+    const defaultCommandLimit = compact ? 4 : 6;
     const approvalRows = overlays.approval ? (compact ? 6 : 7) : 0;
+    const commandCapacity = Math.max(1, safeRows - 1 - 4 - 1 - 2 - approvalRows);
+    const commandLimit = overlays.commandMenu
+        ? Math.min(defaultCommandLimit, commandCapacity)
+        : defaultCommandLimit;
+    const promptColumns = Math.max(4, safeColumns - horizontalPadding * 2 - 2);
     const commandRows = overlays.commandMenu ? commandLimit + 2 : 0;
+    const promptRowLimit = Math.max(1, Math.min(compact ? 4 : 6, safeRows - 1 - 4 - approvalRows - commandRows));
+    const promptRows = Math.min(promptRowLimit, overlays.prompt ? (0, terminal_width_1.estimateTextRows)(overlays.prompt, promptColumns) : 1);
+    const baseRows = 4 + promptRows;
     return {
         columns: safeColumns,
         rows: safeRows,
         compact,
         horizontalPadding,
         commandLimit,
-        reservedRows: baseRows + approvalRows + commandRows,
+        promptColumns,
+        promptRowLimit,
+        reservedRows: Math.min(safeRows - 1, baseRows + approvalRows + commandRows),
+    };
+}
+function createPromptViewport(input, cursor, columns, maxRows) {
+    const characters = (0, editor_1.splitGraphemes)(input);
+    const safeCursor = Math.min(Math.max(cursor, 0), characters.length);
+    const safeColumns = Math.max(4, columns);
+    const safeRows = Math.max(1, maxRows);
+    const preserveActiveNewline = safeRows > 1;
+    let start = safeCursor;
+    let end = Math.min(characters.length, safeCursor + 1);
+    while (start > 0 &&
+        promptViewportRows(characters, safeCursor, start - 1, end, safeColumns, preserveActiveNewline) <= safeRows) {
+        start -= 1;
+    }
+    while (end < characters.length &&
+        promptViewportRows(characters, safeCursor, start, end + 1, safeColumns, preserveActiveNewline) <= safeRows) {
+        end += 1;
+    }
+    return promptViewportParts(characters, safeCursor, start, end, preserveActiveNewline);
+}
+function promptViewportRows(characters, cursor, start, end, columns, preserveActiveNewline) {
+    return (0, terminal_width_1.estimateTextRows)(promptViewportParts(characters, cursor, start, end, preserveActiveNewline).rendered, columns);
+}
+function promptViewportParts(characters, cursor, start, end, preserveActiveNewline) {
+    const prefixClipped = start > 0;
+    const suffixClipped = end < characters.length;
+    const rawActive = characters[cursor] || " ";
+    const active = rawActive === "\n" ? (preserveActiveNewline ? " " : "↵") : rawActive;
+    const before = `${prefixClipped ? "…" : ""}${characters
+        .slice(start, cursor)
+        .join("")}`;
+    const after = `${rawActive === "\n" && preserveActiveNewline ? "\n" : ""}${characters.slice(cursor + 1, end).join("")}${suffixClipped ? "…" : ""}`;
+    return {
+        before,
+        active,
+        after,
+        rendered: `${before}${active}${after}`,
+        prefixClipped,
+        suffixClipped,
     };
 }
 function Header({ React, Box, Text, compact, provider, setup, }) {
@@ -114,16 +159,10 @@ function StatusLine({ React, Text, frame, status, statusText, }) {
     const label = status === "starting" ? "Starting runtime" : statusText;
     return React.createElement(Text, { color: "cyan" }, `${exports.TERMINAL_SPINNER_FRAMES[frame]} ${label}`);
 }
-function PromptLine({ React, Box, Text, cursor, disabled, input, placeholder = "Ask kagent", compact = false, }) {
-    const characters = (0, editor_1.splitGraphemes)(input);
-    const safeCursor = Math.min(Math.max(cursor, 0), characters.length);
-    const before = characters.slice(0, safeCursor).join("");
-    const active = characters[safeCursor] || " ";
-    const after = characters.slice(safeCursor + 1).join("");
-    const activeCharacter = active === "\n" ? " " : active;
-    const afterActive = active === "\n" ? `\n${after}` : after;
+function PromptLine({ React, Box, Text, cursor, disabled, input, placeholder = "Ask kagent", compact = false, columns = 80, maxRows = 6, }) {
+    const viewport = createPromptViewport(input, cursor, columns, maxRows);
     return React.createElement(Box, { flexDirection: "row", marginTop: compact ? 0 : 1, alignItems: "flex-start" }, React.createElement(Text, { color: disabled ? "gray" : "cyan" }, "› "), input
-        ? React.createElement(Text, { wrap: "wrap" }, before, React.createElement(Text, { inverse: !disabled }, activeCharacter), afterActive)
+        ? React.createElement(Text, { wrap: "wrap" }, viewport.before, React.createElement(Text, { inverse: !disabled }, viewport.active), viewport.after)
         : React.createElement(Text, { color: "gray" }, disabled ? "" : placeholder));
 }
 function setupField(setup) {

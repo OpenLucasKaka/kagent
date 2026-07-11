@@ -23,6 +23,12 @@ def test_npm_and_python_package_versions_match():
     assert f'version = "{package_json["version"]}"' in pyproject
 
 
+def test_python_package_requires_langgraph_runtime_context_support():
+    pyproject = Path("pyproject.toml").read_text(encoding="utf-8")
+
+    assert '"langgraph>=0.6.11,<0.7"' in pyproject
+
+
 def test_npm_package_ships_python_runtime_sources():
     package_json = json.loads(Path("package.json").read_text(encoding="utf-8"))
 
@@ -85,7 +91,7 @@ def test_npm_terminal_layout_adapts_to_narrow_and_wide_terminals():
 
     script = r"""
 const assert = require("node:assert/strict");
-const {createTerminalLayout} = require("./npm/lib/ui-components");
+const {createPromptViewport, createTerminalLayout} = require("./npm/lib/ui-components");
 const {estimateTextRows} = require("./npm/lib/terminal-width");
 
 assert.deepEqual(createTerminalLayout(40, 24, {approval: true, commandMenu: true}), {
@@ -94,6 +100,8 @@ assert.deepEqual(createTerminalLayout(40, 24, {approval: true, commandMenu: true
   compact: true,
   horizontalPadding: 0,
   commandLimit: 4,
+  promptColumns: 38,
+  promptRowLimit: 4,
   reservedRows: 17,
 });
 assert.deepEqual(createTerminalLayout(100, 30, {approval: false, commandMenu: true}), {
@@ -102,6 +110,8 @@ assert.deepEqual(createTerminalLayout(100, 30, {approval: false, commandMenu: tr
   compact: false,
   horizontalPadding: 1,
   commandLimit: 6,
+  promptColumns: 96,
+  promptRowLimit: 6,
   reservedRows: 13,
 });
 assert.equal(
@@ -113,6 +123,26 @@ assert.equal(
   18,
 );
 assert.equal(estimateTextRows("中文abcd", 6), 2);
+const small = createTerminalLayout(40, 10, {
+  approval: true,
+  commandMenu: false,
+  prompt: Array.from({length: 20}, (_, index) => `line-${index}`).join("\n"),
+});
+assert.ok(small.reservedRows <= 9);
+assert.ok(small.promptRowLimit >= 1);
+const viewport = createPromptViewport(
+  Array.from({length: 20}, (_, index) => `line-${index}`).join("\n"),
+  149,
+  small.promptColumns,
+  small.promptRowLimit,
+);
+assert.ok(estimateTextRows(viewport.rendered, small.promptColumns) <= small.promptRowLimit);
+assert.equal(viewport.prefixClipped, true);
+const newlineViewport = createPromptViewport("first\nsecond", 5, 20, 3);
+assert.equal(newlineViewport.rendered.includes("\n"), true);
+const oneRowNewlineViewport = createPromptViewport("first\nsecond", 5, 20, 1);
+assert.equal(oneRowNewlineViewport.active, "↵");
+assert.ok(estimateTextRows(oneRowNewlineViewport.rendered, 20) <= 1);
 """
 
     completed = subprocess.run(
@@ -1949,7 +1979,7 @@ async function main() {
   await waitFor(() => lifecycle.some((event) => event.type === "client_failed"));
   await new Promise((resolve) => setTimeout(resolve, 20));
   assert.equal(children.length, 2);
-  assert.match(lifecycle.at(-1).message, /second crash/);
+  assert.equal(lifecycle.at(-1).message, "runtime exited with code 9");
   client.close();
 }
 
@@ -2038,11 +2068,16 @@ async function main() {
   const firstEvents = [];
   client.run("crashing run", (event) => firstEvents.push(event));
   await waitFor(() => writes.length === 1);
-  children[0].stderr.write("runtime worker crashed\n");
+  children[0].stderr.write(
+    "runtime worker crashed /Users/alice/private/project sk-sensitive-token\n",
+  );
   children[0].emit("close", 17);
 
   await waitFor(() => firstEvents.some((event) => event.type === "client_failed"));
-  assert.match(firstEvents.at(-1).message, /runtime worker crashed/);
+  assert.equal(firstEvents.at(-1).message, "runtime exited with code 17");
+  assert.doesNotMatch(firstEvents.at(-1).message, /\/Users\/alice/);
+  assert.doesNotMatch(firstEvents.at(-1).message, /sk-sensitive-token/);
+  assert.equal(firstEvents.some((event) => event.type === "client_stderr"), false);
   await waitFor(() => children.length === 2);
   await waitFor(() => lifecycle.filter((event) => event.type === "runtime_ready").length === 2);
 
