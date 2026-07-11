@@ -29,13 +29,7 @@ export function createTerminalInputBridge(handler: TerminalInputHandler): Termin
   emitKeypressEvents(input);
 
   const handleKeypress = (character: string | undefined, key: ReadlineKey): void => {
-    const terminalKey: TerminalKey = {
-      sequence: key.sequence || "",
-      name: key.name,
-      ctrl: Boolean(key.ctrl),
-      meta: Boolean(key.meta),
-      shift: Boolean(key.shift),
-    };
+    const terminalKey = normalizeTerminalKey(key);
     const value = terminalKey.ctrl ? terminalKey.name || "" : printableInput(character);
     handler(value, terminalKey);
   };
@@ -125,8 +119,31 @@ function printableInput(character: string | undefined): string {
 
 function normalizePastedInput(value: string): string {
   return value
-    .replace(/\r\n|\r|\n/g, " ")
-    .replace(/[\u0000-\u001f\u007f]/g, "");
+    .replace(/\r\n|\r/g, "\n")
+    .replace(/\t/g, "  ")
+    .replace(/[\u0000-\u0009\u000b-\u001f\u007f]/g, "");
+}
+
+function normalizeTerminalKey(key: ReadlineKey): TerminalKey {
+  const sequence = key.sequence || "";
+  const modifiedReturn = /^\x1b\[13;(\d+)u$/.exec(sequence);
+  if (modifiedReturn) {
+    const modifiers = Number(modifiedReturn[1]) - 1;
+    return {
+      sequence,
+      name: "return",
+      shift: Boolean(modifiers & 1),
+      meta: Boolean(modifiers & 2),
+      ctrl: Boolean(modifiers & 4),
+    };
+  }
+  return {
+    sequence,
+    name: key.name,
+    ctrl: Boolean(key.ctrl),
+    meta: Boolean(key.meta),
+    shift: Boolean(key.shift),
+  };
 }
 
 function pasteStartSuffixLength(value: string): number {

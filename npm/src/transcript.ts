@@ -1,4 +1,4 @@
-import { splitGraphemes } from "./editor";
+import { estimateTextRows } from "./terminal-width";
 
 export type TranscriptRole = "user" | "assistant" | "command" | "system";
 export type TranscriptStatus = "complete" | "streaming" | "cancelled" | "error";
@@ -241,34 +241,4 @@ function estimateEntryRows(entry: TranscriptEntry, columns: number): number {
   const contentColumns = Math.max(4, columns - 4);
   const titleRows = entry.title ? estimateTextRows(entry.title, contentColumns) : 0;
   return Math.max(1, titleRows + estimateTextRows(entry.text, contentColumns)) + 1;
-}
-
-function estimateTextRows(text: string, columns: number): number {
-  const lines = text.split("\n");
-  return lines.reduce((total, line) => {
-    const width = splitGraphemes(line).reduce(
-      (lineWidth, grapheme) => lineWidth + graphemeWidth(grapheme),
-      0,
-    );
-    return total + Math.max(1, Math.ceil(width / columns));
-  }, 0);
-}
-
-function graphemeWidth(grapheme: string): number {
-  const codePoint = grapheme.codePointAt(0) || 0;
-  if (
-    codePoint >= 0x1100 &&
-    (codePoint <= 0x115f ||
-      codePoint === 0x2329 ||
-      codePoint === 0x232a ||
-      (codePoint >= 0x2e80 && codePoint <= 0xa4cf) ||
-      (codePoint >= 0xac00 && codePoint <= 0xd7a3) ||
-      (codePoint >= 0xf900 && codePoint <= 0xfaff) ||
-      (codePoint >= 0xfe10 && codePoint <= 0xfe6f) ||
-      (codePoint >= 0xff00 && codePoint <= 0xff60) ||
-      (codePoint >= 0x1f300 && codePoint <= 0x1faff))
-  ) {
-    return 2;
-  }
-  return 1;
 }

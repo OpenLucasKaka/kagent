@@ -122,6 +122,9 @@ function clampCursor(cursor, length) {
     return Math.min(Math.max(cursor, 0), length);
 }
 function isPrintableGrapheme(character) {
+    if (character === "\n") {
+        return true;
+    }
     const codePoint = character.codePointAt(0) || 0;
     return codePoint >= 32 && codePoint !== 127;
 }

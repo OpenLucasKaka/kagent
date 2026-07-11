@@ -111,11 +111,12 @@ TTY sessions show live progress and a compact operator transcript by default.
 The Ink editor supports wrapped Chinese and emoji input, pasted graphemes,
 Backspace and forward Delete, Home/End, prompt history, and a responsive layout
 tested at 40 and 100 columns. PageUp/PageDown browse older conversation pages
-without moving the prompt cursor. Type `/` to open the command palette, use
-Up/Down to select, Tab to complete, and Enter to run. Ctrl-C cooperatively
-cancels an active run without restarting the Python session. Permission prompts
-show the user-facing action and target while keeping internal tool identifiers
-out of the normal transcript.
+without moving the prompt cursor. Multiline paste keeps line breaks; use
+Shift+Enter, Option+Enter, or Ctrl+J to insert a line break and Enter to run.
+Type `/` to open the command palette, use Up/Down to select, and Tab to
+complete. Ctrl-C cooperatively cancels an active run without restarting the
+Python session. Permission prompts show the user-facing action and target while
+keeping internal tool identifiers out of the normal transcript.
 
 Use `/pwd`, `/cd PATH`, `/status`, `/config`, `/tools`, `/memory`,
 `/compact-memory`, `/clear`, `/reset`, and `/help` in the Ink terminal. The

@@ -5,6 +5,7 @@ import { splitGraphemes } from "./editor";
 import { maskSecret, selectedProvider, type ProviderSetupState } from "./provider-setup";
 import type { ApprovalRequiredEvent, ProviderSnapshot } from "./protocol";
 import type { TranscriptEntry } from "./transcript";
+import { estimateTextRows } from "./terminal-width";
 
 export type AgentStatus =
   | "starting"
@@ -28,20 +29,25 @@ export const TERMINAL_SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴"
 export function createTerminalLayout(
   columns: number,
   rows: number,
-  overlays: { approval: boolean; commandMenu: boolean },
+  overlays: { approval: boolean; commandMenu: boolean; prompt?: string },
 ): TerminalLayout {
   const safeColumns = Math.max(20, columns || 80);
   const safeRows = Math.max(10, rows || 24);
   const compact = safeColumns < 56;
+  const horizontalPadding = compact ? 0 : 1;
   const commandLimit = compact ? 4 : 6;
-  const baseRows = 5;
+  const promptColumns = Math.max(4, safeColumns - horizontalPadding * 2 - 2);
+  const promptRows = overlays.prompt
+    ? estimateTextRows(overlays.prompt, promptColumns)
+    : 1;
+  const baseRows = 5 + Math.max(0, promptRows - 1);
   const approvalRows = overlays.approval ? (compact ? 6 : 7) : 0;
   const commandRows = overlays.commandMenu ? commandLimit + 2 : 0;
   return {
     columns: safeColumns,
     rows: safeRows,
     compact,
-    horizontalPadding: compact ? 0 : 1,
+    horizontalPadding,
     commandLimit,
     reservedRows: baseRows + approvalRows + commandRows,
   };
@@ -292,6 +298,8 @@ export function PromptLine({
   const before = characters.slice(0, safeCursor).join("");
   const active = characters[safeCursor] || " ";
   const after = characters.slice(safeCursor + 1).join("");
+  const activeCharacter = active === "\n" ? " " : active;
+  const afterActive = active === "\n" ? `\n${after}` : after;
   return React.createElement(
     Box,
     { flexDirection: "row", marginTop: compact ? 0 : 1, alignItems: "flex-start" },
@@ -301,8 +309,8 @@ export function PromptLine({
           Text,
           { wrap: "wrap" },
           before,
-          React.createElement(Text, { inverse: !disabled }, active),
-          after,
+          React.createElement(Text, { inverse: !disabled }, activeCharacter),
+          afterActive,
         )
       : React.createElement(Text, { color: "gray" }, disabled ? "" : placeholder),
   );

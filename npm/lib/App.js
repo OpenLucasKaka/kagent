@@ -107,6 +107,7 @@ function KagentInkApp({ React, Ink, runtimeSessionFactory = runtime_client_1.cre
             const pagingLayout = (0, ui_components_1.createTerminalLayout)(terminalSize.columns, terminalSize.rows, {
                 approval: approval !== null,
                 commandMenu: commandMenu !== null && status === "idle",
+                prompt: editor.value,
             });
             setTranscriptOffset((current) => (0, transcript_1.moveTranscriptViewport)(transcript.entries, {
                 columns: pagingLayout.columns,
@@ -123,6 +124,10 @@ function KagentInkApp({ React, Ink, runtimeSessionFactory = runtime_client_1.cre
             return;
         }
         if (key.name === "return" || key.name === "enter") {
+            if (key.shift || key.meta || key.sequence === "\n") {
+                setEditor((current) => (0, editor_1.insertInput)(current, "\n"));
+                return;
+            }
             submit();
             return;
         }
@@ -265,7 +270,7 @@ function KagentInkApp({ React, Ink, runtimeSessionFactory = runtime_client_1.cre
             return;
         }
         if (value && !key.ctrl && !key.meta) {
-            updateSetupEditor((current) => (0, editor_1.insertInput)(current, value));
+            updateSetupEditor((current) => (0, editor_1.insertInput)(current, value.replace(/\n/g, " ")));
         }
     }
     function updateSetupEditor(update) {
@@ -429,6 +434,7 @@ function KagentInkApp({ React, Ink, runtimeSessionFactory = runtime_client_1.cre
     const layout = (0, ui_components_1.createTerminalLayout)(terminalSize.columns, terminalSize.rows, {
         approval: approval !== null,
         commandMenu: commandMenu !== null && status === "idle",
+        prompt: editor.value,
     });
     const visibleTranscript = (0, transcript_1.selectTranscriptViewport)(transcript.entries, {
         columns: layout.columns,
@@ -498,5 +504,5 @@ function errorMessage(error) {
     return error instanceof Error ? error.message : String(error);
 }
 function isSessionCommandInput(value) {
-    return value.trimStart().startsWith("/");
+    return !value.includes("\n") && value.trimStart().startsWith("/");
 }

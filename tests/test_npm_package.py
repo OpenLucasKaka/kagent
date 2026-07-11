@@ -83,6 +83,7 @@ def test_npm_terminal_layout_adapts_to_narrow_and_wide_terminals():
     script = r"""
 const assert = require("node:assert/strict");
 const {createTerminalLayout} = require("./npm/lib/ui-components");
+const {estimateTextRows} = require("./npm/lib/terminal-width");
 
 assert.deepEqual(createTerminalLayout(40, 24, {approval: true, commandMenu: true}), {
   columns: 40,
@@ -100,6 +101,15 @@ assert.deepEqual(createTerminalLayout(100, 30, {approval: false, commandMenu: tr
   commandLimit: 6,
   reservedRows: 13,
 });
+assert.equal(
+  createTerminalLayout(40, 24, {
+    approval: true,
+    commandMenu: true,
+    prompt: "第一行\n第二行",
+  }).reservedRows,
+  18,
+);
+assert.equal(estimateTextRows("中文abcd", 6), 2);
 """
 
     completed = subprocess.run(
@@ -152,6 +162,7 @@ async function renderAt(columns) {
       {command: "/reset", description: "Reset session state", aliases: []},
     ],
   };
+  const multilinePrompt = "帮我继续完善这个非常长的终端输入内容并且不要卡住\n保留第二行";
   const element = React.createElement(
     Ink.Box,
     {flexDirection: "column", width: columns},
@@ -212,9 +223,9 @@ async function renderAt(columns) {
       React,
       Box: Ink.Box,
       Text: Ink.Text,
-      cursor: 24,
+      cursor: Array.from(multilinePrompt.split("\n")[0]).length,
       disabled: false,
-      input: "帮我继续完善这个非常长的终端输入内容并且不要卡住",
+      input: multilinePrompt,
     }),
   );
   const instance = Ink.render(element, {
@@ -242,6 +253,7 @@ async function main() {
     assert.match(plain, /History · 3 newer/);
     assert.match(plain, /Permission required/);
     assert.match(plain, /Ask kagent|帮我继续完善/);
+    assert.match(plain, /保留第二行/);
     const overflow = plain
       .split("\n")
       .map((line) => ({line, width: stringWidth(line)}))
@@ -345,6 +357,13 @@ state = insertInput(state, "A");
 assert.equal(state.value, "A👍🏽");
 assert.equal(state.cursor, 1);
 
+let multiline = insertInput(createEditorState(), "第一行\n第二行");
+assert.deepEqual([multiline.value, multiline.cursor], ["第一行\n第二行", 7]);
+multiline = moveCursor(multiline, -3);
+multiline = deleteBeforeCursor(multiline);
+assert.equal(multiline.value, "第一行第二行");
+assert.equal(submitInput(insertInput(createEditorState(), "a\nb")).value, "a\nb");
+
 let submitted = submitInput(insertInput(createEditorState(), "first"));
 assert.equal(submitted.value, "first");
 state = submitted.state;
@@ -373,6 +392,7 @@ assert.equal(submitInput(createEditorState()).value, null);
 
 assert.equal(isSessionCommandInput("/status"), true);
 assert.equal(isSessionCommandInput("  /memory"), true);
+assert.equal(isSessionCommandInput("/status\nexplain"), false);
 assert.equal(isSessionCommandInput("tell me /status"), false);
 """
     subprocess.run([node, "-e", script], check=True)
@@ -437,8 +457,29 @@ assert.deepEqual(events, [
   ["", "left", false],
   ["", "backspace", false],
   ["", "return", false],
-  ["first second", undefined, false],
-  ["third fourth 👍", undefined, false],
+  ["first\nsecond", undefined, false],
+  ["third\nfourth\n👍", undefined, false],
+]);
+
+const modifiedReturns = [];
+const modifiedBridge = createTerminalInputBridge((input, key) => {
+  modifiedReturns.push([
+    input,
+    key.name,
+    key.ctrl,
+    key.meta,
+    key.shift,
+    key.sequence,
+  ]);
+});
+modifiedBridge.write("\x1b[13;2u");
+modifiedBridge.write("\x1b\r");
+modifiedBridge.write("\n");
+modifiedBridge.close();
+assert.deepEqual(modifiedReturns, [
+  ["", "return", false, false, true, "\x1b[13;2u"],
+  ["", "return", false, true, false, "\x1b\r"],
+  ["", "enter", false, false, false, "\n"],
 ]);
 """
     subprocess.run([node, "-e", script], check=True)
@@ -461,6 +502,7 @@ def test_npm_ink_app_uses_raw_terminal_input_and_cooperative_ctrl_c():
     assert 'key.name === "end"' in app
     assert 'key.name === "pageup"' in app
     assert 'key.name === "pagedown"' in app
+    assert 'key.shift || key.meta || key.sequence === "\\n"' in app
     assert "[React, transcript.nextId]" in app
     assert "showError(errorMessage(error));\n      showError(errorMessage(error));" not in app
     assert "exitOnCtrlC: false" in runner
@@ -529,7 +571,9 @@ assert.deepEqual([editor().value, editor().cursor], ["X你a!Y👍🏽", 6]);
 inputEvents.emit("input", "\x1b[D\x1b[3~");
 assert.deepEqual([editor().value, editor().cursor], ["X你a!Y", 5]);
 inputEvents.emit("input", "first\nsecond");
-assert.deepEqual([editor().value, editor().cursor], ["X你a!Yfirst second", 17]);
+assert.deepEqual([editor().value, editor().cursor], ["X你a!Yfirst\nsecond", 17]);
+inputEvents.emit("input", "\x1b[13;2u");
+assert.deepEqual([editor().value, editor().cursor], ["X你a!Yfirst\nsecond\n", 18]);
 inputEvents.emit("input", "\x03");
 assert.equal(exits, 1);
 
@@ -646,6 +690,11 @@ inputEvents.emit("input", "\u0301");
 assert.deepEqual(
   [states[10].editor.value, states[10].editor.cursor],
   ["x👍🏽e\u0301", 3],
+);
+inputEvents.emit("input", "a\nb");
+assert.deepEqual(
+  [states[10].editor.value, states[10].editor.cursor],
+  ["x👍🏽e\u0301a b", 6],
 );
 
 inputCleanup();

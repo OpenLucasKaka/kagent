@@ -12,20 +12,26 @@ exports.StatusLine = StatusLine;
 exports.PromptLine = PromptLine;
 const editor_1 = require("./editor");
 const provider_setup_1 = require("./provider-setup");
+const terminal_width_1 = require("./terminal-width");
 exports.TERMINAL_SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 function createTerminalLayout(columns, rows, overlays) {
     const safeColumns = Math.max(20, columns || 80);
     const safeRows = Math.max(10, rows || 24);
     const compact = safeColumns < 56;
+    const horizontalPadding = compact ? 0 : 1;
     const commandLimit = compact ? 4 : 6;
-    const baseRows = 5;
+    const promptColumns = Math.max(4, safeColumns - horizontalPadding * 2 - 2);
+    const promptRows = overlays.prompt
+        ? (0, terminal_width_1.estimateTextRows)(overlays.prompt, promptColumns)
+        : 1;
+    const baseRows = 5 + Math.max(0, promptRows - 1);
     const approvalRows = overlays.approval ? (compact ? 6 : 7) : 0;
     const commandRows = overlays.commandMenu ? commandLimit + 2 : 0;
     return {
         columns: safeColumns,
         rows: safeRows,
         compact,
-        horizontalPadding: compact ? 0 : 1,
+        horizontalPadding,
         commandLimit,
         reservedRows: baseRows + approvalRows + commandRows,
     };
@@ -106,8 +112,10 @@ function PromptLine({ React, Box, Text, cursor, disabled, input, placeholder = "
     const before = characters.slice(0, safeCursor).join("");
     const active = characters[safeCursor] || " ";
     const after = characters.slice(safeCursor + 1).join("");
+    const activeCharacter = active === "\n" ? " " : active;
+    const afterActive = active === "\n" ? `\n${after}` : after;
     return React.createElement(Box, { flexDirection: "row", marginTop: compact ? 0 : 1, alignItems: "flex-start" }, React.createElement(Text, { color: disabled ? "gray" : "cyan" }, "› "), input
-        ? React.createElement(Text, { wrap: "wrap" }, before, React.createElement(Text, { inverse: !disabled }, active), after)
+        ? React.createElement(Text, { wrap: "wrap" }, before, React.createElement(Text, { inverse: !disabled }, activeCharacter), afterActive)
         : React.createElement(Text, { color: "gray" }, disabled ? "" : placeholder));
 }
 function setupField(setup) {

@@ -197,6 +197,7 @@ export function KagentInkApp({
         {
           approval: approval !== null,
           commandMenu: commandMenu !== null && status === "idle",
+          prompt: editor.value,
         },
       );
       setTranscriptOffset((current) =>
@@ -221,6 +222,10 @@ export function KagentInkApp({
       return;
     }
     if (key.name === "return" || key.name === "enter") {
+      if (key.shift || key.meta || key.sequence === "\n") {
+        setEditor((current) => insertInput(current, "\n"));
+        return;
+      }
       submit();
       return;
     }
@@ -365,7 +370,7 @@ export function KagentInkApp({
       return;
     }
     if (value && !key.ctrl && !key.meta) {
-      updateSetupEditor((current) => insertInput(current, value));
+      updateSetupEditor((current) => insertInput(current, value.replace(/\n/g, " ")));
     }
   }
 
@@ -552,6 +557,7 @@ export function KagentInkApp({
   const layout = createTerminalLayout(terminalSize.columns, terminalSize.rows, {
     approval: approval !== null,
     commandMenu: commandMenu !== null && status === "idle",
+    prompt: editor.value,
   });
   const visibleTranscript = selectTranscriptViewport(
     transcript.entries,
@@ -640,5 +646,5 @@ function errorMessage(error: unknown): string {
 }
 
 export function isSessionCommandInput(value: string): boolean {
-  return value.trimStart().startsWith("/");
+  return !value.includes("\n") && value.trimStart().startsWith("/");
 }

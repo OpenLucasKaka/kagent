@@ -526,9 +526,11 @@ the legacy, LLM-free LangGraph regression path.
 The input editor is grapheme-aware, so long Chinese text, emoji, pasted text,
 Backspace, forward Delete, Home, End, and history navigation remain usable when
 the prompt wraps. PageUp/PageDown page through the bounded visible transcript;
-new messages return the view to the latest page. Typing `/` opens the command palette;
-Up/Down changes the selection, Tab completes it, and Enter runs it.
-The layout is responsive down to a 40-column terminal. Ctrl-C during a run
+new messages return the view to the latest page. Multiline and bracketed paste
+preserve line boundaries. Shift+Enter, Option+Enter, and Ctrl+J insert a line
+break; Enter submits the prompt. Typing `/` opens the command palette; Up/Down
+changes the selection and Tab completes it. The layout budgets wrapped prompt
+rows and remains responsive down to a 40-column terminal. Ctrl-C during a run
 requests cooperative cancellation without discarding the Python session;
 Ctrl-C at a permission prompt denies the action; Ctrl-C while idle exits.
 
