@@ -2065,6 +2065,311 @@ main().catch((error) => {
     assert completed.returncode == 0, completed.stderr
 
 
+def test_npm_runtime_client_preserves_pending_approval_across_child_restart():
+    node = shutil.which("node")
+    if node is None:
+        return
+
+    script = r"""
+const assert = require("node:assert/strict");
+const {EventEmitter} = require("node:events");
+const fs = require("node:fs");
+const path = require("node:path");
+const {PassThrough} = require("node:stream");
+
+const children = [];
+const writes = [];
+const spawnOptions = [];
+const runnerPath = require.resolve("./npm/lib/python-runner");
+require.cache[runnerPath] = {
+  id: runnerPath,
+  filename: runnerPath,
+  loaded: true,
+  exports: {
+    spawnPythonModule(_moduleName, _args, options) {
+      const child = new EventEmitter();
+      const childIndex = children.length;
+      child.stdout = new PassThrough();
+      child.stderr = new PassThrough();
+      child.stdin = new PassThrough();
+      child.stdin.on("data", (chunk) => {
+        writes.push({child: children.indexOf(child), request: JSON.parse(chunk.toString("utf8"))});
+      });
+      child.killed = false;
+      child.exitCode = null;
+      child.signalCode = null;
+      child.kill = () => { child.killed = true; };
+      children.push(child);
+      spawnOptions.push(options);
+      setImmediate(() => child.stdout.write(JSON.stringify({
+        type: "runtime_ready",
+        provider: {
+          configured: true,
+          provider: "test",
+          display_name: "Test",
+          base_url_configured: true,
+          model: "model",
+          api_key_configured: true,
+        },
+        provider_options: [],
+        session_commands: [],
+        pending_approval: childIndex === 1,
+      }) + "\n"));
+      return child;
+    },
+  },
+};
+
+const {createRuntimeSessionClient} = require("./npm/lib/runtime-client");
+const client = createRuntimeSessionClient();
+const lifecycle = [];
+client.subscribe((event) => lifecycle.push(event));
+
+async function waitFor(predicate) {
+  const deadline = Date.now() + 1000;
+  while (Date.now() < deadline) {
+    if (predicate()) return;
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+  assert.ok(predicate(), "condition did not become true");
+}
+
+async function main() {
+  await waitFor(() => lifecycle.some((event) => event.type === "runtime_ready"));
+  const events = [];
+  client.run("approval run", (event) => events.push(event));
+  await waitFor(() => writes.length === 1);
+  const pendingPath = spawnOptions[0].env.KAGENT_PENDING_APPROVAL_PATH;
+  fs.mkdirSync(path.dirname(pendingPath), {recursive: true});
+  fs.writeFileSync(pendingPath, "persisted approval");
+  children[0].emit("close", 17);
+
+  await waitFor(() => children.length === 2);
+  await waitFor(() => lifecycle.filter((event) => event.type === "runtime_ready").length === 2);
+  assert.equal(events.some((event) => event.type === "client_failed"), false);
+  assert.equal(spawnOptions[0].cwd, process.cwd());
+  assert.equal(
+    spawnOptions[0].env.KAGENT_PENDING_APPROVAL_PATH,
+    spawnOptions[1].env.KAGENT_PENDING_APPROVAL_PATH,
+  );
+  children[1].stdout.write(JSON.stringify({
+    type: "approval_required",
+    action_id: "step-1",
+    title: "Open page",
+    reason: "requested",
+    target: "https://example.com",
+  }) + "\n");
+  await waitFor(() => events.filter((event) => event.type === "approval_required").length === 1);
+
+  client.respondToApproval("step-1", false);
+  await waitFor(() => writes.length === 2);
+  assert.equal(writes[1].child, 1);
+  assert.equal(writes[1].request.type, "approval_response");
+  children[1].stdout.write(JSON.stringify({
+    type: "run_completed",
+    status: "cancelled",
+    answer: "cancelled",
+    payload: {},
+  }) + "\n");
+  await waitFor(() => events.at(-1)?.type === "run_completed");
+  client.close();
+  assert.equal(fs.existsSync(pendingPath), false);
+}
+
+main().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});
+"""
+
+    completed = subprocess.run(
+        [node, "-e", script],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+
+
+def test_npm_runtime_client_removes_expired_orphan_approval_snapshots():
+    node = shutil.which("node")
+    if node is None:
+        return
+
+    script = r"""
+const assert = require("node:assert/strict");
+const {EventEmitter} = require("node:events");
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
+const {PassThrough} = require("node:stream");
+
+const root = fs.mkdtempSync(path.join(os.tmpdir(), "kagent-pending-"));
+process.env.XDG_STATE_HOME = root;
+delete process.env.KAGENT_PENDING_APPROVAL_PATH;
+const pendingDirectory = path.join(root, "kagent", "pending-approvals");
+fs.mkdirSync(pendingDirectory, {recursive: true});
+const stalePath = path.join(pendingDirectory, "123e4567-e89b-42d3-a456-426614174000.json");
+const freshPath = path.join(pendingDirectory, "223e4567-e89b-42d3-a456-426614174000.json");
+const unrelatedPath = path.join(pendingDirectory, "unrelated.json");
+fs.writeFileSync(stalePath, "stale");
+fs.writeFileSync(freshPath, "fresh");
+fs.writeFileSync(unrelatedPath, "unrelated");
+const staleTime = new Date(Date.now() - (25 * 60 * 60 * 1000));
+fs.utimesSync(stalePath, staleTime, staleTime);
+fs.utimesSync(unrelatedPath, staleTime, staleTime);
+
+const runnerPath = require.resolve("./npm/lib/python-runner");
+require.cache[runnerPath] = {
+  id: runnerPath,
+  filename: runnerPath,
+  loaded: true,
+  exports: {
+    spawnPythonModule() {
+      const child = new EventEmitter();
+      child.stdout = new PassThrough();
+      child.stderr = new PassThrough();
+      child.stdin = new PassThrough();
+      child.killed = false;
+      child.exitCode = null;
+      child.signalCode = null;
+      child.kill = () => { child.killed = true; };
+      return child;
+    },
+  },
+};
+
+const {createRuntimeSessionClient} = require("./npm/lib/runtime-client");
+const client = createRuntimeSessionClient();
+assert.equal(fs.existsSync(stalePath), false);
+assert.equal(fs.existsSync(freshPath), true);
+assert.equal(fs.existsSync(unrelatedPath), true);
+client.close();
+fs.rmSync(root, {recursive: true, force: true});
+"""
+
+    completed = subprocess.run(
+        [node, "-e", script],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+
+
+def test_npm_runtime_client_preserves_uncertain_tombstone_on_second_crash_and_close():
+    node = shutil.which("node")
+    if node is None:
+        return
+
+    script = r"""
+const assert = require("node:assert/strict");
+const {EventEmitter} = require("node:events");
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
+const {PassThrough} = require("node:stream");
+
+const root = fs.mkdtempSync(path.join(os.tmpdir(), "kagent-uncertain-"));
+const pendingPath = path.join(root, "pending.json");
+process.env.KAGENT_PENDING_APPROVAL_PATH = pendingPath;
+const children = [];
+const writes = [];
+const runnerPath = require.resolve("./npm/lib/python-runner");
+require.cache[runnerPath] = {
+  id: runnerPath,
+  filename: runnerPath,
+  loaded: true,
+  exports: {
+    spawnPythonModule() {
+      const child = new EventEmitter();
+      const childIndex = children.length;
+      child.stdout = new PassThrough();
+      child.stderr = new PassThrough();
+      child.stdin = new PassThrough();
+      child.stdin.on("data", (chunk) => writes.push(JSON.parse(chunk.toString("utf8"))));
+      child.killed = false;
+      child.exitCode = null;
+      child.signalCode = null;
+      child.kill = () => { child.killed = true; };
+      children.push(child);
+      setImmediate(() => child.stdout.write(JSON.stringify({
+        type: "runtime_ready",
+        provider: {
+          configured: true,
+          provider: "test",
+          display_name: "Test",
+          base_url_configured: true,
+          model: "model",
+          api_key_configured: true,
+        },
+        provider_options: [],
+        session_commands: [],
+        pending_approval: false,
+        approval_execution_interrupted: childIndex === 1,
+      }) + "\n"));
+      return child;
+    },
+  },
+};
+
+const {createRuntimeSessionClient} = require("./npm/lib/runtime-client");
+const client = createRuntimeSessionClient();
+const lifecycle = [];
+client.subscribe((event) => lifecycle.push(event));
+
+async function waitFor(predicate) {
+  const deadline = Date.now() + 1000;
+  while (Date.now() < deadline) {
+    if (predicate()) return;
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+  assert.ok(predicate(), "condition did not become true");
+}
+
+async function main() {
+  await waitFor(() => lifecycle.some((event) => event.type === "runtime_ready"));
+  const events = [];
+  client.run("uncertain run", (event) => events.push(event));
+  await waitFor(() => writes.length === 1);
+  fs.writeFileSync(pendingPath, "approved_executing");
+  children[0].emit("close", 17);
+  await waitFor(() => children.length === 2);
+  await waitFor(() => lifecycle.filter((event) => event.type === "runtime_ready").length === 2);
+
+  children[1].emit("close", 18);
+  await waitFor(() => events.some((event) =>
+    event.type === "run_failed" || event.type === "client_failed"));
+  assert.equal(events.at(-1).type, "run_failed");
+  assert.equal(events.at(-1).error_code, "approval_execution_interrupted");
+  assert.equal(fs.existsSync(pendingPath), true);
+
+  client.close();
+  assert.equal(fs.existsSync(pendingPath), true);
+  fs.rmSync(root, {recursive: true, force: true});
+}
+
+main().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});
+"""
+
+    completed = subprocess.run(
+        [node, "-e", script],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+
+
 def test_npm_bin_scripts_are_executable_node_wrappers():
     for script in (Path("npm/bin/kagent.js"), Path("npm/bin/kagent-serve.js")):
         text = script.read_text(encoding="utf-8")

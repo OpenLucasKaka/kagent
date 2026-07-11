@@ -570,6 +570,22 @@ reason, without exposing the internal tool name. If the Python child crashes,
 the client reports a concise failure and attempts one controlled restart while
 preserving the visible transcript. Repeated crashes stop recovery instead of
 looping indefinitely.
+Ink launches the Python runtime in the directory where the user started
+`kagent`, so workspace tools never inherit the npm installation directory.
+Each terminal session receives a stable restart ID and stores an approval
+snapshot at an owner-only path under
+`${XDG_STATE_HOME:-~/.local/state}/kagent/pending-approvals`. The snapshot is
+written atomically before the approval is shown and contains the resumable plan;
+a controlled Python child restart reloads it and re-emits the same approval
+instead of rerunning completed actions. Approved actions are marked as executing
+before dispatch; if the child then exits, kagent reports an uncertain side-effect
+state and never replays the action automatically. Snapshots are plaintext but
+owner-only (`0600` in a `0700` directory), are removed on confirmed terminal
+outcomes and controlled client shutdown, and expire after 24 hours. An
+`approved_executing` tombstone is deliberately retained after an interrupted
+execution or shutdown so a later investigation cannot mistake uncertainty for
+a confirmed failure. Set
+`KAGENT_PENDING_APPROVAL_PATH` only for explicit embedding or test isolation.
 
 Use `kagent --classic` or `.venv/bin/python -m kagent.cli` for the classic
 Python terminal and its detailed operator commands such as `/json`, `/compact`,

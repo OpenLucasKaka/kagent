@@ -76,6 +76,8 @@ export type RuntimeReadyEvent = {
   provider: ProviderSnapshot;
   provider_options: ProviderOption[];
   session_commands: SessionCommandOption[];
+  pending_approval?: boolean;
+  approval_execution_interrupted?: boolean;
 };
 
 export type RuntimeUnavailableEvent = {

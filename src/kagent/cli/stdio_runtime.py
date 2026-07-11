@@ -18,6 +18,12 @@ from kagent.cli.memory import (
     redact_runtime_session_memory_text,
     save_runtime_session_memory,
 )
+from kagent.cli.pending_approval import (
+    clear_pending_approval,
+    default_pending_approval_path,
+    load_pending_approval,
+    save_pending_approval,
+)
 from kagent.cli.provider import RuntimeProviderConfigError, runtime_provider_config_message
 from kagent.cli.session_commands import (
     SessionCommandError,
@@ -41,6 +47,10 @@ from kagent.utils.json_output import json_ready
 
 Request = Dict[str, Any]
 DEFAULT_RUNTIME_MAX_ITERATIONS = 3
+_APPROVAL_EXECUTION_INTERRUPTED_MESSAGE = (
+    "The approved action was interrupted and was not replayed "
+    "because its side-effect state is uncertain."
+)
 
 
 @dataclass(frozen=True)
@@ -49,6 +59,7 @@ class PendingApproval:
     goal: str
     runtime_goal: str
     plan: Dict[str, Any]
+    phase: str = "awaiting_approval"
 
 
 @dataclass(frozen=True)
@@ -60,7 +71,13 @@ class ActiveRun:
 
 
 class StdioRuntimeSession:
-    def __init__(self, stdout: TextIO, *, memory_path: str | None = None) -> None:
+    def __init__(
+        self,
+        stdout: TextIO,
+        *,
+        memory_path: str | None = None,
+        pending_approval_path: str | None = None,
+    ) -> None:
         self.stdout = stdout
         self.memory_path = (
             default_runtime_session_memory_path() if memory_path is None else memory_path
@@ -70,7 +87,15 @@ class StdioRuntimeSession:
             max_turns=RUNTIME_MEMORY_MAX_TURNS,
         )
         self.provider_config = LLMProviderConfig.from_sources()
-        self.pending_approval: PendingApproval | None = None
+        self.pending_approval_path = (
+            default_pending_approval_path()
+            if pending_approval_path is None
+            else pending_approval_path
+        )
+        persisted_pending = load_pending_approval(self.pending_approval_path)
+        self.pending_approval = (
+            PendingApproval(**persisted_pending) if persisted_pending else None
+        )
         self.last_payload: Dict[str, Any] | None = None
         self.active_run: ActiveRun | None = None
         self._run_generation = 0
@@ -105,12 +130,27 @@ class StdioRuntimeSession:
         )
 
     def ready_event(self) -> Dict[str, Any]:
+        pending_phase = self.pending_approval.phase if self.pending_approval else ""
         return {
             "type": "runtime_ready",
             "provider": redacted_provider_snapshot(self.provider_config),
             "provider_options": provider_setup_options(),
             "session_commands": runtime_session_command_catalog(),
+            "pending_approval": pending_phase == "awaiting_approval",
+            "approval_execution_interrupted": pending_phase == "approved_executing",
         }
+
+    def recovered_approval_event(self) -> Dict[str, Any] | None:
+        if self.pending_approval is None:
+            return None
+        if self.pending_approval.phase == "approved_executing":
+            self.pending_approval = None
+            return {
+                "type": "run_failed",
+                "error_code": "approval_execution_interrupted",
+                "message": _APPROVAL_EXECUTION_INTERRUPTED_MESSAGE,
+            }
+        return _approval_event(self.pending_approval.action)
 
     def _handle_run_request(self, request: Request) -> None:
         with self._state_lock:
@@ -305,9 +345,10 @@ class StdioRuntimeSession:
             self._fail("invalid_request", "approved must be a boolean")
             return
 
-        with self._state_lock:
-            self.pending_approval = None
         if not approved:
+            with self._state_lock:
+                self.pending_approval = None
+                clear_pending_approval(self.pending_approval_path)
             result = {
                 "status": "cancelled",
                 "answer": "The requested action was not performed.",
@@ -321,6 +362,25 @@ class StdioRuntimeSession:
         if resumable_plan is None:
             self._fail("invalid_approval_state", "pending approval cannot be resumed")
             return
+        executing = PendingApproval(
+            action=pending.action,
+            goal=pending.goal,
+            runtime_goal=pending.runtime_goal,
+            plan=pending.plan,
+            phase="approved_executing",
+        )
+        save_pending_approval(
+            self.pending_approval_path,
+            {
+                "action": executing.action,
+                "goal": executing.goal,
+                "runtime_goal": executing.runtime_goal,
+                "plan": executing.plan,
+                "phase": executing.phase,
+            },
+        )
+        with self._state_lock:
+            self.pending_approval = executing
         self._start_active_run(
             pending.goal,
             pending.runtime_goal,
@@ -394,8 +454,16 @@ class StdioRuntimeSession:
         except Exception as exc:  # pragma: no cover - defensive protocol boundary
             with self._state_lock:
                 steering_buffer.close()
+                pending = self.pending_approval
                 self._clear_active_run_locked(generation)
-                self._fail("runtime_error", str(exc))
+                if pending and pending.phase == "approved_executing":
+                    self.pending_approval = None
+                    self._fail(
+                        "approval_execution_interrupted",
+                        _APPROVAL_EXECUTION_INTERRUPTED_MESSAGE,
+                    )
+                else:
+                    self._fail("runtime_error", str(exc))
 
     def _finish_run(
         self,
@@ -416,8 +484,19 @@ class StdioRuntimeSession:
                 self._clear_active_run_locked(generation)
                 self._fail("invalid_approval_state", "runtime approval state is incomplete")
                 return
+            save_pending_approval(
+                self.pending_approval_path,
+                {
+                    "action": pending.action,
+                    "goal": pending.goal,
+                    "runtime_goal": pending.runtime_goal,
+                    "plan": pending.plan,
+                    "phase": pending.phase,
+                },
+            )
             with self._state_lock:
                 if not self._is_active_generation(generation):
+                    clear_pending_approval(self.pending_approval_path)
                     return
                 self.pending_approval = pending
                 self._clear_active_run_locked(generation)
@@ -432,11 +511,14 @@ class StdioRuntimeSession:
         *,
         generation: int | None = None,
     ) -> None:
-        remember_runtime_turn(self.memory, goal, payload)
-        save_runtime_session_memory(self.memory_path, self.memory)
         with self._state_lock:
             if generation is not None and not self._is_active_generation(generation):
                 return
+            self.pending_approval = None
+        clear_pending_approval(self.pending_approval_path)
+        remember_runtime_turn(self.memory, goal, payload)
+        save_runtime_session_memory(self.memory_path, self.memory)
+        with self._state_lock:
             self.last_payload = dict(payload)
             if generation is not None:
                 self._clear_active_run_locked(generation)
@@ -544,6 +626,9 @@ def run_stdio_runtime(stdin: TextIO, stdout: TextIO) -> None:
         )
         return
     _emit(stdout, session.ready_event())
+    recovered_approval = session.recovered_approval_event()
+    if recovered_approval is not None:
+        _emit(stdout, recovered_approval)
     for line in stdin:
         line = line.strip()
         if not line:
@@ -580,7 +665,13 @@ def _pending_approval_from_result(
         return None
     if not str(action.get("id", "")).strip():
         return None
-    return PendingApproval(dict(action), goal, runtime_goal, dict(plan))
+    return PendingApproval(
+        dict(action),
+        goal,
+        runtime_goal,
+        dict(plan),
+        "awaiting_approval",
+    )
 
 
 def _approval_event(action: Dict[str, Any]) -> Dict[str, Any]:

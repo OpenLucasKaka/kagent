@@ -1,4 +1,8 @@
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
+import { randomUUID } from "node:crypto";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import readline from "node:readline";
 
 import {
@@ -18,10 +22,19 @@ import {
 } from "./protocol";
 
 type PythonRunner = {
-  spawnPythonModule(moduleName: string, args?: string[]): ChildProcessWithoutNullStreams;
+  spawnPythonModule(
+    moduleName: string,
+    args?: string[],
+    options?: { cwd?: string; env?: NodeJS.ProcessEnv },
+  ): ChildProcessWithoutNullStreams;
 };
 
 const pythonRunner = require("./python-runner") as PythonRunner;
+const PENDING_APPROVAL_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+const PENDING_APPROVAL_FILE_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.json$/i;
+const APPROVAL_EXECUTION_INTERRUPTED_MESSAGE =
+  "The approved action was interrupted and was not replayed because its side-effect state is uncertain.";
 
 export type RuntimeClientEvent =
   | RuntimeProtocolEvent
@@ -59,6 +72,15 @@ export type RuntimeProviderState = {
 };
 
 export function createRuntimeSessionClient(): RuntimeSessionClient {
+  const sessionId = randomUUID();
+  const stateHome = process.env.XDG_STATE_HOME || path.join(os.homedir(), ".local", "state");
+  const configuredPendingApprovalPath = process.env.KAGENT_PENDING_APPROVAL_PATH;
+  const pendingApprovalDirectory = path.join(stateHome, "kagent", "pending-approvals");
+  if (!configuredPendingApprovalPath) {
+    cleanupExpiredPendingApprovals(pendingApprovalDirectory);
+  }
+  const pendingApprovalPath =
+    configuredPendingApprovalPath || path.join(pendingApprovalDirectory, `${sessionId}.json`);
   let child: ChildProcessWithoutNullStreams | null = null;
   let stdout: readline.Interface | null = null;
   let currentHandler: ((event: RuntimeClientEvent) => void) | null = null;
@@ -70,6 +92,9 @@ export function createRuntimeSessionClient(): RuntimeSessionClient {
   let queuedRequest: RuntimeRequest | null = null;
   let startupFailure = "";
   let lastStderrLine = "";
+  let approvalExecutionUncertain = false;
+  let recoveringActive = false;
+  let recoveryFailureMessage = "";
   let lifecycleEvent: RuntimeReadyEvent | null = null;
   const subscribers = new Set<(event: RuntimeClientEvent) => void>();
 
@@ -80,7 +105,13 @@ export function createRuntimeSessionClient(): RuntimeSessionClient {
     lastStderrLine = "";
     let nextChild: ChildProcessWithoutNullStreams;
     try {
-      nextChild = pythonRunner.spawnPythonModule("kagent.cli.stdio_runtime", []);
+      nextChild = pythonRunner.spawnPythonModule("kagent.cli.stdio_runtime", [], {
+        cwd: process.cwd(),
+        env: {
+          ...process.env,
+          KAGENT_PENDING_APPROVAL_PATH: pendingApprovalPath,
+        },
+      });
     } catch (error) {
       recoverFromChildFailure(childGeneration, errorMessage(error));
       return;
@@ -103,6 +134,23 @@ export function createRuntimeSessionClient(): RuntimeSessionClient {
           startupFailure = "";
           lifecycleEvent = event;
           notify(event);
+          if (recoveringActive) {
+            if (event.pending_approval) {
+              approvalExecutionUncertain = false;
+              recoveringActive = false;
+              recoveryFailureMessage = "";
+            } else if (event.approval_execution_interrupted) {
+              approvalExecutionUncertain = true;
+              recoveringActive = false;
+              recoveryFailureMessage = "";
+              queuedRequest = null;
+            } else {
+              const failureMessage = recoveryFailureMessage;
+              recoveringActive = false;
+              recoveryFailureMessage = "";
+              failCurrent(failureMessage);
+            }
+          }
           if (queuedRequest) {
             const request = queuedRequest;
             queuedRequest = null;
@@ -120,6 +168,9 @@ export function createRuntimeSessionClient(): RuntimeSessionClient {
         if (!currentHandler) {
           return;
         }
+        if (event.type === "approval_required") {
+          approvalExecutionUncertain = false;
+        }
         currentHandler(event);
         if (event.type === "provider_configured") {
           updateProviderLifecycle(event);
@@ -132,6 +183,12 @@ export function createRuntimeSessionClient(): RuntimeSessionClient {
           event.type === "session_command_completed" ||
           event.type === "session_command_failed"
         ) {
+          if (event.type === "run_completed" || event.type === "run_failed") {
+            cleanupPendingApproval();
+          }
+          approvalExecutionUncertain = false;
+          recoveringActive = false;
+          recoveryFailureMessage = "";
           busy = false;
           currentHandler = null;
         }
@@ -165,13 +222,32 @@ export function createRuntimeSessionClient(): RuntimeSessionClient {
     stdout?.close();
     child = null;
     stdout = null;
-    if (busy) {
-      failCurrent(message);
-    }
+    const activeRequest = busy && currentHandler !== null;
     if (restartUsed) {
+      const preserveUncertainTombstone = approvalExecutionUncertain;
+      if (activeRequest) {
+        if (preserveUncertainTombstone) {
+          failCurrentWithEvent({
+            type: "run_failed",
+            error_code: "approval_execution_interrupted",
+            message: APPROVAL_EXECUTION_INTERRUPTED_MESSAGE,
+          });
+        } else {
+          failCurrent(message);
+        }
+      }
+      if (!preserveUncertainTombstone) {
+        cleanupPendingApproval();
+      }
       startupFailure = message;
       notify({ type: "client_failed", message });
       return;
+    }
+    if (activeRequest) {
+      recoveringActive = true;
+      recoveryFailureMessage = message;
+    } else if (busy) {
+      failCurrent(message);
     }
     restartUsed = true;
     startupFailure = "";
@@ -221,11 +297,21 @@ export function createRuntimeSessionClient(): RuntimeSessionClient {
   }
 
   function failCurrent(message: string): void {
+    failCurrentWithEvent({ type: "client_failed", message });
+  }
+
+  function failCurrentWithEvent(event: RuntimeClientEvent): void {
     const handler = currentHandler;
+    const preserveUncertainTombstone =
+      event.type === "run_failed" &&
+      event.error_code === "approval_execution_interrupted";
     busy = false;
     currentHandler = null;
     queuedRequest = null;
-    handler?.({ type: "client_failed", message });
+    approvalExecutionUncertain = preserveUncertainTombstone;
+    recoveringActive = false;
+    recoveryFailureMessage = "";
+    handler?.(event);
   }
 
   spawn();
@@ -319,10 +405,13 @@ export function createRuntimeSessionClient(): RuntimeSessionClient {
         action_id: actionId,
         approved,
       };
+      approvalExecutionUncertain = approved;
       try {
         send(request);
       } catch (error) {
-        failCurrent(errorMessage(error));
+        queuedRequest = request;
+        child?.kill();
+        recoverFromChildFailure(generation, errorMessage(error));
       }
     },
     steer(instruction) {
@@ -358,9 +447,13 @@ export function createRuntimeSessionClient(): RuntimeSessionClient {
         return;
       }
       closed = true;
+      const preserveUncertainTombstone = approvalExecutionUncertain;
       busy = false;
       currentHandler = null;
       queuedRequest = null;
+      approvalExecutionUncertain = false;
+      recoveringActive = false;
+      recoveryFailureMessage = "";
       subscribers.clear();
       generation += 1;
       stdout?.close();
@@ -369,8 +462,45 @@ export function createRuntimeSessionClient(): RuntimeSessionClient {
       }
       child = null;
       stdout = null;
+      if (!preserveUncertainTombstone) {
+        cleanupPendingApproval();
+      }
     },
   };
+
+  function cleanupPendingApproval(): void {
+    try {
+      fs.unlinkSync(pendingApprovalPath);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+        // The Python runtime still owns validation and persistence errors.
+      }
+    }
+  }
+}
+
+function cleanupExpiredPendingApprovals(directory: string): void {
+  let entries: fs.Dirent[];
+  try {
+    entries = fs.readdirSync(directory, { withFileTypes: true });
+  } catch {
+    return;
+  }
+  const cutoff = Date.now() - PENDING_APPROVAL_MAX_AGE_MS;
+  for (const entry of entries) {
+    if (!entry.isFile() || !PENDING_APPROVAL_FILE_PATTERN.test(entry.name)) {
+      continue;
+    }
+    const candidate = path.join(directory, entry.name);
+    try {
+      const stats = fs.lstatSync(candidate);
+      if (stats.isFile() && stats.mtimeMs < cutoff) {
+        fs.unlinkSync(candidate);
+      }
+    } catch {
+      // A concurrent runtime may have replaced or removed the snapshot.
+    }
+  }
 }
 
 function errorMessage(error: unknown): string {
