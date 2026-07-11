@@ -580,6 +580,29 @@ _WORKSPACE_DIFF_OUTPUT_SCHEMA = {
     "additionalProperties": False,
 }
 
+_WORKSPACE_RESTORE_OUTPUT_SCHEMA = {
+    "type": "object",
+    "required": [
+        "kind",
+        "path",
+        "restored_revision_id",
+        "previous_sha256",
+        "sha256",
+        "bytes",
+        "updated_at",
+    ],
+    "properties": {
+        "kind": {"type": "string", "enum": list(VIRTUAL_WORKSPACE_KINDS)},
+        "path": {"type": "string"},
+        "restored_revision_id": {"type": "string"},
+        "previous_sha256": {"type": "string"},
+        "sha256": {"type": "string"},
+        "bytes": {"type": "number", "minimum": 0},
+        "updated_at": {"type": "string"},
+    },
+    "additionalProperties": False,
+}
+
 _MEMORY_PUT_OUTPUT_SCHEMA = {
     "type": "object",
     "required": ["backend", "namespace", "key", "stored", "ttl_seconds"],
@@ -1189,6 +1212,49 @@ def default_runtime_tools(
                 "additionalProperties": False,
             },
             output_schema=_WORKSPACE_DIFF_OUTPUT_SCHEMA,
+        ),
+        "workspace_restore": RuntimeToolSpec(
+            name="workspace_restore",
+            description=(
+                "Restore a runtime virtual workspace text asset to a reviewed "
+                "saved revision. Requires the expected current SHA-256 so a "
+                "concurrent edit cannot be overwritten silently. The current "
+                "content is saved as a new revision before restoration."
+            ),
+            handler=lambda payload: _workspace_restore(
+                payload,
+                runtime_workspace_dir=runtime_workspace_dir,
+            ),
+            input_schema={
+                "type": "object",
+                "required": [
+                    "kind",
+                    "path",
+                    "revision_id",
+                    "expected_current_sha256",
+                    "expected_revision_sha256",
+                ],
+                "properties": {
+                    "kind": {
+                        "type": "string",
+                        "enum": list(VIRTUAL_WORKSPACE_KINDS),
+                    },
+                    "path": {"type": "string", "minLength": 1, "maxLength": 2048},
+                    "revision_id": {"type": "string", "minLength": 1, "maxLength": 120},
+                    "expected_current_sha256": {
+                        "type": "string",
+                        "minLength": 64,
+                        "maxLength": 64,
+                    },
+                    "expected_revision_sha256": {
+                        "type": "string",
+                        "minLength": 64,
+                        "maxLength": 64,
+                    },
+                },
+                "additionalProperties": False,
+            },
+            output_schema=_WORKSPACE_RESTORE_OUTPUT_SCHEMA,
         ),
         "workspace_list": RuntimeToolSpec(
             name="workspace_list",
@@ -1924,6 +1990,35 @@ def _workspace_diff(
         revision_id=revision_id.strip(),
         context_lines=int(input_payload.get("context_lines", 3)),
         max_bytes=int(input_payload.get("max_bytes", _READ_FILE_MAX_BYTES)),
+    )
+
+
+def _workspace_restore(
+    input_payload: Dict[str, Any],
+    *,
+    runtime_workspace_dir: str = "",
+) -> Dict[str, Any]:
+    kind = input_payload.get("kind")
+    relative_path = input_payload.get("path")
+    revision_id = input_payload.get("revision_id")
+    expected_current_sha256 = input_payload.get("expected_current_sha256")
+    expected_revision_sha256 = input_payload.get("expected_revision_sha256")
+    if not isinstance(kind, str):
+        raise ValueError("kind must be a string")
+    if not isinstance(relative_path, str) or not relative_path.strip():
+        raise ValueError("path must be a non-empty string")
+    if not isinstance(revision_id, str) or not revision_id.strip():
+        raise ValueError("revision_id must be a non-empty string")
+    if not isinstance(expected_current_sha256, str):
+        raise ValueError("expected_current_sha256 must be a string")
+    if not isinstance(expected_revision_sha256, str):
+        raise ValueError("expected_revision_sha256 must be a string")
+    return _runtime_workspace(runtime_workspace_dir).restore(
+        kind,
+        relative_path.strip(),
+        revision_id=revision_id.strip(),
+        expected_current_sha256=expected_current_sha256.strip(),
+        expected_revision_sha256=expected_revision_sha256.strip(),
     )
 
 

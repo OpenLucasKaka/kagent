@@ -138,6 +138,48 @@ def test_workspace_diff_tool_compares_latest_revision_with_current_asset(
     assert diff.output["truncated"] is False
 
 
+def test_workspace_restore_tool_requires_reviewed_current_sha(tmp_path, monkeypatch):
+    monkeypatch.setenv("KAGENT_RUNTIME_WORKSPACE_DIR", str(tmp_path / "runtime-assets"))
+    execute_runtime_tool(
+        default_runtime_tools(),
+        "workspace_write",
+        {"kind": "reports", "path": "plan.md", "content": "version one\n"},
+        action_id="step-1",
+    )
+    current = execute_runtime_tool(
+        default_runtime_tools(),
+        "workspace_write",
+        {"kind": "reports", "path": "plan.md", "content": "version two\n"},
+        action_id="step-2",
+    )
+    history = execute_runtime_tool(
+        default_runtime_tools(),
+        "workspace_history",
+        {"kind": "reports", "path": "plan.md"},
+        action_id="step-3",
+    )
+
+    restored = execute_runtime_tool(
+        default_runtime_tools(),
+        "workspace_restore",
+        {
+            "kind": "reports",
+            "path": "plan.md",
+            "revision_id": history.output["revisions"][0]["revision_id"],
+            "expected_current_sha256": current.output["sha256"],
+            "expected_revision_sha256": history.output["revisions"][0]["sha256"],
+        },
+        action_id="step-4",
+    )
+
+    assert restored.status == "ok"
+    assert restored.output["path"] == "plan.md"
+    assert restored.output["previous_sha256"] == current.output["sha256"]
+    assert (tmp_path / "runtime-assets" / "reports" / "plan.md").read_text() == (
+        "version one\n"
+    )
+
+
 def test_workspace_tools_reject_virtual_directory_escape(tmp_path, monkeypatch):
     monkeypatch.setenv("KAGENT_RUNTIME_WORKSPACE_DIR", str(tmp_path / "runtime-assets"))
 
@@ -1617,6 +1659,7 @@ def test_registered_runtime_tool_metadata_includes_input_schemas():
         "workspace_history",
         "workspace_list",
         "workspace_read",
+        "workspace_restore",
         "workspace_search",
         "workspace_write",
     ]
@@ -1678,6 +1721,14 @@ def test_registered_runtime_tool_metadata_includes_input_schemas():
         "diff",
         "bytes",
         "truncated",
+    ]
+    assert by_name["workspace_restore"]["approval_required_by_default"] == "true"
+    assert by_name["workspace_restore"]["input_schema"]["required"] == [
+        "kind",
+        "path",
+        "revision_id",
+        "expected_current_sha256",
+        "expected_revision_sha256",
     ]
     assert by_name["workspace_read"]["approval_required_by_default"] == "false"
     assert by_name["workspace_read"]["input_schema"]["required"] == ["kind", "path"]
@@ -2511,6 +2562,19 @@ def test_default_policy_allows_workspace_read_tools():
     assert (
         policy.authorize("workspace_diff", {"kind": "reports", "path": "x.md"}).status
         == "allowed"
+    )
+    assert (
+        policy.authorize(
+            "workspace_restore",
+            {
+                "kind": "reports",
+                "path": "x.md",
+                "revision_id": "revision",
+                "expected_current_sha256": "a" * 64,
+                "expected_revision_sha256": "b" * 64,
+            },
+        ).status
+        == "denied"
     )
     assert policy.authorize("workspace_list", {"kind": "reports"}).status == "allowed"
     assert (

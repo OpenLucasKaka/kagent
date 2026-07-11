@@ -72,6 +72,43 @@ def test_runtime_steps_hide_internal_note_actions():
     assert result["steps"] == []
 
 
+def test_runtime_steps_present_workspace_restore_without_internal_tool_name():
+    payload = {
+        "plan": {
+            "actions": [
+                {
+                    "id": "restore-1",
+                    "tool": "workspace_restore",
+                    "input": {
+                        "kind": "reports",
+                        "path": "plan.md",
+                        "revision_id": "revision-1",
+                        "expected_current_sha256": "a" * 64,
+                        "expected_revision_sha256": "b" * 64,
+                    },
+                    "reason": "Restore reviewed plan",
+                }
+            ]
+        },
+        "observations": [
+            {
+                "action_id": "restore-1",
+                "tool": "workspace_restore",
+                "status": "ok",
+                "output": {
+                    "kind": "reports",
+                    "path": "plan.md",
+                    "restored_revision_id": "revision-1",
+                },
+            }
+        ],
+    }
+
+    steps = derive_runtime_steps(payload)
+
+    assert steps == [{"index": "1", "state": "done", "title": "Restored plan.md"}]
+
+
 def test_runtime_steps_keep_completed_actions_when_final_plan_has_no_actions():
     provider = SequentialLLMProvider(
         [

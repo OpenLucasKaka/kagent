@@ -549,6 +549,15 @@ artifact IDs, and raw trace objects remain hidden. Ctrl+O toggles the latest
 expandable result. Read/list/note operations and failed internal attempts stay
 out of the normal transcript.
 
+Virtual workspace rollback is optimistic and approval-gated. Inspect
+`workspace_history` or `workspace_diff`, then call `workspace_restore` with the
+selected revision ID, revision SHA-256, and current asset SHA-256. A mismatched
+current or revision SHA rejects the restore without writing; a successful
+restore saves the displaced content as a new revision so operators can redo it.
+Kind-directory advisory locks serialize cooperating Kagent processes. Do not
+allow unrelated same-UID processes to mutate the owner-only runtime workspace;
+use a dedicated service account or container when that boundary is unacceptable.
+
 External effects are permission-gated in the Ink client. The prompt shows a
 human title and target, accepts `y` to allow, `n` to deny, and `d` to reveal the
 reason, without exposing the internal tool name. If the Python child crashes,
@@ -711,7 +720,11 @@ listings. Runtime virtual-workspace tools `workspace_write`, `workspace_read`,
 `workspace_list`, `workspace_search`, `workspace_history`, and `workspace_diff`
 keep generated reports, logs, policies, and memory assets under the configured
 runtime workspace with bounded reads, bounded listings, bounded text search,
-overwrite history, and unified change review. `apply_patch` supports audited add, update, move, and delete
+overwrite history, and unified change review. `workspace_restore` restores a
+selected revision only when its expected current and revision SHA-256 values
+still match, records the displaced content for redo, and requires approval by
+default. `apply_patch`
+supports audited add, update, move, and delete
 operations; move operations use `*** Move to: PATH` and report
 `operation=move`, changed-file `path`, `previous_path`, `bytes`, and `sha256`
 in observations.

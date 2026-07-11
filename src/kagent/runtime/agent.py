@@ -71,6 +71,8 @@ Use only tools that are available to you.
     "explicit embedding vectors.\n"
     "Use workspace_history and workspace_diff when reviewing virtual workspace changes, "
     "policy drafts, reports, logs, or persisted working assets.\n"
+    "Use workspace_restore only when the user requests rollback, after reading "
+    "history or diff, and pass the reviewed current and revision SHA-256 values.\n"
     "Use shell_command for bounded non-interactive local CLI checks; it is "
     "policy-gated and may require explicit approval before execution.\n"
     "If the latest previous observation failed, do not return final_answer with "

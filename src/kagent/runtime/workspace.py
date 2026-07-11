@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import difflib
+import fcntl
 import hashlib
 import os
 import tempfile
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path, PurePath
 from typing import Any, Dict
@@ -23,16 +25,24 @@ class RuntimeWorkspace:
 
     def ensure_layout(self) -> Dict[str, Any]:
         root = self.root
+        if root.is_symlink():
+            raise ValueError("workspace root must not be a symlink")
         root.mkdir(parents=True, exist_ok=True)
         root.chmod(_OWNER_ONLY_DIRECTORY_MODE)
         versions = root / _VERSION_DIRECTORY_NAME
+        if versions.is_symlink():
+            raise ValueError("workspace versions path must not contain symlinks")
         versions.mkdir(parents=True, exist_ok=True)
         versions.chmod(_OWNER_ONLY_DIRECTORY_MODE)
         for kind in VIRTUAL_WORKSPACE_KINDS:
             directory = root / kind
+            if directory.is_symlink():
+                raise ValueError("workspace kind path must not contain symlinks")
             directory.mkdir(parents=True, exist_ok=True)
             directory.chmod(_OWNER_ONLY_DIRECTORY_MODE)
             version_directory = versions / kind
+            if version_directory.is_symlink():
+                raise ValueError("workspace versions path must not contain symlinks")
             version_directory.mkdir(parents=True, exist_ok=True)
             version_directory.chmod(_OWNER_ONLY_DIRECTORY_MODE)
         return {
@@ -69,11 +79,12 @@ class RuntimeWorkspace:
             raise ValueError("path is a directory")
         target.parent.mkdir(parents=True, exist_ok=True)
         _chmod_created_directories(self._kind_directory(kind), target.parent)
-        _reject_symlink_traversal(self._kind_directory(kind), target)
-        if target.exists():
-            self._record_revision(kind, target)
         encoded = content.encode("utf-8")
-        _write_owner_only_text_file(target, content)
+        with self._asset_lock(kind, target):
+            _reject_symlink_traversal(self._kind_directory(kind), target)
+            if target.exists():
+                self._record_revision(kind, target)
+            _write_owner_only_text_file(target, content)
         return _asset_metadata(
             root=self._kind_directory(kind),
             path=target,
@@ -242,6 +253,79 @@ class RuntimeWorkspace:
             "truncated": len(encoded) > max_bytes,
         }
 
+    def restore(
+        self,
+        kind: str,
+        relative_path: str | Path,
+        *,
+        revision_id: str,
+        expected_current_sha256: str,
+        expected_revision_sha256: str,
+    ) -> Dict[str, Any]:
+        if not isinstance(revision_id, str) or not revision_id:
+            raise ValueError("revision does not exist")
+        if not isinstance(expected_current_sha256, str) or (
+            len(expected_current_sha256) != 64
+            or any(
+                character not in "0123456789abcdefABCDEF"
+                for character in expected_current_sha256
+            )
+        ):
+            raise ValueError("expected_current_sha256 must be 64 hexadecimal characters")
+        if not isinstance(expected_revision_sha256, str) or (
+            len(expected_revision_sha256) != 64
+            or any(
+                character not in "0123456789abcdefABCDEF"
+                for character in expected_revision_sha256
+            )
+        ):
+            raise ValueError("expected_revision_sha256 must be 64 hexadecimal characters")
+        self.ensure_layout()
+        target = self.resolve(kind, relative_path)
+        if not target.exists():
+            raise ValueError("file does not exist")
+        if not target.is_file():
+            raise ValueError("path is not a regular file")
+        with self._asset_lock(kind, target):
+            _reject_symlink_traversal(self._kind_directory(kind), target)
+            current_body = target.read_bytes()
+            try:
+                current_body.decode("utf-8")
+            except UnicodeDecodeError as exc:
+                raise ValueError("file must be UTF-8 encoded") from exc
+            current_sha256 = hashlib.sha256(current_body).hexdigest()
+            if expected_current_sha256.lower() != current_sha256:
+                raise ValueError(
+                    "current SHA-256 does not match expected_current_sha256"
+                )
+
+            revision = self._select_revision(kind, target, revision_id=revision_id)
+            revision_body = revision.read_bytes()
+            try:
+                revision_content = revision_body.decode("utf-8")
+            except UnicodeDecodeError as exc:
+                raise ValueError("revision must be UTF-8 encoded") from exc
+            restored_sha256 = hashlib.sha256(revision_body).hexdigest()
+            if expected_revision_sha256.lower() != restored_sha256:
+                raise ValueError(
+                    "revision SHA-256 does not match expected_revision_sha256"
+                )
+            if revision_body == current_body:
+                raise ValueError("revision matches current content")
+
+            self._record_revision(kind, target)
+            _write_owner_only_text_file(target, revision_content)
+        stat_result = target.stat()
+        return {
+            "kind": kind,
+            "path": _relative_asset_path(self._kind_directory(kind), target),
+            "restored_revision_id": revision.stem,
+            "previous_sha256": current_sha256,
+            "sha256": restored_sha256,
+            "bytes": len(revision_body),
+            "updated_at": _timestamp(stat_result.st_mtime),
+        }
+
     def search(
         self,
         kind: str,
@@ -314,10 +398,33 @@ class RuntimeWorkspace:
 
     def _revision_directory(self, kind: str, target: Path) -> Path:
         relative = target.relative_to(self._kind_directory(kind))
-        directory = self.root / _VERSION_DIRECTORY_NAME / kind
+        version_root = self.root / _VERSION_DIRECTORY_NAME / kind
+        if version_root.is_symlink():
+            raise ValueError("workspace versions path must not contain symlinks")
+        directory = version_root
         for part in relative.parts:
             directory = directory / part
+            if directory.exists() and directory.is_symlink():
+                raise ValueError("workspace versions path must not contain symlinks")
         return directory
+
+    @contextmanager
+    def _asset_lock(self, kind: str, _target: Path):
+        lock_directory = self._kind_directory(kind)
+        if lock_directory.is_symlink():
+            raise ValueError("workspace kind path must not contain symlinks")
+        flags = os.O_RDONLY
+        if hasattr(os, "O_DIRECTORY"):
+            flags |= os.O_DIRECTORY
+        if hasattr(os, "O_NOFOLLOW"):
+            flags |= os.O_NOFOLLOW
+        descriptor = os.open(lock_directory, flags)
+        try:
+            fcntl.flock(descriptor, fcntl.LOCK_EX)
+            yield
+        finally:
+            fcntl.flock(descriptor, fcntl.LOCK_UN)
+            os.close(descriptor)
 
     def _select_revision(self, kind: str, target: Path, *, revision_id: str) -> Path:
         revision_directory = self._revision_directory(kind, target)

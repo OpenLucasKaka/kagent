@@ -55,6 +55,22 @@ def test_projects_user_meaningful_success_results():
             },
         ),
         (
+            "workspace_restore",
+            {
+                "kind": "reports",
+                "path": "release.md",
+                "restored_revision_id": "revision-secret",
+                "previous_sha256": "a" * 64,
+                "sha256": "b" * 64,
+                "bytes": 42,
+                "updated_at": "2026-01-01T00:00:00Z",
+            },
+            {
+                "title": "Restored workspace asset",
+                "detail": "reports/release.md",
+            },
+        ),
+        (
             "open_url",
             {
                 "url": "https://example.com/path?token=secret-value",

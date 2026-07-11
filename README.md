@@ -167,6 +167,8 @@ The runtime currently includes tools for:
   destructive, secret-exposing, and network shell commands rejected;
 - creating, updating, moving, and deleting workspace files through an audited
   `apply_patch` flow.
+- maintaining versioned virtual-workspace assets with reviewed diff and
+  approval-gated current/revision SHA-locked restore and redo.
 
 Risky tools are policy-gated. Runs expose structured events, observations,
 approval state, artifacts, and metrics so internal dashboards can inspect what

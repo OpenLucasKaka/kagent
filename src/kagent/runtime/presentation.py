@@ -19,6 +19,7 @@ def project_runtime_presentation(
         "artifact": _project_artifact,
         "apply_patch": _project_apply_patch,
         "workspace_diff": _project_workspace_diff,
+        "workspace_restore": _project_workspace_restore,
         "open_url": _project_open_url,
         "open_app": _project_open_app,
         "http_request": _project_http_request,
@@ -90,6 +91,16 @@ def _project_workspace_diff(output: Dict[str, Any]) -> Dict[str, Any]:
         visible,
         truncated,
     )
+
+
+def _project_workspace_restore(output: Dict[str, Any]) -> Dict[str, Any]:
+    path = _string(output.get("path"))
+    revision_id = _string(output.get("restored_revision_id"))
+    if not path or not revision_id:
+        return {}
+    kind = _string(output.get("kind"))
+    detail = f"{kind}/{path}" if kind else path
+    return _presentation("Restored workspace asset", detail)
 
 
 def _project_open_url(output: Dict[str, Any]) -> Dict[str, Any]:

@@ -100,6 +100,14 @@ start, block, resume, complete, fail, cancel, and reopen lifecycle events.
 virtual-workspace asset creation, retrieval, listing, text search, bounded
 overwrite history, and unified change review. These assets cover reports, logs,
 policies, and memory snapshots.
+`workspace_restore` adds approval-gated revision recovery with expected current
+and revision SHA-256 preconditions. Kind-directory advisory locks serialize API
+writes and restores across processes. The restore records displaced content
+before atomically replacing owner-only UTF-8 data, preventing stale or tampered
+reviews from overwriting a concurrent Kagent API edit while preserving a redo
+path. Advisory locks and symlink checks operate inside the owner-only workspace
+trust boundary; a hostile process already running as the same OS user requires
+process or container isolation.
 `http_request` returns bounded response metadata and body text
 only after the policy layer has produced explicit approval for the action.
 It also applies SSRF defense in depth by rejecting private, loopback, and link-local

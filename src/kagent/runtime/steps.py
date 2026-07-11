@@ -160,6 +160,7 @@ def _title_from_tool_payload(
         "open_app": "Opened" if completed else "Open",
         "open_url": "Opened" if completed else "Open",
         "read_file": "Read" if completed else "Read",
+        "workspace_restore": "Restored" if completed else "Restore",
         "shell_command": "Ran command" if completed else "Run command",
     }.get(tool, "")
     if not prefix:
@@ -181,6 +182,8 @@ def _tool_target(tool: str, payload: Dict[str, Any]) -> str:
         return _short_value(payload.get("command", ""))
     if tool == "artifact":
         return _short_value(payload.get("title", ""))
+    if tool == "workspace_restore":
+        return _short_value(payload.get("path", ""))
     if tool == "apply_patch":
         return _changed_files_label(payload.get("changed_files"))
     return ""
