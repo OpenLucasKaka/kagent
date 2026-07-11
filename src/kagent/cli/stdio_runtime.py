@@ -312,7 +312,7 @@ class StdioRuntimeSession:
                 target=self._run_worker,
                 args=(generation, goal, runtime_goal, token, run_kwargs),
                 name=f"kagent-stdio-run-{generation}",
-                daemon=True,
+                daemon=False,
             )
             self.active_run = ActiveRun(generation, token, thread)
             self._state_changed.notify_all()
@@ -335,8 +335,9 @@ class StdioRuntimeSession:
             )
             self._finish_run(generation, goal, runtime_goal, result)
         except Exception as exc:  # pragma: no cover - defensive protocol boundary
-            self._clear_active_run(generation)
             self._fail("runtime_error", str(exc))
+        finally:
+            self._clear_active_run(generation)
 
     def _finish_run(
         self,
@@ -347,22 +348,18 @@ class StdioRuntimeSession:
     ) -> None:
         payload = json_ready(result)
         if not isinstance(payload, dict):
-            self._clear_active_run(generation)
             self._fail("runtime_error", "runtime result must be an object")
             return
         payload["goal"] = goal
         if payload.get("status") == "requires_approval":
             pending = _pending_approval_from_result(payload, goal, runtime_goal)
             if pending is None:
-                self._clear_active_run(generation)
                 self._fail("invalid_approval_state", "runtime approval state is incomplete")
                 return
             with self._state_lock:
                 if not self._is_active_generation(generation):
                     return
                 self.pending_approval = pending
-                self.active_run = None
-                self._state_changed.notify_all()
             self._emit(_approval_event(pending.action))
             return
         self._complete(goal, payload, generation=generation)
@@ -380,9 +377,6 @@ class StdioRuntimeSession:
             if generation is not None and not self._is_active_generation(generation):
                 return
             self.last_payload = dict(payload)
-            if generation is not None:
-                self.active_run = None
-                self._state_changed.notify_all()
         self._emit(
             {
                 "type": "run_completed",

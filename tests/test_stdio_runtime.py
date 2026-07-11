@@ -670,6 +670,71 @@ def test_stdio_runtime_cancels_active_run_cooperatively_and_reuses_session(
     assert events[-1]["answer"] == "second answer"
 
 
+def test_stdio_runtime_remains_busy_until_terminal_event_is_flushed(
+    monkeypatch,
+    tmp_path,
+):
+    completion_write_started = threading.Event()
+    release_completion_write = threading.Event()
+
+    class BlockingCompletionStream(io.StringIO):
+        def write(self, value):
+            if '"type": "run_completed"' in value:
+                completion_write_started.set()
+                assert release_completion_write.wait(timeout=2)
+            return super().write(value)
+
+    def fake_run_runtime_agent(goal, **_kwargs):
+        return {"status": "done", "answer": "finished", "goal": goal}
+
+    monkeypatch.setattr(stdio_runtime, "run_runtime_agent", fake_run_runtime_agent)
+    stdout = BlockingCompletionStream()
+    session = stdio_runtime.StdioRuntimeSession(
+        stdout,
+        memory_path=str(tmp_path / "session-memory.json"),
+    )
+
+    session.handle({"type": "run_request", "goal": "flush", "runtime_plan": "{}"})
+    assert completion_write_started.wait(timeout=1)
+
+    idle_wait_finished = threading.Event()
+
+    def wait_for_idle():
+        session.wait_until_idle()
+        idle_wait_finished.set()
+
+    waiter = threading.Thread(target=wait_for_idle)
+    waiter.start()
+    assert not idle_wait_finished.wait(timeout=0.05)
+
+    release_completion_write.set()
+    waiter.join(timeout=2)
+
+    assert idle_wait_finished.is_set()
+    assert session.active_run is None
+    assert _jsonl(stdout.getvalue())[-1]["type"] == "run_completed"
+
+
+def test_stdio_runtime_flushes_worker_failure_before_shutdown(monkeypatch, tmp_path):
+    def fake_run_runtime_agent(_goal, **_kwargs):
+        raise RuntimeError("worker failed")
+
+    monkeypatch.setattr(stdio_runtime, "run_runtime_agent", fake_run_runtime_agent)
+    stdin = io.StringIO(
+        json.dumps({"type": "run_request", "goal": "fail", "runtime_plan": "{}"})
+        + "\n"
+    )
+    stdout = io.StringIO()
+
+    stdio_runtime.run_stdio_runtime(stdin, stdout)
+
+    assert _jsonl(stdout.getvalue())[-1] == {
+        "type": "run_failed",
+        "error_code": "runtime_error",
+        "message": "worker failed",
+    }
+
+
 def test_stdio_runtime_rejects_cancel_without_active_run(tmp_path):
     stdout = io.StringIO()
     session = stdio_runtime.StdioRuntimeSession(
