@@ -20,7 +20,29 @@ _API_KEY_PATTERN = re.compile(r"\bsk-[A-Za-z0-9:_-]{6,}\b")
 _BEARER_TOKEN_PATTERN = re.compile(
     r"(?i)\b(bearer[\s-]+)([A-Za-z0-9._:/+=-]{6,})"
 )
-_SECRET_VALUE_PATTERNS = (_API_KEY_PATTERN, _BEARER_TOKEN_PATTERN)
+_GITHUB_TOKEN_PATTERN = re.compile(
+    r"\b(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})\b"
+)
+_KNOWN_SECRET_ASSIGNMENT_PATTERN = re.compile(
+    r"(?i)(\b(?:api[_-]?key|access[_-]?token|auth[_-]?token|client[_-]?secret|"
+    r"github[_-]?token|password|secret[_-]?key)[\"']?\s*[:=]\s*[\"']?)"
+    r"([^\s\"',;}{&#\[\]]{4,})([\"']?)"
+)
+_ENV_SECRET_ASSIGNMENT_PATTERN = re.compile(
+    r"(\b[A-Z][A-Z0-9_]*(?:API_KEY|ACCESS_TOKEN|AUTH_TOKEN|CLIENT_SECRET|"
+    r"SECRET_ACCESS_KEY|SECRET_KEY|PASSWORD|PRIVATE_KEY|TOKEN)[\"']?"
+    r"\s*[:=]\s*[\"']?)([^\s\"',;}{&#\[\]]{4,})([\"']?)"
+)
+_PRIVATE_KEY_PATTERN = re.compile(
+    r"-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----.*?"
+    r"-----END [A-Z0-9 ]*PRIVATE KEY-----",
+    re.DOTALL,
+)
+_SECRET_VALUE_PATTERNS = (
+    _API_KEY_PATTERN,
+    _BEARER_TOKEN_PATTERN,
+    _GITHUB_TOKEN_PATTERN,
+)
 
 
 def redact_runtime_payload(value: Any) -> Any:
@@ -35,8 +57,19 @@ def redact_runtime_payload(value: Any) -> Any:
 
 def redact_runtime_text(value: str) -> str:
     redacted = _URL_PATTERN.sub(lambda match: _redact_url(match.group(0)), value)
+    redacted = _PRIVATE_KEY_PATTERN.sub(REDACTED_VALUE, redacted)
+    redacted = _KNOWN_SECRET_ASSIGNMENT_PATTERN.sub(_redact_assignment, redacted)
+    redacted = _ENV_SECRET_ASSIGNMENT_PATTERN.sub(_redact_assignment, redacted)
     redacted = _API_KEY_PATTERN.sub(REDACTED_VALUE, redacted)
-    return _BEARER_TOKEN_PATTERN.sub(lambda match: match.group(1) + REDACTED_VALUE, redacted)
+    redacted = _GITHUB_TOKEN_PATTERN.sub(REDACTED_VALUE, redacted)
+    return _BEARER_TOKEN_PATTERN.sub(
+        lambda match: match.group(1) + REDACTED_VALUE,
+        redacted,
+    )
+
+
+def _redact_assignment(match: re.Match[str]) -> str:
+    return f"{match.group(1)}{REDACTED_VALUE}{match.group(3)}"
 
 
 def _redact_url(value: str) -> str:

@@ -206,6 +206,13 @@ adds a bounded replanning iteration, and emits queued/applied lifecycle events.
 This keeps user corrections responsive without interrupting an in-flight tool
 or creating an unbounded prompt queue.
 
+`runtime/presentation.py` is the allowlisted boundary between tool observations
+and terminal result rendering. It projects only user-meaningful successful
+outcomes, applies runtime redaction, bounds optional content to 4000 characters,
+and omits internal tool names, action IDs, inputs, and raw trace payloads. The
+Ink transcript renders the projection collapsed by default and toggles only the
+latest expandable result.
+
 `cli/main.py` and `cli/ui.py` remain the classic Python CLI path for one-shot
 automation, JSON diagnostics, and environments where Ink cannot start. The
 `cli` package exposes the CLI entrypoint and `python -m kagent.cli` support

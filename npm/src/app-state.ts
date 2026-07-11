@@ -14,6 +14,7 @@ import {
   createTranscriptState,
   progressTranscriptAction,
   transcriptReducer,
+  type TranscriptAction,
   type TranscriptState,
 } from "./transcript";
 import type { AgentStatus } from "./ui-components";
@@ -36,6 +37,7 @@ export type AppRuntimeAction =
   | { type: "setup_action"; action: ProviderSetupAction }
   | { type: "approval_response"; approved: boolean }
   | { type: "cancel_requested"; label: string }
+  | { type: "transcript_action"; action: TranscriptAction }
   | { type: "error"; message: string };
 
 export function createAppRuntimeState(): AppRuntimeState {
@@ -80,6 +82,12 @@ export function appRuntimeReducer(
   }
   if (action.type === "cancel_requested") {
     return { ...state, status: "cancelling", statusText: action.label };
+  }
+  if (action.type === "transcript_action") {
+    return {
+      ...state,
+      transcript: transcriptReducer(state.transcript, action.action),
+    };
   }
   if (action.type === "error") {
     return failureState(state, action.message);

@@ -43,6 +43,12 @@ function appRuntimeReducer(state, action) {
     if (action.type === "cancel_requested") {
         return { ...state, status: "cancelling", statusText: action.label };
     }
+    if (action.type === "transcript_action") {
+        return {
+            ...state,
+            transcript: (0, transcript_1.transcriptReducer)(state.transcript, action.action),
+        };
+    }
     if (action.type === "error") {
         return failureState(state, action.message);
     }

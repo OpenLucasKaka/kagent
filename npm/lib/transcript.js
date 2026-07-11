@@ -56,6 +56,38 @@ function transcriptReducer(state, action) {
         }
         return appendEntry(state, "assistant", action.text, status);
     }
+    if (action.type === "result_completed") {
+        const entry = {
+            id: `m-${state.nextId}`,
+            role: "command",
+            status: "complete",
+            text: "",
+            title: action.title,
+            ...(action.detail ? { detail: action.detail } : {}),
+            ...(action.content ? { content: action.content, expanded: false } : {}),
+        };
+        return retain({
+            ...state,
+            entries: state.entries.concat(entry),
+            nextId: state.nextId + 1,
+        });
+    }
+    if (action.type === "toggle_latest_result") {
+        let index = -1;
+        for (let candidate = state.entries.length - 1; candidate >= 0; candidate -= 1) {
+            if (state.entries[candidate].content) {
+                index = candidate;
+                break;
+            }
+        }
+        if (index < 0) {
+            return state;
+        }
+        return {
+            ...state,
+            entries: state.entries.map((entry, entryIndex) => entryIndex === index ? { ...entry, expanded: !entry.expanded } : entry),
+        };
+    }
     return appendEntry(state, "system", action.text, "error");
 }
 function progressTranscriptAction(event) {
@@ -71,6 +103,26 @@ function progressTranscriptAction(event) {
             type: "assistant_completed",
             text: String(event.answer ?? event.text ?? ""),
             outcome: "complete",
+        };
+    }
+    if (type === "tool_completed") {
+        const presentation = event.presentation;
+        if (!presentation || typeof presentation !== "object") {
+            return null;
+        }
+        const payload = presentation;
+        const title = String(payload.title || "").trim();
+        if (!title) {
+            return null;
+        }
+        const detail = String(payload.detail || "").trim();
+        return {
+            type: "result_completed",
+            title,
+            detail: payload.truncated === true
+                ? [detail, "truncated"].filter(Boolean).join(" · ")
+                : detail,
+            content: String(payload.content || "").trim(),
         };
     }
     return null;
@@ -167,5 +219,9 @@ function retain(state) {
 function estimateEntryRows(entry, columns) {
     const contentColumns = Math.max(4, columns - 4);
     const titleRows = entry.title ? (0, terminal_width_1.estimateTextRows)(entry.title, contentColumns) : 0;
-    return Math.max(1, titleRows + (0, terminal_width_1.estimateTextRows)(entry.text, contentColumns)) + 1;
+    const detailRows = entry.detail ? (0, terminal_width_1.estimateTextRows)(entry.detail, contentColumns) : 0;
+    const contentRows = entry.expanded && entry.content
+        ? (0, terminal_width_1.estimateTextRows)(entry.content, contentColumns)
+        : 0;
+    return Math.max(1, titleRows + detailRows + contentRows + (0, terminal_width_1.estimateTextRows)(entry.text, contentColumns)) + 1;
 }

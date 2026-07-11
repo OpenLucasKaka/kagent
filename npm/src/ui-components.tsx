@@ -175,7 +175,15 @@ export function MessageList({
           Box,
           { flexDirection: "column", flexGrow: 1, flexShrink: 1 },
           message.title ? React.createElement(Text, { bold: true, color }, message.title) : null,
-          React.createElement(Text, { color, wrap: "wrap" }, message.text),
+          message.detail
+            ? React.createElement(Text, { color: "gray", wrap: "wrap" }, message.detail)
+            : null,
+          message.text
+            ? React.createElement(Text, { color, wrap: "wrap" }, message.text)
+            : null,
+          message.expanded && message.content
+            ? React.createElement(Text, { color: "gray", wrap: "wrap" }, message.content)
+            : null,
         ),
       );
     }),

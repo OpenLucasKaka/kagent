@@ -120,6 +120,9 @@ queues the latest additional instruction for the next planner or tool boundary;
 Escape also requests cancellation. Permission prompts show the user-facing
 action and target while keeping internal tool identifiers out of the normal
 transcript.
+Completed file changes, artifacts, browser actions, HTTP fetches, workspace
+diffs, and bounded command results appear as concise outcome lines without
+internal tool names. Ctrl+O expands or collapses the latest outcome content.
 
 Use `/pwd`, `/cd PATH`, `/status`, `/config`, `/tools`, `/memory`,
 `/compact-memory`, `/clear`, `/reset`, and `/help` in the Ink terminal. The

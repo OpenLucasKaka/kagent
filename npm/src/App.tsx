@@ -188,6 +188,13 @@ export function KagentInkApp({
       handleSetupInput(value, key);
       return;
     }
+    if (key.ctrl && key.name === "o") {
+      dispatchRuntime({
+        type: "transcript_action",
+        action: { type: "toggle_latest_result" },
+      });
+      return;
+    }
     if (key.name === "pageup" || key.name === "pagedown") {
       const pagingLayout = createTerminalLayout(
         terminalSize.columns,

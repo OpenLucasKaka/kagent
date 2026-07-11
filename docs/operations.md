@@ -539,6 +539,13 @@ boundary and can add a bounded replanning iteration. Escape requests the same
 cooperative cancellation as Ctrl-C. Steering text is not persisted separately
 and is never injected during an active tool call.
 
+Presentable tool outcomes use a strict server-side projection before reaching
+the terminal. The projection exposes only a redacted title, short detail, and
+at most 4000 characters of optional content; tool names, action IDs, inputs,
+artifact IDs, and raw trace objects remain hidden. Ctrl+O toggles the latest
+expandable result. Read/list/note operations and failed internal attempts stay
+out of the normal transcript.
+
 External effects are permission-gated in the Ink client. The prompt shows a
 human title and target, accepts `y` to allow, `n` to deny, and `d` to reveal the
 reason, without exposing the internal tool name. If the Python child crashes,

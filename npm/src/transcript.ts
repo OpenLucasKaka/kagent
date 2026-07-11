@@ -9,6 +9,9 @@ export type TranscriptEntry = {
   status: TranscriptStatus;
   text: string;
   title?: string;
+  detail?: string;
+  content?: string;
+  expanded?: boolean;
 };
 
 export type TranscriptState = {
@@ -28,6 +31,13 @@ export type TranscriptAction =
       text: string;
       outcome: "complete" | "cancelled";
     }
+  | {
+      type: "result_completed";
+      title: string;
+      detail: string;
+      content: string;
+    }
+  | { type: "toggle_latest_result" }
   | { type: "error"; text: string };
 
 export type TranscriptViewport = {
@@ -89,6 +99,40 @@ export function transcriptReducer(
     }
     return appendEntry(state, "assistant", action.text, status);
   }
+  if (action.type === "result_completed") {
+    const entry: TranscriptEntry = {
+      id: `m-${state.nextId}`,
+      role: "command",
+      status: "complete",
+      text: "",
+      title: action.title,
+      ...(action.detail ? { detail: action.detail } : {}),
+      ...(action.content ? { content: action.content, expanded: false } : {}),
+    };
+    return retain({
+      ...state,
+      entries: state.entries.concat(entry),
+      nextId: state.nextId + 1,
+    });
+  }
+  if (action.type === "toggle_latest_result") {
+    let index = -1;
+    for (let candidate = state.entries.length - 1; candidate >= 0; candidate -= 1) {
+      if (state.entries[candidate].content) {
+        index = candidate;
+        break;
+      }
+    }
+    if (index < 0) {
+      return state;
+    }
+    return {
+      ...state,
+      entries: state.entries.map((entry, entryIndex) =>
+        entryIndex === index ? { ...entry, expanded: !entry.expanded } : entry,
+      ),
+    };
+  }
   return appendEntry(state, "system", action.text, "error");
 }
 
@@ -107,6 +151,26 @@ export function progressTranscriptAction(
       type: "assistant_completed",
       text: String(event.answer ?? event.text ?? ""),
       outcome: "complete",
+    };
+  }
+  if (type === "tool_completed") {
+    const presentation = event.presentation;
+    if (!presentation || typeof presentation !== "object") {
+      return null;
+    }
+    const payload = presentation as Record<string, unknown>;
+    const title = String(payload.title || "").trim();
+    if (!title) {
+      return null;
+    }
+    const detail = String(payload.detail || "").trim();
+    return {
+      type: "result_completed",
+      title,
+      detail: payload.truncated === true
+        ? [detail, "truncated"].filter(Boolean).join(" · ")
+        : detail,
+      content: String(payload.content || "").trim(),
     };
   }
   return null;
@@ -240,5 +304,12 @@ function retain(state: TranscriptState): TranscriptState {
 function estimateEntryRows(entry: TranscriptEntry, columns: number): number {
   const contentColumns = Math.max(4, columns - 4);
   const titleRows = entry.title ? estimateTextRows(entry.title, contentColumns) : 0;
-  return Math.max(1, titleRows + estimateTextRows(entry.text, contentColumns)) + 1;
+  const detailRows = entry.detail ? estimateTextRows(entry.detail, contentColumns) : 0;
+  const contentRows = entry.expanded && entry.content
+    ? estimateTextRows(entry.content, contentColumns)
+    : 0;
+  return Math.max(
+    1,
+    titleRows + detailRows + contentRows + estimateTextRows(entry.text, contentColumns),
+  ) + 1;
 }

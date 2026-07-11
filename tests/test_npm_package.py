@@ -188,12 +188,24 @@ async function renderAt(columns) {
       React,
       Box: Ink.Box,
       Text: Ink.Text,
-      messages: [{
-        id: "m-1",
-        role: "assistant",
-        status: "streaming",
-        text: "正在整理一份很长的周末旅行计划，内容会自动换行并保持输入区域稳定。",
-      }],
+      messages: [
+        {
+          id: "m-1",
+          role: "assistant",
+          status: "streaming",
+          text: "正在整理一份很长的周末旅行计划，内容会自动换行并保持输入区域稳定。",
+        },
+        {
+          id: "m-2",
+          role: "command",
+          status: "complete",
+          text: "",
+          title: "Updated files docs/plan.md",
+          detail: "update docs/plan.md · 128 bytes",
+          content: "- old line\n+ new line",
+          expanded: true,
+        },
+      ],
     }),
     React.createElement(ui.TranscriptPosition, {
       React,
@@ -257,6 +269,9 @@ async function main() {
     assert.match(plain, /Permission required/);
     assert.match(plain, /Ask kagent|帮我继续完善/);
     assert.match(plain, /保留第二行/);
+    assert.match(plain, /Updated files docs\/plan.md/);
+    assert.match(plain, /\+ new line/);
+    assert.doesNotMatch(plain, /apply_patch|workspace_diff/);
     const overflow = plain
       .split("\n")
       .map((line) => ({line, width: stringWidth(line)}))
@@ -508,6 +523,7 @@ def test_npm_ink_app_uses_raw_terminal_input_and_cooperative_ctrl_c():
     assert 'key.shift || key.meta || key.sequence === "\\n"' in app
     assert "runtime.steer" in app
     assert 'status === "thinking" && key.name === "escape"' in app
+    assert 'key.ctrl && key.name === "o"' in app
     assert "[React, transcript.nextId]" in app
     assert "showError(errorMessage(error));\n      showError(errorMessage(error));" not in app
     assert "exitOnCtrlC: false" in runner
@@ -1107,6 +1123,27 @@ const unicodeViewport = selectTranscriptViewport(unicodeState, {
   reservedRows: 1,
 });
 assert.equal(unicodeViewport.at(-1).id, "m-2");
+
+const resultAction = progressTranscriptAction({
+  type: "tool_completed",
+  presentation: {
+    title: "Created Rollout plan",
+    detail: "plan · markdown · 42 bytes",
+    content: "# Rollout\nShip carefully",
+  },
+});
+assert.deepEqual(resultAction, {
+  type: "result_completed",
+  title: "Created Rollout plan",
+  detail: "plan · markdown · 42 bytes",
+  content: "# Rollout\nShip carefully",
+});
+let resultState = transcriptReducer(createTranscriptState(), resultAction);
+assert.equal(resultState.entries[0].expanded, false);
+resultState = transcriptReducer(resultState, {type: "toggle_latest_result"});
+assert.equal(resultState.entries[0].expanded, true);
+resultState = transcriptReducer(resultState, {type: "toggle_latest_result"});
+assert.equal(resultState.entries[0].expanded, false);
 """
     subprocess.run([node, "-e", script], check=True)
 
@@ -1350,6 +1387,13 @@ inputEvents.emit("input", "\r");
 assert.equal(steered, "focus on the latest request");
 assert.equal(states[1].value, "");
 
+runHandler({
+  type: "run_progress",
+  event: {
+    type: "tool_completed",
+    presentation: {title: "Created Trip plan", detail: "plan · markdown"},
+  },
+});
 runHandler({type: "run_progress", event: {type: "answer_started"}});
 runHandler({type: "run_progress", event: {type: "answer_delta", delta: "你"}});
 runHandler({type: "run_progress", event: {type: "answer_delta", delta: "好"}});
@@ -1364,9 +1408,11 @@ runHandler({
 assert.equal(states[2].transcript.activeAssistantId, null);
 assert.deepEqual(states[2].transcript.entries.map((entry) => [entry.role, entry.text]), [
   ["user", "go"],
+  ["command", ""],
   ["assistant", "你好"],
 ]);
-assert.equal(states[2].transcript.entries[1].id, streamingId);
+assert.equal(states[2].transcript.entries[1].title, "Created Trip plan");
+assert.equal(states[2].transcript.entries[2].id, streamingId);
 
 inputCleanup();
 runtimeCleanup();

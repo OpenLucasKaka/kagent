@@ -110,6 +110,13 @@ function KagentInkApp({ React, Ink, runtimeSessionFactory = runtime_client_1.cre
             handleSetupInput(value, key);
             return;
         }
+        if (key.ctrl && key.name === "o") {
+            dispatchRuntime({
+                type: "transcript_action",
+                action: { type: "toggle_latest_result" },
+            });
+            return;
+        }
         if (key.name === "pageup" || key.name === "pagedown") {
             const pagingLayout = (0, ui_components_1.createTerminalLayout)(terminalSize.columns, terminalSize.rows, {
                 approval: approval !== null,

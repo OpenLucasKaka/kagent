@@ -73,7 +73,13 @@ function MessageList({ React, Box, Text, messages, }) {
     return React.createElement(Box, { flexDirection: "column" }, ...messages.map((message) => {
         const marker = message.role === "user" ? "›" : message.role === "assistant" ? "•" : message.role === "command" ? "·" : "!";
         const color = message.role === "user" ? "cyan" : message.role === "system" ? "red" : message.role === "command" ? "gray" : undefined;
-        return React.createElement(Box, { key: message.id, flexDirection: "row", marginBottom: 1 }, React.createElement(Text, { color, bold: message.role === "user" }, `${marker} `), React.createElement(Box, { flexDirection: "column", flexGrow: 1, flexShrink: 1 }, message.title ? React.createElement(Text, { bold: true, color }, message.title) : null, React.createElement(Text, { color, wrap: "wrap" }, message.text)));
+        return React.createElement(Box, { key: message.id, flexDirection: "row", marginBottom: 1 }, React.createElement(Text, { color, bold: message.role === "user" }, `${marker} `), React.createElement(Box, { flexDirection: "column", flexGrow: 1, flexShrink: 1 }, message.title ? React.createElement(Text, { bold: true, color }, message.title) : null, message.detail
+            ? React.createElement(Text, { color: "gray", wrap: "wrap" }, message.detail)
+            : null, message.text
+            ? React.createElement(Text, { color, wrap: "wrap" }, message.text)
+            : null, message.expanded && message.content
+            ? React.createElement(Text, { color: "gray", wrap: "wrap" }, message.content)
+            : null));
     }));
 }
 function TranscriptPosition({ React, Text, newerCount, }) {
