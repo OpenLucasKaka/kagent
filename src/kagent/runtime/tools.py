@@ -21,6 +21,7 @@ from kagent.providers.embeddings import (
     EmbeddingProviderConfig,
     OpenAICompatibleEmbeddingProvider,
 )
+from kagent.runtime.file_transaction import commit_text_changes, workspace_transaction
 from kagent.runtime.policy import RuntimePolicy
 from kagent.runtime.redaction import redact_runtime_payload
 from kagent.runtime.sandbox import run_shell_sandboxed
@@ -1769,6 +1770,18 @@ def execute_runtime_tool(
             completed_at=_utc_timestamp(),
             duration_seconds=_duration_since(started_timer),
         )
+    except Exception as exc:
+        return AgentObservation(
+            action_id=action_id,
+            tool=tool_name,
+            status="failed",
+            output={},
+            error_code="tool_execution_failed",
+            error=str(exc) or type(exc).__name__,
+            started_at=started_at,
+            completed_at=_utc_timestamp(),
+            duration_seconds=_duration_since(started_timer),
+        )
     try:
         _validate_tool_input(output, tool.output_schema, "output")
     except ValueError as exc:
@@ -2478,6 +2491,14 @@ def _apply_patch(input_payload: Dict[str, Any]) -> Dict[str, Any]:
         raise ValueError("patch must be a non-empty string")
     operations = _parse_workspace_patch(patch)
     workspace_root = Path.cwd().resolve()
+    with workspace_transaction(workspace_root):
+        return _stage_and_commit_workspace_patch(workspace_root, operations)
+
+
+def _stage_and_commit_workspace_patch(
+    workspace_root: Path,
+    operations: list[_PatchOperation],
+) -> Dict[str, Any]:
     staged_contents: dict[Path, str | None] = {}
     changed_files = []
 
@@ -2549,14 +2570,7 @@ def _apply_patch(input_payload: Dict[str, Any]) -> Dict[str, Any]:
             }
         )
 
-    for target, content in staged_contents.items():
-        if content is None:
-            if target.exists():
-                target.unlink()
-            continue
-        target.parent.mkdir(parents=True, exist_ok=True)
-        with target.open("w", encoding="utf-8", newline="") as handle:
-            handle.write(content)
+    commit_text_changes(workspace_root, staged_contents)
     return {"changed_files": changed_files, "file_count": len(changed_files)}
 
 

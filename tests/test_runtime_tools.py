@@ -3,6 +3,7 @@ import shlex
 import sys
 import time
 
+from kagent.runtime import file_transaction
 from kagent.runtime import tools as runtime_tools
 from kagent.runtime.policy import RuntimePolicy
 from kagent.runtime.tools import (
@@ -847,6 +848,148 @@ def test_apply_patch_tool_rejects_overwriting_existing_file(tmp_path, monkeypatc
     assert observation.error_code == "invalid_tool_input"
     assert "file already exists" in observation.error
     assert existing.read_text(encoding="utf-8") == "keep me\n"
+
+
+def test_apply_patch_tool_rolls_back_all_files_when_commit_fails(
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.chdir(tmp_path)
+    first = tmp_path / "first.md"
+    second = tmp_path / "second.md"
+    first.write_text("first old\n", encoding="utf-8")
+    second.write_text("second old\n", encoding="utf-8")
+    real_atomic_write = file_transaction._atomic_write_text
+    write_count = 0
+
+    def fail_second_write(target, content, *, mode=None):
+        nonlocal write_count
+        write_count += 1
+        if write_count == 2:
+            raise OSError("injected commit failure")
+        real_atomic_write(target, content, mode=mode)
+
+    monkeypatch.setattr(
+        file_transaction,
+        "_atomic_write_text",
+        fail_second_write,
+    )
+
+    observation = execute_runtime_tool(
+        default_runtime_tools(),
+        "apply_patch",
+        {
+            "patch": (
+                "*** Begin Patch\n"
+                "*** Update File: first.md\n"
+                "@@\n"
+                "-first old\n"
+                "+first new\n"
+                "*** Update File: second.md\n"
+                "@@\n"
+                "-second old\n"
+                "+second new\n"
+                "*** End Patch\n"
+            )
+        },
+        action_id="step-1",
+    )
+
+    assert observation.status == "failed"
+    assert observation.error_code == "tool_execution_failed"
+    assert "injected commit failure" in observation.error
+    assert first.read_text(encoding="utf-8") == "first old\n"
+    assert second.read_text(encoding="utf-8") == "second old\n"
+
+
+def test_apply_patch_tool_removes_created_directories_when_commit_fails(
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.chdir(tmp_path)
+    existing = tmp_path / "existing.md"
+    existing.write_text("old\n", encoding="utf-8")
+    real_atomic_write = file_transaction._atomic_write_text
+    write_count = 0
+
+    def fail_second_write(target, content, *, mode=None):
+        nonlocal write_count
+        write_count += 1
+        if write_count == 2:
+            raise OSError("injected commit failure")
+        real_atomic_write(target, content, mode=mode)
+
+    monkeypatch.setattr(
+        file_transaction,
+        "_atomic_write_text",
+        fail_second_write,
+    )
+
+    observation = execute_runtime_tool(
+        default_runtime_tools(),
+        "apply_patch",
+        {
+            "patch": (
+                "*** Begin Patch\n"
+                "*** Add File: generated/nested/new.md\n"
+                "+new\n"
+                "*** Update File: existing.md\n"
+                "@@\n"
+                "-old\n"
+                "+updated\n"
+                "*** End Patch\n"
+            )
+        },
+        action_id="step-1",
+    )
+
+    assert observation.status == "failed"
+    assert existing.read_text(encoding="utf-8") == "old\n"
+    assert not (tmp_path / "generated").exists()
+
+
+def test_apply_patch_tool_restores_deleted_file_when_later_commit_fails(
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.chdir(tmp_path)
+    deleted = tmp_path / "deleted.md"
+    updated = tmp_path / "updated.md"
+    deleted.write_text("restore me\n", encoding="utf-8")
+    updated.write_text("old\n", encoding="utf-8")
+    real_atomic_write = file_transaction._atomic_write_text
+
+    def fail_commit_write(target, content, *, mode=None):
+        if content == "updated\n":
+            raise OSError("injected commit failure")
+        real_atomic_write(target, content, mode=mode)
+
+    monkeypatch.setattr(
+        file_transaction,
+        "_atomic_write_text",
+        fail_commit_write,
+    )
+
+    observation = execute_runtime_tool(
+        default_runtime_tools(),
+        "apply_patch",
+        {
+            "patch": (
+                "*** Begin Patch\n"
+                "*** Delete File: deleted.md\n"
+                "*** Update File: updated.md\n"
+                "@@\n"
+                "-old\n"
+                "+updated\n"
+                "*** End Patch\n"
+            )
+        },
+        action_id="step-1",
+    )
+
+    assert observation.status == "failed"
+    assert deleted.read_text(encoding="utf-8") == "restore me\n"
+    assert updated.read_text(encoding="utf-8") == "old\n"
 
 
 def test_runtime_tool_times_out_slow_handler():
