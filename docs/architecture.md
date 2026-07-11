@@ -144,11 +144,15 @@ unmatched subjects fall back to the global or default policy.
 
 `runtime/agent.py` exposes the default Codex-style runtime through a compiled
 LangGraph `StateGraph` via `build_runtime_graph()`. The runtime graph has a
-small production shell: `prepare -> planner -> runtime_loop -> finalize -> END`.
+small production shell: `prepare -> planner -> runtime_loop -> finalize -> END`,
+with a conditional single-action path through
+`prepare_action -> mark_action_executing -> execute_action`.
 The first provider call and plan parse run in the checkpointable `planner` node;
 resuming after that boundary does not repeat the provider request. The
-`runtime_loop` node owns action authorization, execution, observations, and any
-later replanning required by failures or steering.
+directly allowed, dependency-free single actions run through explicit prepare,
+executing-marker, and execution checkpoints. The `runtime_loop` node owns
+approval/hook/dependency paths, multi-action plans, observations, and any later
+replanning required by failures or steering.
 This keeps the public runtime on explicit LangGraph phases while preserving the
 current loop semantics. Every runtime trace carries `trace_type: "codex_runtime"` and
 `runtime_engine: "langgraph"` so persisted status, listing, and resume flows can
@@ -164,16 +168,20 @@ binds `run_id` to `configurable.thread_id`. Known secret patterns are redacted
 before checkpoint writes and unsupported custom tool values are replaced with a
 typed placeholder instead of failing after a side effect. The low-level compiled
 graph can explicitly resume after the `planner` checkpoint without repeating the
-provider call. `run_runtime_agent()` still rejects an existing thread because
-implicit high-level resume is not yet safe. The current `runtime_loop` remains
-one graph node, so a checkpoint does not authorize automatic replay after a
-crash inside a tool; owner-loss recovery still treats that boundary as
-interrupted or, for approval-resumed actions, explicitly uncertain.
+provider call. A directly allowed single action is copied from an in-memory
+cache into an execution cache using random one-time tokens. The token is removed
+before tool execution; a fresh context resuming from the executing marker cannot
+prove whether the side effect started, so it returns
+`approval_execution_interrupted` and never replays the tool. Resuming after the
+completed execution checkpoint skips the tool. `run_runtime_agent()` still
+rejects an existing thread because implicit high-level resume is not yet safe.
+Approval, hook, dependency, multi-action, and later-replanning paths remain in
+one `runtime_loop` node and retain the conservative interrupted behavior.
 `runtime_topology()` exposes the same runtime graph shape for clients and
 operators, and `kagent --runtime --graph` prints that topology without requiring
 provider configuration or executing a user goal.
 Each runtime result also includes `graph_phases`, a compact timing list for the
-LangGraph shell nodes (`prepare`, `planner`, `runtime_loop`, and `finalize`). Planner,
+LangGraph shell nodes, including conditional action checkpoints. Planner,
 policy, executor, and tool observations remain in `events` and `observations`;
 `graph_phases` is reserved for graph-level timing so operators can separate
 LangGraph orchestration latency from agent-loop latency.

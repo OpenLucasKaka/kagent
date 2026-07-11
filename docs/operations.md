@@ -659,18 +659,21 @@ Use those schema names for generated clients, contract review, and downstream
 smoke tests.
 Use `GET /runtime/graph` to inspect the deployed LangGraph runtime topology and
 confirm the service is running the expected
-`prepare -> planner -> runtime_loop -> finalize`
+`prepare -> planner -> (single-action checkpoint path) -> runtime_loop -> finalize`
 graph shell. Use `GET /runtime/tools` to inspect Codex-style runtime tool names,
 descriptions, `input_schema`, `output_schema`, and `timeout_seconds` values
 before generating or validating plans.
 Runtime run detail responses include `graph_phase_count`; the expected value is
-`4` for the current graph shell. If it is missing or lower than expected, inspect
+at least `4` for the base graph shell. A directly allowed single action adds
+`prepare_action`, `mark_action_executing`, and `execute_action`, producing `7`
+phases. If the count is missing or lower than expected, inspect
 the full trace for graph startup/finalization failures before debugging planner
 or tool behavior. The `/runtime/runs/summary` endpoint aggregates
 `graph_phase_count` across the filtered fleet, which is useful for checking
 whether new graph-phase instrumentation is present across recent internal runs.
 It also returns `graph_phase_node_counts` so operators can compare
-`prepare`, `planner`, `runtime_loop`, and `finalize` coverage directly and identify which
+`prepare`, `planner`, action-checkpoint, `runtime_loop`, and `finalize` coverage
+directly and identify which
 phase is missing from incomplete traces.
 Set `KAGENT_SERVICE_RUNTIME_ALLOWED_TOOLS` to a comma-separated
 allowlist when a deployment should execute only selected runtime tools without

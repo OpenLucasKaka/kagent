@@ -98,7 +98,15 @@ assert "note" in tool_names, tools
 graph_status, graph = request_json("/runtime/graph")
 assert_status(graph_status, 200, graph, "runtime graph")
 assert graph["runtime_engine"] == "langgraph", graph
-assert graph["nodes"] == ["prepare", "planner", "runtime_loop", "finalize"], graph
+assert graph["nodes"] == [
+    "prepare",
+    "planner",
+    "prepare_action",
+    "mark_action_executing",
+    "execute_action",
+    "runtime_loop",
+    "finalize",
+], graph
 
 policy_status, policy = request_json("/runtime/policy")
 assert_status(policy_status, 200, policy, "runtime policy")

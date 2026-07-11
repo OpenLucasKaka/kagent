@@ -370,10 +370,21 @@ def test_service_runtime_graph_endpoint_reports_topology():
     assert status_code == 200
     assert payload["runtime_engine"] == "langgraph"
     assert payload["entry_point"] == "prepare"
-    assert payload["nodes"] == ["prepare", "planner", "runtime_loop", "finalize"]
+    assert payload["nodes"] == [
+        "prepare",
+        "planner",
+        "prepare_action",
+        "mark_action_executing",
+        "execute_action",
+        "runtime_loop",
+        "finalize",
+    ]
     assert payload["edges"] == [
         "prepare -> planner",
-        "planner -> runtime_loop",
+        "planner -> prepare_action | runtime_loop",
+        "prepare_action -> mark_action_executing | runtime_loop",
+        "mark_action_executing -> execute_action | runtime_loop",
+        "execute_action -> runtime_loop",
         "runtime_loop -> finalize",
         "finalize -> END",
     ]

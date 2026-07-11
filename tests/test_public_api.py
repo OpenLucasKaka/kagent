@@ -32,16 +32,28 @@ def test_public_api_exports_runtime_topology():
         "runtime_engine": "langgraph",
         "entry_point": "prepare",
         "terminal": "END",
-        "nodes": ["prepare", "planner", "runtime_loop", "finalize"],
+        "nodes": [
+            "prepare",
+            "planner",
+            "prepare_action",
+            "mark_action_executing",
+            "execute_action",
+            "runtime_loop",
+            "finalize",
+        ],
         "edges": [
             "prepare -> planner",
-            "planner -> runtime_loop",
+            "planner -> prepare_action | runtime_loop",
+            "prepare_action -> mark_action_executing | runtime_loop",
+            "mark_action_executing -> execute_action | runtime_loop",
+            "execute_action -> runtime_loop",
             "runtime_loop -> finalize",
             "finalize -> END",
         ],
         "loop": (
-            "planner checkpoints the first plan; runtime_loop handles bounded "
-            "policy-executor iterations and replanning"
+            "planner checkpoints the first plan; directly allowed single actions "
+            "use action checkpoints; runtime_loop handles remaining execution and "
+            "replanning"
         ),
         "runtime_loop_nodes": [
             "planner",
@@ -56,7 +68,10 @@ def test_public_api_exports_runtime_topology():
             "provider_and_memory_context",
             "langgraph_prepare",
             "langgraph_planner",
+            "langgraph_prepare_action",
             "policy",
+            "langgraph_mark_action_executing",
+            "langgraph_execute_action",
             "executor",
             "observation",
             "replan_or_finish",

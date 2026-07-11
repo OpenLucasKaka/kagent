@@ -268,6 +268,46 @@ def test_planner_checkpoint_keeps_sensitive_input_out_of_state_without_corruptio
     assert resumed["result"]["status"] == "done"
     assert executed_values == ["checkpoint-secret"]
     assert context.get("planner_plan_cache") == {}
+    assert context.get("prepared_action_cache") == {}
+    assert context.get("executing_action_cache") == {}
+
+    fresh_checkpointer = InMemorySaver()
+    fresh_graph = build_runtime_graph(
+        checkpointer=fresh_checkpointer,
+        interrupt_after=["prepare_action"],
+    )
+    fresh_config = {
+        "configurable": {"thread_id": "sensitive-action-prepare-fresh-run"}
+    }
+    fresh_state = {
+        **state,
+        "run_id": "sensitive-action-prepare-fresh-run",
+    }
+    fresh_context = {
+        "goal": "consume value",
+        "provider": provider,
+        "tools": tools,
+        "policy": RuntimePolicy(allowed_tools={"sensitive"}),
+    }
+    fresh_graph.invoke(fresh_state, config=fresh_config, context=fresh_context)
+
+    fresh_resumed = fresh_graph.invoke(
+        None,
+        config=fresh_config,
+        context={
+            "goal": "consume value",
+            "provider": provider,
+            "tools": tools,
+            "policy": RuntimePolicy(allowed_tools={"sensitive"}),
+        },
+    )
+
+    assert fresh_resumed["result"]["status"] == "failed"
+    assert fresh_resumed["result"]["error_code"] == (
+        "planner_checkpoint_sensitive_input"
+    )
+    assert executed_values == ["checkpoint-secret"]
+    assert context.get("planner_plan_cache") == {}
 
 
 def test_planner_checkpoint_refuses_sensitive_resume_without_original_plan_cache():
@@ -352,6 +392,474 @@ def test_runtime_rejects_invalid_iteration_budget_before_provider_or_hooks():
     assert calls == []
 
 
+def test_single_action_resume_after_execute_checkpoint_does_not_replay_tool():
+    executions = []
+    tools = {
+        "counter": RuntimeToolSpec(
+            name="counter",
+            description="count execution",
+            handler=lambda payload: (
+                executions.append(payload["value"])
+                or {"count": len(executions)}
+            ),
+            input_schema={"type": "object"},
+            output_schema={"type": "object"},
+        )
+    }
+    provider = FakeLLMProvider(
+        '{"actions":[{"id":"step-1","tool":"counter",'
+        '"input":{"value":"once"},"reason":"count"}],'
+        '"final_answer":"done"}'
+    )
+    checkpointer = InMemorySaver()
+    graph = build_runtime_graph(
+        checkpointer=checkpointer,
+        interrupt_after=["execute_action"],
+    )
+    config = {"configurable": {"thread_id": "action-completed-run"}}
+    state = {
+        "goal": "execute once",
+        "run_id": "action-completed-run",
+        "max_iterations": 1,
+        "approved_action_ids": [],
+        "metadata": {},
+        "tags": [],
+    }
+    context = {
+        "goal": "execute once",
+        "provider": provider,
+        "tools": tools,
+        "policy": RuntimePolicy(allowed_tools={"counter"}),
+    }
+
+    graph.invoke(state, config=config, context=context)
+
+    assert graph.get_state(config).next == ("runtime_loop",)
+    assert executions == ["once"]
+
+    resumed = graph.invoke(None, config=config, context=context)
+
+    assert resumed["result"]["status"] == "done"
+    assert executions == ["once"]
+
+
+def test_single_action_same_context_resume_after_execution_marker_runs_once():
+    executions = []
+    tools = {
+        "counter": RuntimeToolSpec(
+            name="counter",
+            description="count execution",
+            handler=lambda payload: (
+                executions.append(payload["value"])
+                or {"count": len(executions)}
+            ),
+            input_schema={"type": "object"},
+            output_schema={"type": "object"},
+        )
+    }
+    provider = FakeLLMProvider(
+        '{"actions":[{"id":"step-1","tool":"counter",'
+        '"input":{"value":"once"},"reason":"count"}],'
+        '"final_answer":"done"}'
+    )
+    checkpointer = InMemorySaver()
+    graph = build_runtime_graph(
+        checkpointer=checkpointer,
+        interrupt_after=["mark_action_executing"],
+    )
+    config = {"configurable": {"thread_id": "action-marked-run"}}
+    state = {
+        "goal": "execute once",
+        "run_id": "action-marked-run",
+        "max_iterations": 1,
+        "approved_action_ids": [],
+        "metadata": {},
+        "tags": [],
+    }
+    context = {
+        "goal": "execute once",
+        "provider": provider,
+        "tools": tools,
+        "policy": RuntimePolicy(allowed_tools={"counter"}),
+    }
+
+    graph.invoke(state, config=config, context=context)
+
+    assert graph.get_state(config).next == ("execute_action",)
+    assert executions == []
+
+    resumed = graph.invoke(None, config=config, context=context)
+
+    assert resumed["result"]["status"] == "done"
+    assert executions == ["once"]
+
+
+def test_single_action_cancelled_after_execution_marker_does_not_run_tool():
+    executions = []
+    cancellation = RuntimeCancellationToken()
+    tools = {
+        "counter": RuntimeToolSpec(
+            name="counter",
+            description="count execution",
+            handler=lambda payload: (
+                executions.append(payload["value"])
+                or {"count": len(executions)}
+            ),
+            input_schema={"type": "object"},
+            output_schema={"type": "object"},
+        )
+    }
+    provider = FakeLLMProvider(
+        '{"actions":[{"id":"step-1","tool":"counter",'
+        '"input":{"value":"cancelled"},"reason":"count"}],'
+        '"final_answer":"done"}'
+    )
+    checkpointer = InMemorySaver()
+    graph = build_runtime_graph(
+        checkpointer=checkpointer,
+        interrupt_after=["mark_action_executing"],
+    )
+    config = {"configurable": {"thread_id": "action-cancelled-run"}}
+    state = {
+        "goal": "execute unless cancelled",
+        "run_id": "action-cancelled-run",
+        "max_iterations": 1,
+        "approved_action_ids": [],
+        "metadata": {},
+        "tags": [],
+    }
+    context = {
+        "goal": "execute unless cancelled",
+        "provider": provider,
+        "tools": tools,
+        "policy": RuntimePolicy(allowed_tools={"counter"}),
+        "cancellation_token": cancellation,
+    }
+
+    graph.invoke(state, config=config, context=context)
+    cancellation.cancel("operator cancelled before execution")
+    resumed = graph.invoke(None, config=config, context=context)
+
+    assert resumed["result"]["status"] == "cancelled"
+    assert resumed["result"]["error_code"] == "run_cancelled"
+    assert executions == []
+    assert context.get("planner_plan_cache") == {}
+    assert context.get("prepared_action_cache") == {}
+    assert context.get("executing_action_cache") == {}
+
+
+def test_single_action_pending_steering_after_planner_replans_before_tool():
+    executions = []
+    steering = RuntimeSteeringBuffer()
+
+    class SteeringProvider:
+        def __init__(self):
+            self.calls = []
+
+        def complete(self, _system, user):
+            self.calls.append(user)
+            if len(self.calls) == 1:
+                steering.submit("Do not run the tool; answer directly")
+                return (
+                    '{"actions":[{"id":"step-1","tool":"counter",'
+                    '"input":{"value":"obsolete"},"reason":"count"}],'
+                    '"final_answer":"old answer"}'
+                )
+            assert "Do not run the tool; answer directly" in user
+            return '{"actions":[],"final_answer":"updated answer"}'
+
+    result = run_runtime_agent(
+        "draft an answer",
+        provider=SteeringProvider(),
+        steering_buffer=steering,
+        tools={
+            "counter": RuntimeToolSpec(
+                name="counter",
+                description="count execution",
+                handler=lambda payload: executions.append(payload["value"]) or {},
+                input_schema={"type": "object"},
+                output_schema={"type": "object"},
+            )
+        },
+        policy=RuntimePolicy(allowed_tools={"counter"}),
+        max_iterations=1,
+    )
+
+    assert result["status"] == "done"
+    assert result["answer"] == "updated answer"
+    assert executions == []
+
+
+def test_single_action_steered_after_execution_marker_does_not_run_tool():
+    executions = []
+    steering = RuntimeSteeringBuffer()
+
+    class SteeringProvider:
+        def __init__(self):
+            self.calls = []
+
+        def complete(self, _system, user):
+            self.calls.append(user)
+            if len(self.calls) == 1:
+                return (
+                    '{"actions":[{"id":"step-1","tool":"counter",'
+                    '"input":{"value":"obsolete"},"reason":"count"}],'
+                    '"final_answer":"old answer"}'
+                )
+            assert "Use the updated answer without running the tool" in user
+            return '{"actions":[],"final_answer":"updated answer"}'
+
+    provider = SteeringProvider()
+    checkpointer = InMemorySaver()
+    graph = build_runtime_graph(
+        checkpointer=checkpointer,
+        interrupt_after=["mark_action_executing"],
+    )
+    config = {"configurable": {"thread_id": "action-steered-run"}}
+    state = {
+        "goal": "draft an answer",
+        "run_id": "action-steered-run",
+        "max_iterations": 1,
+        "approved_action_ids": [],
+        "metadata": {},
+        "tags": [],
+    }
+    context = {
+        "goal": "draft an answer",
+        "provider": provider,
+        "tools": {
+            "counter": RuntimeToolSpec(
+                name="counter",
+                description="count execution",
+                handler=lambda payload: executions.append(payload["value"]) or {},
+                input_schema={"type": "object"},
+                output_schema={"type": "object"},
+            )
+        },
+        "policy": RuntimePolicy(allowed_tools={"counter"}),
+        "steering_buffer": steering,
+    }
+
+    graph.invoke(state, config=config, context=context)
+    steering.submit("Use the updated answer without running the tool")
+    resumed = graph.invoke(None, config=config, context=context)
+
+    assert resumed["result"]["status"] == "done"
+    assert resumed["result"]["answer"] == "updated answer"
+    assert executions == []
+    assert context.get("planner_plan_cache") == {}
+    assert context.get("prepared_action_cache") == {}
+    assert context.get("executing_action_cache") == {}
+
+
+def test_single_action_steering_during_tool_preserves_observation_for_replan():
+    steering = RuntimeSteeringBuffer()
+    executions = []
+
+    class SteeringProvider:
+        def __init__(self):
+            self.calls = []
+
+        def complete(self, _system, user):
+            self.calls.append(user)
+            if len(self.calls) == 1:
+                return (
+                    '{"actions":[{"id":"step-1","tool":"counter",'
+                    '"input":{"value":"executed"},"reason":"count"}],'
+                    '"final_answer":"old answer"}'
+                )
+            assert "Use the completed tool result" in user
+            assert '"count": 1' in user
+            return '{"actions":[],"final_answer":"updated answer"}'
+
+    def execute(payload):
+        executions.append(payload["value"])
+        steering.submit("Use the completed tool result")
+        return {"count": len(executions)}
+
+    result = run_runtime_agent(
+        "run and summarize",
+        provider=SteeringProvider(),
+        steering_buffer=steering,
+        tools={
+            "counter": RuntimeToolSpec(
+                name="counter",
+                description="count execution",
+                handler=execute,
+                input_schema={"type": "object"},
+                output_schema={"type": "object"},
+            )
+        },
+        policy=RuntimePolicy(allowed_tools={"counter"}),
+        max_iterations=1,
+    )
+
+    assert result["status"] == "done"
+    assert result["answer"] == "updated answer"
+    assert result["observations"][0]["output"] == {"count": 1}
+    assert executions == ["executed"]
+
+
+def test_single_action_cancellation_during_tool_preserves_observation():
+    cancellation = RuntimeCancellationToken()
+    executions = []
+
+    def execute(payload):
+        executions.append(payload["value"])
+        cancellation.cancel("operator cancelled during execution")
+        return {"count": len(executions)}
+
+    result = run_runtime_agent(
+        "run unless cancelled",
+        provider=FakeLLMProvider(
+            '{"actions":[{"id":"step-1","tool":"counter",'
+            '"input":{"value":"executed"},"reason":"count"}],'
+            '"final_answer":"done"}'
+        ),
+        cancellation_token=cancellation,
+        tools={
+            "counter": RuntimeToolSpec(
+                name="counter",
+                description="count execution",
+                handler=execute,
+                input_schema={"type": "object"},
+                output_schema={"type": "object"},
+            )
+        },
+        policy=RuntimePolicy(allowed_tools={"counter"}),
+        max_iterations=1,
+    )
+
+    assert result["status"] == "cancelled"
+    assert result["error_code"] == "run_cancelled"
+    assert result["observations"][0]["output"] == {"count": 1}
+    assert executions == ["executed"]
+
+
+def test_single_action_fresh_context_after_execution_marker_is_uncertain():
+    executions = []
+    tools = {
+        "counter": RuntimeToolSpec(
+            name="counter",
+            description="count execution",
+            handler=lambda payload: (
+                executions.append(payload["value"])
+                or {"count": len(executions)}
+            ),
+            input_schema={"type": "object"},
+            output_schema={"type": "object"},
+        )
+    }
+    provider = FakeLLMProvider(
+        '{"actions":[{"id":"step-1","tool":"counter",'
+        '"input":{"value":"once"},"reason":"count"}],'
+        '"final_answer":"done"}'
+    )
+    checkpointer = InMemorySaver()
+    graph = build_runtime_graph(
+        checkpointer=checkpointer,
+        interrupt_after=["mark_action_executing"],
+    )
+    config = {"configurable": {"thread_id": "action-uncertain-run"}}
+    state = {
+        "goal": "execute once",
+        "run_id": "action-uncertain-run",
+        "max_iterations": 1,
+        "approved_action_ids": [],
+        "metadata": {},
+        "tags": [],
+    }
+    graph.invoke(
+        state,
+        config=config,
+        context={
+            "goal": "execute once",
+            "provider": provider,
+            "tools": tools,
+            "policy": RuntimePolicy(allowed_tools={"counter"}),
+        },
+    )
+
+    resumed = graph.invoke(
+        None,
+        config=config,
+        context={
+            "goal": "execute once",
+            "provider": provider,
+            "tools": tools,
+            "policy": RuntimePolicy(allowed_tools={"counter"}),
+        },
+    )
+
+    assert resumed["result"]["status"] == "failed"
+    assert resumed["result"]["error_code"] == "approval_execution_interrupted"
+    assert resumed["result"]["events"][-1]["node"] == "executor"
+    assert resumed["result"]["events"][-1]["error_code"] == (
+        "approval_execution_interrupted"
+    )
+    assert resumed["result"]["progress_events"][-2]["type"] == "tool_completed"
+    assert resumed["result"]["progress_events"][-2]["error_code"] == (
+        "approval_execution_interrupted"
+    )
+    assert executions == []
+
+
+def test_sensitive_single_action_prepare_checkpoint_is_redacted_and_resumable():
+    executed_values = []
+    tools = {
+        "sensitive": RuntimeToolSpec(
+            name="sensitive",
+            description="consume sensitive input",
+            handler=lambda payload: (
+                executed_values.append(payload["api_key"])
+                or {"accepted": True}
+            ),
+            input_schema={"type": "object"},
+            output_schema={"type": "object"},
+        )
+    }
+    provider = FakeLLMProvider(
+        '{"actions":[{"id":"step-1","tool":"sensitive",'
+        '"input":{"api_key":"checkpoint-secret"},"reason":"consume"}],'
+        '"final_answer":"done"}'
+    )
+    checkpointer = InMemorySaver()
+    graph = build_runtime_graph(
+        checkpointer=checkpointer,
+        interrupt_after=["prepare_action"],
+    )
+    config = {"configurable": {"thread_id": "sensitive-action-prepare-run"}}
+    state = {
+        "goal": "consume value",
+        "run_id": "sensitive-action-prepare-run",
+        "max_iterations": 1,
+        "approved_action_ids": [],
+        "metadata": {},
+        "tags": [],
+    }
+    context = {
+        "goal": "consume value",
+        "provider": provider,
+        "tools": tools,
+        "policy": RuntimePolicy(allowed_tools={"sensitive"}),
+    }
+
+    graph.invoke(state, config=config, context=context)
+
+    assert graph.get_state(config).next == ("mark_action_executing",)
+    for checkpoint_tuple in checkpointer.list(config):
+        serialized = json.dumps(
+            checkpoint_tuple.checkpoint["channel_values"],
+            default=str,
+        )
+        assert "checkpoint-secret" not in serialized
+
+    resumed = graph.invoke(None, config=config, context=context)
+
+    assert resumed["result"]["status"] == "done"
+    assert executed_values == ["checkpoint-secret"]
+
+
 def test_runtime_steering_replans_with_latest_user_instruction():
     steering = RuntimeSteeringBuffer()
 
@@ -406,16 +914,28 @@ def test_runtime_topology_exposes_production_graph_phases():
         "runtime_engine": "langgraph",
         "entry_point": "prepare",
         "terminal": "END",
-        "nodes": ["prepare", "planner", "runtime_loop", "finalize"],
+        "nodes": [
+            "prepare",
+            "planner",
+            "prepare_action",
+            "mark_action_executing",
+            "execute_action",
+            "runtime_loop",
+            "finalize",
+        ],
         "edges": [
             "prepare -> planner",
-            "planner -> runtime_loop",
+            "planner -> prepare_action | runtime_loop",
+            "prepare_action -> mark_action_executing | runtime_loop",
+            "mark_action_executing -> execute_action | runtime_loop",
+            "execute_action -> runtime_loop",
             "runtime_loop -> finalize",
             "finalize -> END",
         ],
         "loop": (
-            "planner checkpoints the first plan; runtime_loop handles bounded "
-            "policy-executor iterations and replanning"
+            "planner checkpoints the first plan; directly allowed single actions "
+            "use action checkpoints; runtime_loop handles remaining execution and "
+            "replanning"
         ),
         "runtime_loop_nodes": [
             "planner",
@@ -430,7 +950,10 @@ def test_runtime_topology_exposes_production_graph_phases():
             "provider_and_memory_context",
             "langgraph_prepare",
             "langgraph_planner",
+            "langgraph_prepare_action",
             "policy",
+            "langgraph_mark_action_executing",
+            "langgraph_execute_action",
             "executor",
             "observation",
             "replan_or_finish",
@@ -448,7 +971,10 @@ def test_runtime_topology_explains_user_goal_execution_flow():
         "provider_and_memory_context",
         "langgraph_prepare",
         "langgraph_planner",
+        "langgraph_prepare_action",
         "policy",
+        "langgraph_mark_action_executing",
+        "langgraph_execute_action",
         "executor",
         "observation",
         "replan_or_finish",
@@ -476,6 +1002,9 @@ def test_runtime_agent_result_includes_graph_phase_timings():
     assert [phase["node"] for phase in result["graph_phases"]] == [
         "prepare",
         "planner",
+        "prepare_action",
+        "mark_action_executing",
+        "execute_action",
         "runtime_loop",
         "finalize",
     ]
