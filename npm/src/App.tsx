@@ -45,6 +45,13 @@ import {
   type TerminalInputHandler,
   type TerminalKey,
 } from "./terminal-input";
+import {
+  createTranscriptState,
+  progressTranscriptAction,
+  selectTranscriptViewport,
+  transcriptReducer,
+  type TranscriptEntry,
+} from "./transcript";
 
 type InkApi = {
   Box: ReactNamespace.ElementType;
@@ -65,12 +72,6 @@ type AppProps = {
   runtimeSessionFactory?: typeof createRuntimeSessionClient;
 };
 
-type Message = {
-  role: "user" | "assistant" | "command" | "system";
-  text: string;
-  title?: string;
-};
-
 type Status = "starting" | "idle" | "thinking" | "approval" | "error";
 
 const FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
@@ -85,7 +86,7 @@ export function KagentInkApp({
   const { internal_eventEmitter: inputEvents, setRawMode } = Ink.useStdin();
   const [runtime] = React.useState<RuntimeSessionClient>(() => runtimeSessionFactory());
   const [editor, setEditor] = React.useState<EditorState>(createEditorState);
-  const [messages, setMessages] = React.useState<Message[]>([]);
+  const [transcript, setTranscript] = React.useState(createTranscriptState);
   const [status, setStatus] = React.useState<Status>("starting");
   const [statusText, setStatusText] = React.useState("");
   const [frame, setFrame] = React.useState(0);
@@ -356,7 +357,9 @@ export function KagentInkApp({
       app.exit();
       return;
     }
-    setMessages((current) => current.concat({ role: "user", text: goal }));
+    setTranscript((current) =>
+      transcriptReducer(current, { type: "user_submitted", text: goal }),
+    );
     setEditor(submission.state);
     setSelectedCommand(null);
     setStatus("thinking");
@@ -373,12 +376,14 @@ export function KagentInkApp({
     if (event.type === "session_command_completed") {
       setStatus("idle");
       setStatusText("");
-      const message: Message = {
-        role: "command",
-        title: event.title,
-        text: event.message,
-      };
-      setMessages((current) => (event.clear_messages ? [message] : current.concat(message)));
+      setTranscript((current) =>
+        transcriptReducer(current, {
+          type: "command_completed",
+          title: event.title,
+          text: event.message,
+          clear: event.clear_messages,
+        }),
+      );
       return;
     }
     if (event.type === "session_command_failed" || event.type === "client_failed") {
@@ -418,6 +423,10 @@ export function KagentInkApp({
     }
     if (event.type === "run_progress") {
       setStatusText(progressLabel(event.event));
+      const action = progressTranscriptAction(event.event);
+      if (action) {
+        setTranscript((current) => transcriptReducer(current, action));
+      }
       return;
     }
     if (event.type === "approval_required") {
@@ -431,8 +440,12 @@ export function KagentInkApp({
       setStatus("idle");
       setStatusText("");
       const fallback = event.status === "cancelled" ? "Action cancelled." : "Done.";
-      setMessages((current) =>
-        current.concat({ role: "assistant", text: event.answer || fallback }),
+      setTranscript((current) =>
+        transcriptReducer(current, {
+          type: "assistant_completed",
+          text: event.answer || fallback,
+          outcome: event.status === "cancelled" ? "cancelled" : "complete",
+        }),
       );
       return;
     }
@@ -446,7 +459,9 @@ export function KagentInkApp({
   function showError(message: string): void {
     setStatus("error");
     setStatusText("");
-    setMessages((current) => current.concat({ role: "system", text: message }));
+    setTranscript((current) =>
+      transcriptReducer(current, { type: "error", text: message }),
+    );
   }
 
   if (setup) {
@@ -464,11 +479,17 @@ export function KagentInkApp({
     );
   }
 
+  const visibleTranscript = selectTranscriptViewport(transcript.entries, {
+    columns: process.stdout.columns || 80,
+    rows: process.stdout.rows || 24,
+    reservedRows: 6 + (approval ? 6 : 0) + (commandMenu ? 7 : 0),
+  });
+
   return React.createElement(
     Box,
     { flexDirection: "column", paddingX: 1 },
     React.createElement(Header, { React, Box, Text, provider, setup: false }),
-    React.createElement(MessageList, { React, Box, Text, messages }),
+    React.createElement(MessageList, { React, Box, Text, messages: visibleTranscript }),
     approval
       ? React.createElement(ApprovalPanel, {
           React,
@@ -612,12 +633,16 @@ function setupField(setup: ProviderSetupState): {
   };
 }
 
-function MessageList({ React, Box, Text, messages }: RenderProps & { messages: Message[] }) {
-  const recent = messages.slice(-10);
+function MessageList({
+  React,
+  Box,
+  Text,
+  messages,
+}: RenderProps & { messages: TranscriptEntry[] }) {
   return React.createElement(
     Box,
     { flexDirection: "column" },
-    ...recent.map((message, index) => {
+    ...messages.map((message) => {
       const marker =
         message.role === "user"
           ? "›"
@@ -636,7 +661,7 @@ function MessageList({ React, Box, Text, messages }: RenderProps & { messages: M
               : undefined;
       return React.createElement(
         Box,
-        { key: `${message.role}-${index}`, flexDirection: "row", marginBottom: 1 },
+        { key: message.id, flexDirection: "row", marginBottom: 1 },
         React.createElement(Text, { color, bold: message.role === "user" }, `${marker} `),
         React.createElement(
           Box,

@@ -7,6 +7,7 @@ const editor_1 = require("./editor");
 const runtime_client_1 = require("./runtime-client");
 const provider_setup_1 = require("./provider-setup");
 const terminal_input_1 = require("./terminal-input");
+const transcript_1 = require("./transcript");
 const FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 function KagentInkApp({ React, Ink, runtimeSessionFactory = runtime_client_1.createRuntimeSessionClient, }) {
     const { Box, Text } = Ink;
@@ -14,7 +15,7 @@ function KagentInkApp({ React, Ink, runtimeSessionFactory = runtime_client_1.cre
     const { internal_eventEmitter: inputEvents, setRawMode } = Ink.useStdin();
     const [runtime] = React.useState(() => runtimeSessionFactory());
     const [editor, setEditor] = React.useState(editor_1.createEditorState);
-    const [messages, setMessages] = React.useState([]);
+    const [transcript, setTranscript] = React.useState(transcript_1.createTranscriptState);
     const [status, setStatus] = React.useState("starting");
     const [statusText, setStatusText] = React.useState("");
     const [frame, setFrame] = React.useState(0);
@@ -272,7 +273,7 @@ function KagentInkApp({ React, Ink, runtimeSessionFactory = runtime_client_1.cre
             app.exit();
             return;
         }
-        setMessages((current) => current.concat({ role: "user", text: goal }));
+        setTranscript((current) => (0, transcript_1.transcriptReducer)(current, { type: "user_submitted", text: goal }));
         setEditor(submission.state);
         setSelectedCommand(null);
         setStatus("thinking");
@@ -288,12 +289,12 @@ function KagentInkApp({ React, Ink, runtimeSessionFactory = runtime_client_1.cre
         if (event.type === "session_command_completed") {
             setStatus("idle");
             setStatusText("");
-            const message = {
-                role: "command",
+            setTranscript((current) => (0, transcript_1.transcriptReducer)(current, {
+                type: "command_completed",
                 title: event.title,
                 text: event.message,
-            };
-            setMessages((current) => (event.clear_messages ? [message] : current.concat(message)));
+                clear: event.clear_messages,
+            }));
             return;
         }
         if (event.type === "session_command_failed" || event.type === "client_failed") {
@@ -332,6 +333,10 @@ function KagentInkApp({ React, Ink, runtimeSessionFactory = runtime_client_1.cre
         }
         if (event.type === "run_progress") {
             setStatusText(progressLabel(event.event));
+            const action = (0, transcript_1.progressTranscriptAction)(event.event);
+            if (action) {
+                setTranscript((current) => (0, transcript_1.transcriptReducer)(current, action));
+            }
             return;
         }
         if (event.type === "approval_required") {
@@ -345,7 +350,11 @@ function KagentInkApp({ React, Ink, runtimeSessionFactory = runtime_client_1.cre
             setStatus("idle");
             setStatusText("");
             const fallback = event.status === "cancelled" ? "Action cancelled." : "Done.";
-            setMessages((current) => current.concat({ role: "assistant", text: event.answer || fallback }));
+            setTranscript((current) => (0, transcript_1.transcriptReducer)(current, {
+                type: "assistant_completed",
+                text: event.answer || fallback,
+                outcome: event.status === "cancelled" ? "cancelled" : "complete",
+            }));
             return;
         }
         if (event.type === "run_failed" || event.type === "client_failed") {
@@ -357,7 +366,7 @@ function KagentInkApp({ React, Ink, runtimeSessionFactory = runtime_client_1.cre
     function showError(message) {
         setStatus("error");
         setStatusText("");
-        setMessages((current) => current.concat({ role: "system", text: message }));
+        setTranscript((current) => (0, transcript_1.transcriptReducer)(current, { type: "error", text: message }));
     }
     if (setup) {
         return React.createElement(Box, { flexDirection: "column", paddingX: 1 }, React.createElement(Header, { React, Box, Text, provider: null, setup: true }), React.createElement(ProviderSetupPanel, {
@@ -368,7 +377,12 @@ function KagentInkApp({ React, Ink, runtimeSessionFactory = runtime_client_1.cre
             setup,
         }));
     }
-    return React.createElement(Box, { flexDirection: "column", paddingX: 1 }, React.createElement(Header, { React, Box, Text, provider, setup: false }), React.createElement(MessageList, { React, Box, Text, messages }), approval
+    const visibleTranscript = (0, transcript_1.selectTranscriptViewport)(transcript.entries, {
+        columns: process.stdout.columns || 80,
+        rows: process.stdout.rows || 24,
+        reservedRows: 6 + (approval ? 6 : 0) + (commandMenu ? 7 : 0),
+    });
+    return React.createElement(Box, { flexDirection: "column", paddingX: 1 }, React.createElement(Header, { React, Box, Text, provider, setup: false }), React.createElement(MessageList, { React, Box, Text, messages: visibleTranscript }), approval
         ? React.createElement(ApprovalPanel, {
             React,
             Box,
@@ -441,9 +455,8 @@ function setupField(setup) {
         placeholder: required ? "Paste API key" : "Leave empty for local providers",
     };
 }
-function MessageList({ React, Box, Text, messages }) {
-    const recent = messages.slice(-10);
-    return React.createElement(Box, { flexDirection: "column" }, ...recent.map((message, index) => {
+function MessageList({ React, Box, Text, messages, }) {
+    return React.createElement(Box, { flexDirection: "column" }, ...messages.map((message) => {
         const marker = message.role === "user"
             ? "›"
             : message.role === "assistant"
@@ -458,7 +471,7 @@ function MessageList({ React, Box, Text, messages }) {
                 : message.role === "command"
                     ? "gray"
                     : undefined;
-        return React.createElement(Box, { key: `${message.role}-${index}`, flexDirection: "row", marginBottom: 1 }, React.createElement(Text, { color, bold: message.role === "user" }, `${marker} `), React.createElement(Box, { flexDirection: "column", flexGrow: 1 }, message.title
+        return React.createElement(Box, { key: message.id, flexDirection: "row", marginBottom: 1 }, React.createElement(Text, { color, bold: message.role === "user" }, `${marker} `), React.createElement(Box, { flexDirection: "column", flexGrow: 1 }, message.title
             ? React.createElement(Text, { bold: true, color }, message.title)
             : null, React.createElement(Text, { color, wrap: "wrap" }, message.text)));
     }));

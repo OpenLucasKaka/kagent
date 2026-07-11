@@ -663,6 +663,191 @@ runtimeCleanup();
     subprocess.run([node, "-e", script], check=True)
 
 
+def test_npm_transcript_reducer_streams_without_duplicates_and_bounds_viewport():
+    node = shutil.which("node")
+    if node is None:
+        return
+
+    script = r"""
+const assert = require("node:assert/strict");
+const {
+  createTranscriptState,
+  progressTranscriptAction,
+  selectTranscriptViewport,
+  transcriptReducer,
+} = require("./npm/lib/transcript");
+
+let state = createTranscriptState(4);
+state = transcriptReducer(state, {type: "user_submitted", text: "制定计划"});
+state = transcriptReducer(state, {type: "assistant_started"});
+const assistantId = state.activeAssistantId;
+state = transcriptReducer(state, {type: "assistant_delta", text: "第一"});
+state = transcriptReducer(state, {type: "assistant_delta", text: "步"});
+assert.equal(state.entries.at(-1).id, assistantId);
+assert.equal(state.entries.at(-1).text, "第一步");
+assert.equal(state.entries.at(-1).status, "streaming");
+
+state = transcriptReducer(state, {
+  type: "assistant_completed",
+  text: "第一步",
+  outcome: "complete",
+});
+state = transcriptReducer(state, {
+  type: "assistant_completed",
+  text: "第一步",
+  outcome: "complete",
+});
+assert.equal(state.entries.filter((entry) => entry.role === "assistant").length, 1);
+assert.equal(state.entries.at(-1).status, "complete");
+
+let cancelled = createTranscriptState();
+cancelled = transcriptReducer(cancelled, {type: "assistant_started"});
+cancelled = transcriptReducer(cancelled, {
+  type: "assistant_completed",
+  text: "已停止。",
+  outcome: "cancelled",
+});
+assert.equal(cancelled.entries[0].status, "cancelled");
+
+assert.deepEqual(progressTranscriptAction({type: "answer_started"}), {
+  type: "assistant_started",
+});
+assert.deepEqual(progressTranscriptAction({type: "answer_delta", delta: "你好"}), {
+  type: "assistant_delta",
+  text: "你好",
+});
+
+for (const text of ["二", "三", "四", "五"]) {
+  state = transcriptReducer(state, {type: "user_submitted", text});
+}
+assert.equal(state.entries.length, 4);
+assert.deepEqual(state.entries.map((entry) => entry.text), ["二", "三", "四", "五"]);
+
+const viewport = selectTranscriptViewport(state.entries, {
+  columns: 10,
+  rows: 5,
+  reservedRows: 2,
+});
+assert.equal(viewport.at(-1).text, "五");
+assert.ok(viewport.length >= 1);
+
+const unicodeState = [
+  {id: "m-1", role: "assistant", status: "complete", text: "深圳周末旅行攻略", title: "攻略"},
+  {id: "m-2", role: "user", status: "complete", text: "继续", title: undefined},
+];
+const unicodeViewport = selectTranscriptViewport(unicodeState, {
+  columns: 8,
+  rows: 3,
+  reservedRows: 1,
+});
+assert.equal(unicodeViewport.at(-1).id, "m-2");
+"""
+    subprocess.run([node, "-e", script], check=True)
+
+
+def test_npm_ink_app_reduces_streamed_answer_into_one_transcript_entry():
+    node = shutil.which("node")
+    if node is None:
+        return
+
+    script = r"""
+const assert = require("node:assert/strict");
+const {EventEmitter} = require("node:events");
+const {KagentInkApp} = require("./npm/lib/App");
+
+const states = [];
+const refs = [];
+let effects = [];
+let stateCursor = 0;
+let refCursor = 0;
+let lifecycleHandler;
+let runHandler;
+
+const React = {
+  createElement(type, props, ...children) { return {type, props, children}; },
+  useEffect(effect) { effects.push(effect); },
+  useRef(value) {
+    const index = refCursor++;
+    if (!refs[index]) refs[index] = {current: value};
+    return refs[index];
+  },
+  useState(initial) {
+    const index = stateCursor++;
+    if (!(index in states)) states[index] = typeof initial === "function" ? initial() : initial;
+    return [states[index], (update) => {
+      states[index] = typeof update === "function" ? update(states[index]) : update;
+    }];
+  },
+};
+const inputEvents = new EventEmitter();
+const Ink = {
+  Box: "Box",
+  Text: "Text",
+  useApp() { return {exit() {}}; },
+  useStdin() { return {internal_eventEmitter: inputEvents, setRawMode() {}}; },
+};
+const runtime = {
+  subscribe(handler) { lifecycleHandler = handler; return () => {}; },
+  run(goal, handler) {
+    assert.equal(goal, "go");
+    runHandler = handler;
+  },
+  close() {},
+  cancel() {},
+};
+
+function render() {
+  stateCursor = 0;
+  refCursor = 0;
+  effects = [];
+  return KagentInkApp({React, Ink, runtimeSessionFactory: () => runtime});
+}
+
+render();
+const inputCleanup = effects[0]();
+const runtimeCleanup = effects[1]();
+lifecycleHandler({
+  type: "runtime_ready",
+  provider: {
+    configured: true,
+    provider: "test",
+    display_name: "Test",
+    base_url_configured: true,
+    model: "model",
+    api_key_configured: true,
+  },
+  provider_options: [],
+  session_commands: [],
+});
+render();
+inputEvents.emit("input", "go");
+render();
+inputEvents.emit("input", "\r");
+
+runHandler({type: "run_progress", event: {type: "answer_started"}});
+runHandler({type: "run_progress", event: {type: "answer_delta", delta: "你"}});
+runHandler({type: "run_progress", event: {type: "answer_delta", delta: "好"}});
+const streamingId = states[2].activeAssistantId;
+runHandler({
+  type: "run_completed",
+  status: "done",
+  answer: "你好",
+  payload: {},
+});
+
+assert.equal(states[2].activeAssistantId, null);
+assert.deepEqual(states[2].entries.map((entry) => [entry.role, entry.text]), [
+  ["user", "go"],
+  ["assistant", "你好"],
+]);
+assert.equal(states[2].entries[1].id, streamingId);
+
+inputCleanup();
+runtimeCleanup();
+"""
+    subprocess.run([node, "-e", script], check=True)
+
+
 def test_npm_runtime_client_reuses_python_session_and_handles_approval(tmp_path):
     node = shutil.which("node")
     if node is None:
