@@ -183,7 +183,11 @@ The Ink client separates deterministic terminal behavior into focused modules:
 
 - `editor.ts` owns grapheme-aware editing and prompt history transitions.
 - `commands.ts` owns slash-command filtering, selection, and completion.
+- `app-state.ts` owns pure lifecycle, provider, command, approval, and run-state
+  transitions independently of React rendering.
 - `transcript.ts` owns streamed assistant messages and viewport selection.
+- `terminal-width.ts` owns shared Unicode-aware row estimation for transcripts
+  and multiline prompts.
 - `ui-components.tsx` owns responsive terminal presentation.
 - `runtime-client.ts` owns the Python child lifecycle, typed request routing,
   cooperative cancellation, and one bounded crash recovery attempt.

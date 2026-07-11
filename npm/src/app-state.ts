@@ -1,0 +1,251 @@
+import {
+  createProviderSetupState,
+  providerSetupReducer,
+  type ProviderSetupAction,
+  type ProviderSetupState,
+} from "./provider-setup";
+import type { RuntimeClientEvent } from "./runtime-client";
+import type {
+  ApprovalRequiredEvent,
+  ProviderSnapshot,
+  SessionCommandOption,
+} from "./protocol";
+import {
+  createTranscriptState,
+  progressTranscriptAction,
+  transcriptReducer,
+  type TranscriptState,
+} from "./transcript";
+import type { AgentStatus } from "./ui-components";
+
+export type AppRuntimeState = {
+  transcript: TranscriptState;
+  status: AgentStatus;
+  statusText: string;
+  approval: ApprovalRequiredEvent | null;
+  provider: ProviderSnapshot | null;
+  setup: ProviderSetupState | null;
+  commandCatalog: SessionCommandOption[];
+};
+
+export type RuntimeEventChannel = "lifecycle" | "provider" | "command" | "run";
+
+export type AppRuntimeAction =
+  | { type: "runtime_event"; channel: RuntimeEventChannel; event: RuntimeClientEvent }
+  | { type: "submit"; text: string; command: boolean }
+  | { type: "setup_action"; action: ProviderSetupAction }
+  | { type: "approval_response"; approved: boolean }
+  | { type: "cancel_requested"; label: string }
+  | { type: "error"; message: string };
+
+export function createAppRuntimeState(): AppRuntimeState {
+  return {
+    transcript: createTranscriptState(),
+    status: "starting",
+    statusText: "",
+    approval: null,
+    provider: null,
+    setup: null,
+    commandCatalog: [],
+  };
+}
+
+export function appRuntimeReducer(
+  state: AppRuntimeState,
+  action: AppRuntimeAction,
+): AppRuntimeState {
+  if (action.type === "submit") {
+    return {
+      ...state,
+      transcript: transcriptReducer(state.transcript, {
+        type: "user_submitted",
+        text: action.text,
+      }),
+      status: "thinking",
+      statusText: action.command ? "Running command" : "Thinking",
+    };
+  }
+  if (action.type === "setup_action") {
+    return state.setup
+      ? { ...state, setup: providerSetupReducer(state.setup, action.action) }
+      : state;
+  }
+  if (action.type === "approval_response") {
+    return {
+      ...state,
+      approval: null,
+      status: "thinking",
+      statusText: action.approved ? "Continuing" : "Cancelling",
+    };
+  }
+  if (action.type === "cancel_requested") {
+    return { ...state, status: "cancelling", statusText: action.label };
+  }
+  if (action.type === "error") {
+    return failureState(state, action.message);
+  }
+  return reduceRuntimeEvent(state, action.channel, action.event);
+}
+
+function reduceRuntimeEvent(
+  state: AppRuntimeState,
+  channel: RuntimeEventChannel,
+  event: RuntimeClientEvent,
+): AppRuntimeState {
+  if (channel === "lifecycle") {
+    return reduceLifecycleEvent(state, event);
+  }
+  if (channel === "provider") {
+    return reduceProviderEvent(state, event);
+  }
+  if (channel === "command") {
+    return reduceCommandEvent(state, event);
+  }
+  return reduceRunEvent(state, event);
+}
+
+function reduceLifecycleEvent(
+  state: AppRuntimeState,
+  event: RuntimeClientEvent,
+): AppRuntimeState {
+  if (event.type === "runtime_ready") {
+    try {
+      return {
+        ...state,
+        provider: event.provider,
+        commandCatalog: event.session_commands || [],
+        setup: event.provider.configured
+          ? null
+          : createProviderSetupState(event.provider_options),
+        status: "idle",
+        statusText: "",
+      };
+    } catch (error) {
+      return failureState(state, errorMessage(error));
+    }
+  }
+  if (event.type === "runtime_unavailable" || event.type === "client_failed") {
+    return failureState(state, event.message);
+  }
+  return state;
+}
+
+function reduceProviderEvent(
+  state: AppRuntimeState,
+  event: RuntimeClientEvent,
+): AppRuntimeState {
+  if (event.type === "provider_configured") {
+    return {
+      ...state,
+      provider: event.provider,
+      setup: null,
+      status: "idle",
+      statusText: "",
+    };
+  }
+  if (event.type === "provider_configuration_failed" || event.type === "client_failed") {
+    if (!state.setup) {
+      return failureState(state, event.message);
+    }
+    return {
+      ...state,
+      setup: providerSetupReducer(state.setup, {
+        type: "failure",
+        message: event.message,
+        field: event.type === "provider_configuration_failed" ? event.field : undefined,
+      }),
+    };
+  }
+  return state;
+}
+
+function reduceCommandEvent(
+  state: AppRuntimeState,
+  event: RuntimeClientEvent,
+): AppRuntimeState {
+  if (event.type === "session_command_completed") {
+    return {
+      ...state,
+      status: "idle",
+      statusText: "",
+      transcript: transcriptReducer(state.transcript, {
+        type: "command_completed",
+        title: event.title,
+        text: event.message,
+        clear: event.clear_messages,
+      }),
+    };
+  }
+  if (event.type === "session_command_failed" || event.type === "client_failed") {
+    return failureState(state, event.message);
+  }
+  return state;
+}
+
+function reduceRunEvent(
+  state: AppRuntimeState,
+  event: RuntimeClientEvent,
+): AppRuntimeState {
+  if (event.type === "run_started") {
+    return { ...state, status: "thinking", statusText: "Thinking" };
+  }
+  if (event.type === "run_progress") {
+    const transcriptAction = progressTranscriptAction(event.event);
+    return {
+      ...state,
+      statusText: progressLabel(event.event),
+      transcript: transcriptAction
+        ? transcriptReducer(state.transcript, transcriptAction)
+        : state.transcript,
+    };
+  }
+  if (event.type === "run_cancel_requested") {
+    return { ...state, status: "cancelling", statusText: "Stopping" };
+  }
+  if (event.type === "approval_required") {
+    return { ...state, approval: event, status: "approval", statusText: "" };
+  }
+  if (event.type === "run_completed") {
+    const fallback = event.status === "cancelled" ? "Action cancelled." : "Done.";
+    return {
+      ...state,
+      approval: null,
+      status: "idle",
+      statusText: "",
+      transcript: transcriptReducer(state.transcript, {
+        type: "assistant_completed",
+        text: event.answer || fallback,
+        outcome: event.status === "cancelled" ? "cancelled" : "complete",
+      }),
+    };
+  }
+  if (event.type === "run_failed" || event.type === "client_failed") {
+    return failureState({ ...state, approval: null }, event.message);
+  }
+  return state;
+}
+
+function failureState(state: AppRuntimeState, message: string): AppRuntimeState {
+  return {
+    ...state,
+    approval: null,
+    status: "error",
+    statusText: "",
+    transcript: transcriptReducer(state.transcript, { type: "error", text: message }),
+  };
+}
+
+function progressLabel(event: Record<string, unknown>): string {
+  const type = String(event.type || "");
+  if (type === "planner_started") {
+    return "Thinking";
+  }
+  if (type === "plan_ready" || type === "tool_started" || type === "tool_completed") {
+    return "Working";
+  }
+  return type.endsWith("failed") ? "Retrying" : "Working";
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}

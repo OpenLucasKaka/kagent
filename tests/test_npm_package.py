@@ -600,6 +600,8 @@ let effects = [];
 let stateCursor = 0;
 let refCursor = 0;
 let lifecycleHandler;
+let providerHandler;
+let configuredProvider;
 
 const React = {
   createElement(type, props, ...children) {
@@ -645,6 +647,10 @@ const runtime = {
   },
   close() {},
   cancel() {},
+  configureProvider(config, handler) {
+    configuredProvider = config;
+    providerHandler = handler;
+  },
 };
 
 function render() {
@@ -682,20 +688,45 @@ render();
 inputEvents.emit("input", "👍");
 inputEvents.emit("input", "🏽");
 assert.deepEqual(
-  [states[10].editor.value, states[10].editor.cursor],
+  [states[2].setup.editor.value, states[2].setup.editor.cursor],
   ["x👍🏽", 2],
 );
 inputEvents.emit("input", "e");
 inputEvents.emit("input", "\u0301");
 assert.deepEqual(
-  [states[10].editor.value, states[10].editor.cursor],
+  [states[2].setup.editor.value, states[2].setup.editor.cursor],
   ["x👍🏽e\u0301", 3],
 );
 inputEvents.emit("input", "a\nb");
 assert.deepEqual(
-  [states[10].editor.value, states[10].editor.cursor],
+  [states[2].setup.editor.value, states[2].setup.editor.cursor],
   ["x👍🏽e\u0301a b", 6],
 );
+inputEvents.emit("input", "\r");
+render();
+inputEvents.emit("input", "\r");
+render();
+inputEvents.emit("input", "\r");
+render();
+effects[4]();
+assert.deepEqual(configuredProvider, {
+  provider: "test",
+  baseUrl: "x👍🏽e\u0301a b",
+  model: "model",
+  apiKey: "",
+});
+providerHandler({
+  type: "provider_configured",
+  provider: {
+    configured: true,
+    provider: "test",
+    display_name: "Test",
+    base_url_configured: true,
+    model: "model",
+    api_key_configured: false,
+  },
+});
+assert.equal(states[2].setup, null);
 
 inputCleanup();
 runtimeCleanup();
@@ -899,7 +930,7 @@ inputEvents.emit("input", "/");
 render();
 inputEvents.emit("input", "\x1b[B");
 render();
-assert.equal(states[12], "/config");
+assert.equal(states[6], "/config");
 inputEvents.emit("input", "\t");
 render();
 assert.deepEqual([states[1].value, states[1].cursor], ["/config", 7]);
@@ -1075,6 +1106,152 @@ assert.equal(unicodeViewport.at(-1).id, "m-2");
     subprocess.run([node, "-e", script], check=True)
 
 
+def test_npm_app_runtime_reducer_covers_lifecycle_provider_command_and_run_events():
+    node = shutil.which("node")
+    if node is None:
+        return
+
+    script = r"""
+const assert = require("node:assert/strict");
+const {appRuntimeReducer, createAppRuntimeState} = require("./npm/lib/app-state");
+
+const provider = {
+  configured: false,
+  provider: "test",
+  display_name: "Test",
+  base_url_configured: false,
+  model: "model",
+  api_key_configured: false,
+};
+const option = {
+  provider: "test",
+  label: "Test",
+  base_url: "https://example.test/v1",
+  model: "model",
+  api_key_required: false,
+};
+let state = createAppRuntimeState();
+assert.equal(state.status, "starting");
+
+state = appRuntimeReducer(state, {
+  type: "runtime_event",
+  channel: "lifecycle",
+  event: {
+    type: "runtime_ready",
+    provider,
+    provider_options: [option],
+    session_commands: [{command: "/status", description: "status", aliases: []}],
+  },
+});
+assert.equal(state.status, "idle");
+assert.equal(state.setup.stage, "provider");
+assert.equal(state.commandCatalog[0].command, "/status");
+
+state = appRuntimeReducer(state, {
+  type: "setup_action",
+  action: {type: "next"},
+});
+assert.equal(state.setup.stage, "base_url");
+state = appRuntimeReducer(state, {
+  type: "runtime_event",
+  channel: "provider",
+  event: {
+    type: "provider_configuration_failed",
+    error_code: "invalid_model",
+    message: "Model unavailable",
+    field: "model",
+  },
+});
+assert.equal(state.setup.stage, "model");
+assert.equal(state.setup.error, "Model unavailable");
+
+state = appRuntimeReducer(state, {
+  type: "runtime_event",
+  channel: "provider",
+  event: {type: "provider_configured", provider: {...provider, configured: true}},
+});
+assert.equal(state.setup, null);
+assert.equal(state.provider.configured, true);
+
+state = appRuntimeReducer(state, {type: "submit", text: "go", command: false});
+state = appRuntimeReducer(state, {
+  type: "runtime_event",
+  channel: "run",
+  event: {type: "run_progress", event: {type: "answer_started"}},
+});
+state = appRuntimeReducer(state, {
+  type: "runtime_event",
+  channel: "run",
+  event: {type: "run_progress", event: {type: "answer_delta", delta: "完成"}},
+});
+assert.equal(state.transcript.entries.at(-1).status, "streaming");
+
+state = appRuntimeReducer(state, {
+  type: "runtime_event",
+  channel: "run",
+  event: {
+    type: "approval_required",
+    action_id: "open",
+    title: "Open page",
+    reason: "requested",
+    target: "https://example.test",
+  },
+});
+assert.equal(state.status, "approval");
+state = appRuntimeReducer(state, {type: "approval_response", approved: true});
+assert.equal(state.approval, null);
+assert.equal(state.statusText, "Continuing");
+
+state = appRuntimeReducer(state, {
+  type: "runtime_event",
+  channel: "run",
+  event: {type: "run_completed", status: "done", answer: "完成", payload: {}},
+});
+assert.equal(state.status, "idle");
+assert.equal(state.transcript.entries.at(-1).text, "完成");
+assert.equal(state.transcript.entries.at(-1).status, "complete");
+
+state = appRuntimeReducer(state, {type: "submit", text: "/status", command: true});
+state = appRuntimeReducer(state, {
+  type: "runtime_event",
+  channel: "command",
+  event: {
+    type: "session_command_completed",
+    command: "/status",
+    title: "Status",
+    message: "Ready",
+    data: {},
+    clear_messages: false,
+  },
+});
+assert.equal(state.status, "idle");
+assert.equal(state.transcript.entries.at(-1).title, "Status");
+
+const failed = appRuntimeReducer(state, {
+  type: "runtime_event",
+  channel: "run",
+  event: {type: "client_failed", message: "runtime stopped"},
+});
+assert.equal(failed.status, "error");
+assert.equal(failed.approval, null);
+assert.equal(failed.transcript.entries.at(-1).text, "runtime stopped");
+
+const invalidReady = appRuntimeReducer(createAppRuntimeState(), {
+  type: "runtime_event",
+  channel: "lifecycle",
+  event: {
+    type: "runtime_ready",
+    provider,
+    provider_options: [],
+    session_commands: [],
+  },
+});
+assert.equal(invalidReady.status, "error");
+assert.match(invalidReady.transcript.entries[0].text, /model providers/);
+"""
+    subprocess.run([node, "-e", script], check=True)
+
+
 def test_npm_ink_app_reduces_streamed_answer_into_one_transcript_entry():
     node = shutil.which("node")
     if node is None:
@@ -1157,7 +1334,7 @@ inputEvents.emit("input", "\r");
 runHandler({type: "run_progress", event: {type: "answer_started"}});
 runHandler({type: "run_progress", event: {type: "answer_delta", delta: "你"}});
 runHandler({type: "run_progress", event: {type: "answer_delta", delta: "好"}});
-const streamingId = states[2].activeAssistantId;
+const streamingId = states[2].transcript.activeAssistantId;
 runHandler({
   type: "run_completed",
   status: "done",
@@ -1165,12 +1342,107 @@ runHandler({
   payload: {},
 });
 
-assert.equal(states[2].activeAssistantId, null);
-assert.deepEqual(states[2].entries.map((entry) => [entry.role, entry.text]), [
+assert.equal(states[2].transcript.activeAssistantId, null);
+assert.deepEqual(states[2].transcript.entries.map((entry) => [entry.role, entry.text]), [
   ["user", "go"],
   ["assistant", "你好"],
 ]);
-assert.equal(states[2].entries[1].id, streamingId);
+assert.equal(states[2].transcript.entries[1].id, streamingId);
+
+inputCleanup();
+runtimeCleanup();
+"""
+    subprocess.run([node, "-e", script], check=True)
+
+
+def test_npm_ink_app_keeps_synchronous_approval_failure_in_error_state():
+    node = shutil.which("node")
+    if node is None:
+        return
+
+    script = r"""
+const assert = require("node:assert/strict");
+const {EventEmitter} = require("node:events");
+const {KagentInkApp} = require("./npm/lib/App");
+
+const states = [];
+const refs = [];
+let effects = [];
+let stateCursor = 0;
+let refCursor = 0;
+let lifecycleHandler;
+let runHandler;
+const React = {
+  createElement(type, props, ...children) { return {type, props, children}; },
+  useEffect(effect) { effects.push(effect); },
+  useRef(value) {
+    const index = refCursor++;
+    if (!refs[index]) refs[index] = {current: value};
+    return refs[index];
+  },
+  useState(initial) {
+    const index = stateCursor++;
+    if (!(index in states)) states[index] = typeof initial === "function" ? initial() : initial;
+    return [states[index], (update) => {
+      states[index] = typeof update === "function" ? update(states[index]) : update;
+    }];
+  },
+};
+const inputEvents = new EventEmitter();
+const Ink = {
+  Box: "Box",
+  Text: "Text",
+  useApp() { return {exit() {}}; },
+  useStdin() { return {internal_eventEmitter: inputEvents, setRawMode() {}}; },
+};
+const runtime = {
+  subscribe(handler) { lifecycleHandler = handler; return () => {}; },
+  run(goal, handler) { runHandler = handler; },
+  respondToApproval() {
+    runHandler({type: "client_failed", message: "runtime stopped"});
+  },
+  close() {},
+  cancel() {},
+};
+function render() {
+  stateCursor = 0;
+  refCursor = 0;
+  effects = [];
+  KagentInkApp({React, Ink, runtimeSessionFactory: () => runtime});
+}
+
+render();
+const inputCleanup = effects[0]();
+const runtimeCleanup = effects[1]();
+lifecycleHandler({
+  type: "runtime_ready",
+  provider: {
+    configured: true,
+    provider: "test",
+    display_name: "Test",
+    base_url_configured: true,
+    model: "model",
+    api_key_configured: true,
+  },
+  provider_options: [],
+  session_commands: [],
+});
+render();
+inputEvents.emit("input", "go");
+render();
+inputEvents.emit("input", "\r");
+runHandler({
+  type: "approval_required",
+  action_id: "open",
+  title: "Open page",
+  reason: "requested",
+  target: "https://example.test",
+});
+render();
+inputEvents.emit("input", "y");
+assert.equal(states[2].status, "error");
+assert.equal(states[2].approval, null);
+assert.equal(states[2].transcript.entries.at(-1).text, "runtime stopped");
 
 inputCleanup();
 runtimeCleanup();

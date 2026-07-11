@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.KagentInkApp = KagentInkApp;
 exports.isSessionCommandInput = isSessionCommandInput;
+const app_state_1 = require("./app-state");
 const commands_1 = require("./commands");
 const editor_1 = require("./editor");
 const runtime_client_1 = require("./runtime-client");
@@ -15,21 +16,19 @@ function KagentInkApp({ React, Ink, runtimeSessionFactory = runtime_client_1.cre
     const { internal_eventEmitter: inputEvents, setRawMode } = Ink.useStdin();
     const [runtime] = React.useState(() => runtimeSessionFactory());
     const [editor, setEditor] = React.useState(editor_1.createEditorState);
-    const [transcript, setTranscript] = React.useState(transcript_1.createTranscriptState);
+    const [runtimeState, setRuntimeState] = React.useState(app_state_1.createAppRuntimeState);
     const [transcriptOffset, setTranscriptOffset] = React.useState(0);
-    const [status, setStatus] = React.useState("starting");
-    const [statusText, setStatusText] = React.useState("");
     const [frame, setFrame] = React.useState(0);
-    const [approval, setApproval] = React.useState(null);
     const [showApprovalDetails, setShowApprovalDetails] = React.useState(false);
-    const [provider, setProvider] = React.useState(null);
-    const [setup, setSetup] = React.useState(null);
-    const [commandCatalog, setCommandCatalog] = React.useState([]);
     const [selectedCommand, setSelectedCommand] = React.useState(null);
     const [terminalSize, setTerminalSize] = React.useState(() => currentTerminalSize());
+    const { transcript, status, statusText, approval, provider, setup, commandCatalog } = runtimeState;
     const commandMenu = (0, commands_1.updateCommandMenu)(commandCatalog, editor.value, selectedCommand);
     const terminalInputHandler = React.useRef(() => undefined);
     terminalInputHandler.current = handleTerminalInput;
+    function dispatchRuntime(action) {
+        setRuntimeState((current) => (0, app_state_1.appRuntimeReducer)(current, action));
+    }
     React.useEffect(() => {
         const bridge = (0, terminal_input_1.createTerminalInputBridge)((input, key) => {
             terminalInputHandler.current(input, key);
@@ -61,6 +60,12 @@ function KagentInkApp({ React, Ink, runtimeSessionFactory = runtime_client_1.cre
         setTranscriptOffset(0);
     }, [React, transcript.nextId]);
     React.useEffect(() => {
+        if (setup?.stage !== "saving") {
+            return;
+        }
+        runtime.configureProvider((0, provider_setup_1.providerConfiguration)(setup), handleProviderEvent);
+    }, [React, runtime, setup]);
+    React.useEffect(() => {
         if (status !== "thinking" &&
             status !== "cancelling" &&
             status !== "starting" &&
@@ -77,7 +82,7 @@ function KagentInkApp({ React, Ink, runtimeSessionFactory = runtime_client_1.cre
             if (setup) {
                 if (setup.stage === "saving") {
                     runtime.cancel();
-                    setSetup((current) => current ? (0, provider_setup_1.providerSetupReducer)(current, { type: "back" }) : current);
+                    dispatchRuntime({ type: "setup_action", action: { type: "back" } });
                     return;
                 }
                 app.exit();
@@ -85,15 +90,17 @@ function KagentInkApp({ React, Ink, runtimeSessionFactory = runtime_client_1.cre
             }
             if (status === "thinking" || status === "cancelling") {
                 runtime.cancel();
-                setStatus("cancelling");
-                setStatusText("Stopping");
+                dispatchRuntime({ type: "cancel_requested", label: "Stopping" });
                 return;
             }
             if (status === "approval" && approval) {
-                runtime.respondToApproval(approval.action_id, false);
-                setApproval(null);
-                setStatus("thinking");
-                setStatusText("Cancelling");
+                dispatchRuntime({ type: "approval_response", approved: false });
+                try {
+                    runtime.respondToApproval(approval.action_id, false);
+                }
+                catch (error) {
+                    showError(errorMessage(error));
+                }
                 return;
             }
             app.exit();
@@ -188,29 +195,7 @@ function KagentInkApp({ React, Ink, runtimeSessionFactory = runtime_client_1.cre
         }
     }
     function handleLifecycleEvent(event) {
-        if (event.type === "runtime_ready") {
-            applyRuntimeReady(event);
-            return;
-        }
-        if (event.type === "runtime_unavailable" || event.type === "client_failed") {
-            showError(event.message);
-        }
-    }
-    function applyRuntimeReady(event) {
-        setProvider(event.provider);
-        setCommandCatalog(event.session_commands || []);
-        if (event.provider.configured) {
-            setSetup(null);
-            setStatus("idle");
-            return;
-        }
-        try {
-            setSetup((0, provider_setup_1.createProviderSetupState)(event.provider_options));
-            setStatus("idle");
-        }
-        catch (error) {
-            showError(errorMessage(error));
-        }
+        dispatchRuntime({ type: "runtime_event", channel: "lifecycle", event });
     }
     function handleSetupInput(value, key) {
         if (!setup || setup.stage === "saving") {
@@ -221,28 +206,30 @@ function KagentInkApp({ React, Ink, runtimeSessionFactory = runtime_client_1.cre
                 app.exit();
             }
             else {
-                setSetup((0, provider_setup_1.providerSetupReducer)(setup, { type: "back" }));
+                dispatchRuntime({ type: "setup_action", action: { type: "back" } });
             }
             return;
         }
         if (setup.stage === "provider") {
             if (key.name === "up") {
-                setSetup((0, provider_setup_1.providerSetupReducer)(setup, { type: "select", offset: -1 }));
+                dispatchRuntime({
+                    type: "setup_action",
+                    action: { type: "select", offset: -1 },
+                });
             }
             else if (key.name === "down") {
-                setSetup((0, provider_setup_1.providerSetupReducer)(setup, { type: "select", offset: 1 }));
+                dispatchRuntime({
+                    type: "setup_action",
+                    action: { type: "select", offset: 1 },
+                });
             }
             else if (key.name === "return" || key.name === "enter") {
-                setSetup((0, provider_setup_1.providerSetupReducer)(setup, { type: "next" }));
+                dispatchRuntime({ type: "setup_action", action: { type: "next" } });
             }
             return;
         }
         if (key.name === "return" || key.name === "enter") {
-            const next = (0, provider_setup_1.providerSetupReducer)(setup, { type: "next" });
-            setSetup(next);
-            if (next.stage === "saving") {
-                runtime.configureProvider((0, provider_setup_1.providerConfiguration)(next), handleProviderEvent);
-            }
+            dispatchRuntime({ type: "setup_action", action: { type: "next" } });
             return;
         }
         if (key.name === "backspace") {
@@ -274,32 +261,18 @@ function KagentInkApp({ React, Ink, runtimeSessionFactory = runtime_client_1.cre
         }
     }
     function updateSetupEditor(update) {
-        setSetup((current) => {
-            if (!current || !(0, provider_setup_1.isInputStage)(current.stage)) {
+        setRuntimeState((current) => {
+            if (!current.setup || !(0, provider_setup_1.isInputStage)(current.setup.stage)) {
                 return current;
             }
-            return (0, provider_setup_1.providerSetupReducer)(current, {
-                type: "edit",
-                editor: update(current.editor),
+            return (0, app_state_1.appRuntimeReducer)(current, {
+                type: "setup_action",
+                action: { type: "edit", editor: update(current.setup.editor) },
             });
         });
     }
     function handleProviderEvent(event) {
-        if (event.type === "provider_configured") {
-            setProvider(event.provider);
-            setSetup(null);
-            setStatus("idle");
-            return;
-        }
-        if (event.type === "provider_configuration_failed" || event.type === "client_failed") {
-            setSetup((current) => current
-                ? (0, provider_setup_1.providerSetupReducer)(current, {
-                    type: "failure",
-                    message: event.message,
-                    field: event.type === "provider_configuration_failed" ? event.field : undefined,
-                })
-                : current);
-        }
+        dispatchRuntime({ type: "runtime_event", channel: "provider", event });
     }
     function submit() {
         const submission = (0, editor_1.submitInput)(editor);
@@ -311,33 +284,18 @@ function KagentInkApp({ React, Ink, runtimeSessionFactory = runtime_client_1.cre
             app.exit();
             return;
         }
-        setTranscript((current) => (0, transcript_1.transcriptReducer)(current, { type: "user_submitted", text: goal }));
         setEditor(submission.state);
         setSelectedCommand(null);
-        setStatus("thinking");
-        if (isSessionCommandInput(goal)) {
-            setStatusText("Running command");
+        const command = isSessionCommandInput(goal);
+        dispatchRuntime({ type: "submit", text: goal, command });
+        if (command) {
             runtime.command(goal, handleCommandEvent);
             return;
         }
-        setStatusText("Thinking");
         runtime.run(goal, handleRuntimeEvent);
     }
     function handleCommandEvent(event) {
-        if (event.type === "session_command_completed") {
-            setStatus("idle");
-            setStatusText("");
-            setTranscript((current) => (0, transcript_1.transcriptReducer)(current, {
-                type: "command_completed",
-                title: event.title,
-                text: event.message,
-                clear: event.clear_messages,
-            }));
-            return;
-        }
-        if (event.type === "session_command_failed" || event.type === "client_failed") {
-            showError(event.message);
-        }
+        dispatchRuntime({ type: "runtime_event", channel: "command", event });
     }
     function handleApprovalInput(value) {
         if (!approval) {
@@ -351,65 +309,20 @@ function KagentInkApp({ React, Ink, runtimeSessionFactory = runtime_client_1.cre
         if (answer !== "y" && answer !== "n") {
             return;
         }
-        setStatus("thinking");
-        setStatusText(answer === "y" ? "Continuing" : "Cancelling");
         setShowApprovalDetails(false);
+        dispatchRuntime({ type: "approval_response", approved: answer === "y" });
         try {
             runtime.respondToApproval(approval.action_id, answer === "y");
-            setApproval(null);
         }
         catch (error) {
-            setApproval(null);
             showError(errorMessage(error));
         }
     }
     function handleRuntimeEvent(event) {
-        if (event.type === "run_started") {
-            setStatus("thinking");
-            setStatusText("Thinking");
-            return;
-        }
-        if (event.type === "run_progress") {
-            setStatusText(progressLabel(event.event));
-            const action = (0, transcript_1.progressTranscriptAction)(event.event);
-            if (action) {
-                setTranscript((current) => (0, transcript_1.transcriptReducer)(current, action));
-            }
-            return;
-        }
-        if (event.type === "run_cancel_requested") {
-            setStatus("cancelling");
-            setStatusText("Stopping");
-            return;
-        }
-        if (event.type === "approval_required") {
-            setApproval(event);
-            setStatus("approval");
-            setStatusText("");
-            return;
-        }
-        if (event.type === "run_completed") {
-            setApproval(null);
-            setStatus("idle");
-            setStatusText("");
-            const fallback = event.status === "cancelled" ? "Action cancelled." : "Done.";
-            setTranscript((current) => (0, transcript_1.transcriptReducer)(current, {
-                type: "assistant_completed",
-                text: event.answer || fallback,
-                outcome: event.status === "cancelled" ? "cancelled" : "complete",
-            }));
-            return;
-        }
-        if (event.type === "run_failed" || event.type === "client_failed") {
-            setApproval(null);
-            showError(event.message);
-            return;
-        }
+        dispatchRuntime({ type: "runtime_event", channel: "run", event });
     }
     function showError(message) {
-        setStatus("error");
-        setStatusText("");
-        setTranscript((current) => (0, transcript_1.transcriptReducer)(current, { type: "error", text: message }));
+        dispatchRuntime({ type: "error", message });
     }
     if (setup) {
         const layout = (0, ui_components_1.createTerminalLayout)(terminalSize.columns, terminalSize.rows, {
@@ -486,19 +399,6 @@ function currentTerminalSize() {
         columns: process.stdout.columns || 80,
         rows: process.stdout.rows || 24,
     };
-}
-function progressLabel(event) {
-    const type = String(event.type || "");
-    if (type === "planner_started") {
-        return "Thinking";
-    }
-    if (type === "plan_ready" || type === "tool_started" || type === "tool_completed") {
-        return "Working";
-    }
-    if (type.endsWith("failed")) {
-        return "Retrying";
-    }
-    return "Working";
 }
 function errorMessage(error) {
     return error instanceof Error ? error.message : String(error);
