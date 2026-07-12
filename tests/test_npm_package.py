@@ -2807,24 +2807,20 @@ assert.equal(fs.statSync(explicit).mode & 0o777, 0o700);
     assert completed.returncode == 0, completed.stderr
 
 
-def test_npm_runner_uses_nofollow_file_descriptors_for_final_components():
+def test_npm_runner_uses_python_dir_fds_for_managed_parent_chains():
     runner = Path("npm/lib/python-runner.js").read_text(encoding="utf-8")
 
-    assert "fs.constants.O_NOFOLLOW" in runner
-    assert "fs.constants.O_DIRECTORY" in runner
-    assert "fs.constants.O_RDONLY" in runner
-    assert "directoryFd = fs.openSync(" in runner
-    assert "fs.fstatSync(directoryFd)" in runner
-    assert "fs.fchmodSync(directoryFd, 0o700)" in runner
-    assert "fs.closeSync(directoryFd)" in runner
-    assert "fileFd = fs.openSync(" in runner
-    assert "fs.constants.O_WRONLY" in runner
-    assert "fs.constants.O_CREAT" in runner
-    assert "fs.constants.O_TRUNC" in runner
-    assert "fs.fstatSync(fileFd)" in runner
-    assert "fs.fchmodSync(fileFd, 0o600)" in runner
-    assert "fs.writeFileSync(fileFd" in runner
-    assert "fs.closeSync(fileFd)" in runner
+    assert "SECURE_FILESYSTEM_HELPER" in runner
+    assert "dir_fd=current_fd" in runner
+    assert "dir_fd=parent_fd" in runner
+    assert "os.O_DIRECTORY | os.O_NOFOLLOW" in runner
+    assert "os.mkdir(part, 0o700, dir_fd=current_fd)" in runner
+    assert "os.fchmod(directory_fd, 0o700)" in runner
+    assert "os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW" in runner
+    assert "os.fchmod(file_fd, 0o600)" in runner
+    assert "runSecureFilesystemOperation(\"ensure-directory\"" in runner
+    assert "runSecureFilesystemOperation(\"write-file\"" in runner
+    assert "const python = findPython();" in runner
     assert "fs.chmodSync(directory" not in runner
     assert "fs.chmodSync(filePath" not in runner
     assert "fs.writeFileSync(filePath" not in runner
@@ -2896,6 +2892,134 @@ rejectsSymlink("state-link", (testRoot) => {
     KAGENT_HOME: path.join(testRoot, "home"),
   });
 });
+"""
+
+    completed = subprocess.run(
+        [node, "-e", script, str(tmp_path)],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+
+
+def test_npm_runner_parent_replacement_cannot_escape_managed_paths(tmp_path):
+    node = shutil.which("node")
+    if node is None:
+        return
+
+    script = r"""
+const assert = require("node:assert/strict");
+const childProcess = require("node:child_process");
+const fs = require("node:fs");
+const path = require("node:path");
+const { _internals } = require("./npm/lib/python-runner");
+
+const root = process.argv[1];
+
+function replaceParentDuringOperation({name, replaceOnMkdir, replaceOnHelper, action}) {
+  const testRoot = path.join(root, name);
+  const home = path.join(testRoot, "home");
+  const cache = path.join(home, "cache");
+  const outside = path.join(testRoot, "outside");
+  const displaced = path.join(testRoot, "displaced");
+  fs.mkdirSync(home, {recursive: true});
+  fs.mkdirSync(outside, {mode: 0o755});
+
+  const originalMkdirSync = fs.mkdirSync;
+  const originalOpenSync = fs.openSync;
+  const originalSpawnSync = childProcess.spawnSync;
+  let replaced = false;
+  function replaceParent() {
+    if (replaced) return;
+    replaced = true;
+    fs.renameSync(replaceOnMkdir.parent, displaced);
+    fs.symlinkSync(outside, replaceOnMkdir.parent, "dir");
+  }
+  fs.mkdirSync = function(directory, options) {
+    if (path.resolve(directory) === path.resolve(replaceOnMkdir.path)) replaceParent();
+    return originalMkdirSync.call(this, directory, options);
+  };
+  fs.openSync = function(file, flags, mode) {
+    if (path.resolve(file) === path.resolve(replaceOnMkdir.path)) replaceParent();
+    return originalOpenSync.call(this, file, flags, mode);
+  };
+  childProcess.spawnSync = function(command, args, options) {
+    if (Array.isArray(args) && args[2] === replaceOnHelper.action &&
+        path.resolve(args[3]) === path.resolve(replaceOnHelper.path)) {
+      replaced = true;
+      const helperArgs = args.slice();
+      const parentLiteral = JSON.stringify(replaceOnMkdir.parent);
+      const displacedLiteral = JSON.stringify(displaced);
+      const outsideLiteral = JSON.stringify(outside);
+      let marker;
+      let injection;
+      if (replaceOnHelper.action === "ensure-directory") {
+        marker = "            current_fd = next_fd\n";
+        const parentNameLiteral = JSON.stringify(path.basename(replaceOnMkdir.parent));
+        injection =
+          `            if part == ${parentNameLiteral}:\n` +
+          `                os.rename(${parentLiteral}, ${displacedLiteral})\n` +
+          `                os.symlink(${outsideLiteral}, ${parentLiteral})\n`;
+      } else {
+        marker = "    parent_fd = open_directory(parent, False)\n";
+        injection =
+          `    os.rename(${parentLiteral}, ${displacedLiteral})\n` +
+          `    os.symlink(${outsideLiteral}, ${parentLiteral})\n`;
+      }
+      helperArgs[1] = helperArgs[1].replace(marker, marker + injection);
+      assert.notEqual(helperArgs[1], args[1], "Python fault injection marker was not found");
+      return originalSpawnSync.call(this, command, helperArgs, options);
+    }
+    return originalSpawnSync.call(this, command, args, options);
+  };
+  try {
+    try {
+      action();
+    } catch (error) {
+      assert.match(error.message, /symbolic link|managed path|secure filesystem/i);
+    }
+  } finally {
+    fs.mkdirSync = originalMkdirSync;
+    fs.openSync = originalOpenSync;
+    childProcess.spawnSync = originalSpawnSync;
+  }
+  assert.equal(replaced, true, "fault injection did not replace the parent");
+  assert.equal(fs.lstatSync(replaceOnMkdir.parent).isSymbolicLink(), true);
+  assert.equal(fs.statSync(outside).mode & 0o777, 0o755);
+  return {outside, displaced, cache};
+}
+
+const directoryRoot = path.join(root, "directory-race");
+const directoryHome = path.join(directoryRoot, "home");
+const directoryCache = path.join(directoryHome, "cache");
+const directoryResult = replaceParentDuringOperation({
+  name: "directory-race",
+  replaceOnMkdir: {parent: directoryHome, path: directoryCache},
+  replaceOnHelper: {action: "ensure-directory", path: directoryCache},
+  action: () => _internals.ensureCacheRoot({KAGENT_HOME: directoryHome}),
+});
+assert.equal(fs.existsSync(path.join(directoryResult.outside, "cache")), false);
+assert.equal(fs.statSync(path.join(directoryResult.displaced, "cache")).isDirectory(), true);
+
+const fileRoot = path.join(root, "file-race");
+const fileHome = path.join(fileRoot, "home");
+const fileCache = path.join(fileHome, "cache");
+fs.mkdirSync(fileCache, {recursive: true});
+const statePath = path.join(fileCache, "npm-self-update.json");
+const fileResult = replaceParentDuringOperation({
+  name: "file-race",
+  replaceOnMkdir: {parent: fileCache, path: statePath},
+  replaceOnHelper: {action: "write-file", path: statePath},
+  action: () => _internals.writeSelfUpdateState({checked: true}, {KAGENT_HOME: fileHome}),
+});
+assert.equal(fs.existsSync(path.join(fileResult.outside, "npm-self-update.json")), false);
+const displacedStatePath = path.join(fileResult.displaced, "npm-self-update.json");
+assert.equal(
+  JSON.parse(fs.readFileSync(displacedStatePath, "utf8")).checked,
+  true,
+);
 """
 
     completed = subprocess.run(

@@ -13,6 +13,111 @@ const GITHUB_PACKAGE_JSON_URL = "https://raw.githubusercontent.com/OpenLucasKaka
 const GITHUB_HEAD_URL = "https://api.github.com/repos/OpenLucasKaka/Kagent/commits/main";
 const GITHUB_INSTALL_SPEC = "github:OpenLucasKaka/Kagent";
 const SELF_UPDATE_TIMEOUT_MS = 3000;
+const SECURE_FILESYSTEM_HELPER = String.raw`
+import errno
+import os
+import stat
+import sys
+
+
+DIRECTORY_FLAGS = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+
+
+def fail(message):
+    raise RuntimeError(message)
+
+
+def path_parts(target):
+    if not os.path.isabs(target):
+        fail("managed path must be absolute")
+    normalized = os.path.normpath(target)
+    parts = [part for part in normalized.split(os.sep) if part]
+    if not parts:
+        fail("refusing managed filesystem root")
+    return parts
+
+
+def open_directory(target, create_missing):
+    parts = path_parts(target)
+    current_fd = os.open(os.sep, DIRECTORY_FLAGS)
+    try:
+        for part in parts:
+            try:
+                next_fd = os.open(part, DIRECTORY_FLAGS, dir_fd=current_fd)
+            except FileNotFoundError:
+                if not create_missing:
+                    raise
+                try:
+                    os.mkdir(part, 0o700, dir_fd=current_fd)
+                except FileExistsError:
+                    pass
+                next_fd = os.open(part, DIRECTORY_FLAGS, dir_fd=current_fd)
+            except OSError as error:
+                if error.errno in (errno.ELOOP, errno.ENOTDIR):
+                    fail(f"refusing symbolic link or non-directory in managed path: {target}")
+                raise
+            os.close(current_fd)
+            current_fd = next_fd
+        return current_fd
+    except BaseException:
+        os.close(current_fd)
+        raise
+
+
+def ensure_directory(target):
+    directory_fd = open_directory(target, True)
+    try:
+        if not stat.S_ISDIR(os.fstat(directory_fd).st_mode):
+            fail(f"managed path is not a directory: {target}")
+        os.fchmod(directory_fd, 0o700)
+    finally:
+        os.close(directory_fd)
+
+
+def write_file(target):
+    parent, name = os.path.split(os.path.normpath(target))
+    if not name or name in (".", ".."):
+        fail(f"managed path is not a file: {target}")
+    parent_fd = open_directory(parent, False)
+    file_fd = None
+    try:
+        try:
+            file_fd = os.open(
+                name,
+                os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW,
+                0o600,
+                dir_fd=parent_fd,
+            )
+        except OSError as error:
+            if error.errno in (errno.ELOOP, errno.ENOTDIR):
+                fail(f"refusing symbolic link in managed path: {target}")
+            raise
+        if not stat.S_ISREG(os.fstat(file_fd).st_mode):
+            fail(f"managed path is not a file: {target}")
+        os.fchmod(file_fd, 0o600)
+        body = sys.stdin.buffer.read()
+        offset = 0
+        while offset < len(body):
+            offset += os.write(file_fd, body[offset:])
+        os.fchmod(file_fd, 0o600)
+    finally:
+        if file_fd is not None:
+            os.close(file_fd)
+        os.close(parent_fd)
+
+
+try:
+    operation, target = sys.argv[1:3]
+    if operation == "ensure-directory":
+        ensure_directory(target)
+    elif operation == "write-file":
+        write_file(target)
+    else:
+        fail(f"unsupported secure filesystem operation: {operation}")
+except BaseException as error:
+    sys.stderr.write(f"{error}\n")
+    raise SystemExit(1)
+`;
 
 function packageRoot() {
   return path.resolve(__dirname, "..", "..");
@@ -92,29 +197,8 @@ function rejectSymlinks(targetPath) {
 }
 
 function ensurePrivateDirectory(directory) {
-  rejectSymlinks(directory);
-  fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
-  let directoryFd;
-  try {
-    directoryFd = fs.openSync(
-      directory,
-      fs.constants.O_RDONLY | fs.constants.O_DIRECTORY | fs.constants.O_NOFOLLOW
-    );
-  } catch (error) {
-    if (error.code === "ELOOP") {
-      throw new Error(`refusing symbolic link in managed path: ${directory}`);
-    }
-    throw error;
-  }
-  try {
-    const stat = fs.fstatSync(directoryFd);
-    if (!stat.isDirectory()) {
-      throw new Error(`managed path is not a directory: ${directory}`);
-    }
-    fs.fchmodSync(directoryFd, 0o700);
-  } finally {
-    fs.closeSync(directoryFd);
-  }
+  const resolved = path.resolve(directory);
+  runSecureFilesystemOperation("ensure-directory", resolved);
   return directory;
 }
 
@@ -133,32 +217,30 @@ function ensureMetadataCacheRoot(env = process.env) {
 }
 
 function writePrivateFile(filePath, body) {
-  rejectSymlinks(filePath);
-  let fileFd;
-  try {
-    fileFd = fs.openSync(
-      filePath,
-      fs.constants.O_WRONLY |
-        fs.constants.O_CREAT |
-        fs.constants.O_TRUNC |
-        fs.constants.O_NOFOLLOW,
-      0o600
-    );
-  } catch (error) {
-    if (error.code === "ELOOP") {
-      throw new Error(`refusing symbolic link in managed path: ${filePath}`);
+  runSecureFilesystemOperation("write-file", path.resolve(filePath), body);
+}
+
+function runSecureFilesystemOperation(operation, targetPath, body = "") {
+  const python = findPython();
+  const result = childProcess.spawnSync(
+    python,
+    ["-c", SECURE_FILESYSTEM_HELPER, operation, targetPath],
+    {
+      encoding: "utf8",
+      env: process.env,
+      input: body,
+      stdio: ["pipe", "pipe", "pipe"]
     }
-    throw error;
+  );
+  if (result.error) {
+    throw result.error;
   }
-  try {
-    const stat = fs.fstatSync(fileFd);
-    if (!stat.isFile()) {
-      throw new Error(`managed path is not a file: ${filePath}`);
-    }
-    fs.writeFileSync(fileFd, body, { encoding: "utf8" });
-    fs.fchmodSync(fileFd, 0o600);
-  } finally {
-    fs.closeSync(fileFd);
+  if (result.status !== 0) {
+    const detail = String(result.stderr || result.stdout || "").trim();
+    const suffix = detail ? `: ${detail.slice(-4000)}` : "";
+    throw new Error(
+      `secure filesystem ${operation} failed for ${targetPath}${suffix}`
+    );
   }
 }
 
