@@ -293,6 +293,53 @@ def test_destination_parent_replacement_is_detected_before_destination_wins(tmp_
     assert not (Path(env["HOME"]) / ".kagent" / ".migration-v1-complete").exists()
 
 
+@pytest.mark.parametrize(
+    ("operation", "failed_fdopen_call"),
+    [("copy-source", 1), ("copy-destination", 2), ("marker", 1)],
+)
+def test_fdopen_failures_close_all_owned_file_descriptors(
+    tmp_path, monkeypatch, operation, failed_fdopen_call
+):
+    env = _legacy_env(tmp_path)
+    if operation != "marker":
+        _write(Path(env["XDG_CONFIG_HOME"]) / "kagent" / "provider.json", "provider")
+
+    opened_fds = []
+    real_open_source_file = paths._open_source_file
+    real_open_temporary_file = paths._open_temporary_file
+    real_fdopen = paths.os.fdopen
+    fdopen_calls = 0
+
+    def capture_source_fd(path):
+        source_fd = real_open_source_file(path)
+        opened_fds.append(source_fd)
+        return source_fd
+
+    def capture_temporary_fd(parent_fd, destination_name):
+        temporary_fd, temporary_name = real_open_temporary_file(parent_fd, destination_name)
+        opened_fds.append(temporary_fd)
+        return temporary_fd, temporary_name
+
+    def fail_selected_fdopen(fd, *args, **kwargs):
+        nonlocal fdopen_calls
+        fdopen_calls += 1
+        if fdopen_calls == failed_fdopen_call:
+            raise OSError("injected fdopen failure")
+        return real_fdopen(fd, *args, **kwargs)
+
+    monkeypatch.setattr(paths, "_open_source_file", capture_source_fd)
+    monkeypatch.setattr(paths, "_open_temporary_file", capture_temporary_fd)
+    monkeypatch.setattr(paths.os, "fdopen", fail_selected_fdopen)
+
+    with pytest.raises(OSError, match="injected fdopen failure"):
+        migrate_legacy_kagent_state(env)
+
+    assert opened_fds
+    for opened_fd in opened_fds:
+        with pytest.raises(OSError):
+            os.fstat(opened_fd)
+
+
 @pytest.mark.skipif(not hasattr(os, "mkfifo"), reason="requires FIFO support")
 def test_directory_migration_rejects_non_regular_entries(tmp_path):
     env = _legacy_env(tmp_path)

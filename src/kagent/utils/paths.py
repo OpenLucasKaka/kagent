@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import secrets
 import stat
+from contextlib import contextmanager
 from pathlib import Path
 from typing import List, Mapping, Optional, Tuple
 
@@ -194,6 +195,20 @@ def _open_temporary_file(parent_fd: int, destination_name: str) -> Tuple[int, st
     raise OSError("unable to allocate an atomic migration temporary file")
 
 
+@contextmanager
+def _fdopen_stream(file_descriptor: int, mode: str, *, closefd: bool = True):
+    try:
+        stream = os.fdopen(file_descriptor, mode, closefd=closefd)
+    except BaseException:
+        if closefd:
+            os.close(file_descriptor)
+        raise
+    try:
+        yield stream
+    finally:
+        stream.close()
+
+
 def _destination_entry_exists(parent_fd: int, name: str, path: Path) -> bool:
     try:
         mode = os.stat(name, dir_fd=parent_fd, follow_symlinks=False).st_mode
@@ -214,12 +229,12 @@ def _atomic_copy_file(source: Path, destination: Path) -> None:
             return
         source_fd = _open_source_file(source)
         try:
-            temporary_fd, temporary_name = _open_temporary_file(
-                destination_parent_fd, destination.name
-            )
-            try:
-                with os.fdopen(source_fd, "rb", closefd=False) as source_stream:
-                    with os.fdopen(temporary_fd, "wb") as destination_stream:
+            with _fdopen_stream(source_fd, "rb", closefd=False) as source_stream:
+                temporary_fd, temporary_name = _open_temporary_file(
+                    destination_parent_fd, destination.name
+                )
+                try:
+                    with _fdopen_stream(temporary_fd, "wb") as destination_stream:
                         while True:
                             chunk = source_stream.read(1024 * 1024)
                             if not chunk:
@@ -227,22 +242,24 @@ def _atomic_copy_file(source: Path, destination: Path) -> None:
                             destination_stream.write(chunk)
                         destination_stream.flush()
                         os.fsync(destination_stream.fileno())
-                try:
-                    os.link(
-                        temporary_name,
-                        destination.name,
-                        src_dir_fd=destination_parent_fd,
-                        dst_dir_fd=destination_parent_fd,
-                        follow_symlinks=False,
-                    )
-                except FileExistsError:
-                    _destination_entry_exists(destination_parent_fd, destination.name, destination)
-                _ensure_directory_fd_matches_path(destination.parent, destination_parent_fd)
-            finally:
-                try:
-                    os.unlink(temporary_name, dir_fd=destination_parent_fd)
-                except FileNotFoundError:
-                    pass
+                    try:
+                        os.link(
+                            temporary_name,
+                            destination.name,
+                            src_dir_fd=destination_parent_fd,
+                            dst_dir_fd=destination_parent_fd,
+                            follow_symlinks=False,
+                        )
+                    except FileExistsError:
+                        _destination_entry_exists(
+                            destination_parent_fd, destination.name, destination
+                        )
+                    _ensure_directory_fd_matches_path(destination.parent, destination_parent_fd)
+                finally:
+                    try:
+                        os.unlink(temporary_name, dir_fd=destination_parent_fd)
+                    except FileNotFoundError:
+                        pass
         finally:
             os.close(source_fd)
     finally:
@@ -336,7 +353,7 @@ def _write_marker(marker: Path) -> None:
     try:
         temporary_fd, temporary_name = _open_temporary_file(parent_fd, marker.name)
         try:
-            with os.fdopen(temporary_fd, "wb") as stream:
+            with _fdopen_stream(temporary_fd, "wb") as stream:
                 stream.write(b"complete\n")
                 stream.flush()
                 os.fsync(stream.fileno())
