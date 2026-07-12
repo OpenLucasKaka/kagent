@@ -8,6 +8,8 @@ import time
 from pathlib import Path
 from typing import Any, Mapping
 
+from kagent.utils.paths import kagent_state_dir, migrate_legacy_kagent_state
+
 PENDING_APPROVAL_PATH_ENV_VAR = "KAGENT_PENDING_APPROVAL_PATH"
 _SCHEMA_VERSION = "1"
 _MAX_SNAPSHOT_AGE_SECONDS = 24 * 60 * 60
@@ -24,19 +26,13 @@ def default_pending_approval_path(
     configured = source.get(PENDING_APPROVAL_PATH_ENV_VAR, "").strip()
     if configured:
         return configured
-    state_home = source.get("XDG_STATE_HOME", "").strip()
-    if state_home:
-        root = Path(state_home)
-    else:
-        home = source.get("HOME", "").strip()
-        if not home:
-            return ""
-        root = Path(home) / ".local" / "state"
+    migrate_legacy_kagent_state(source)
+    root = kagent_state_dir(source)
     workspace_root = Path.cwd() if workspace is None else Path(workspace)
     identity = hashlib.sha256(
         str(workspace_root.resolve()).encode("utf-8")
     ).hexdigest()
-    return str(root / "kagent" / "pending-approvals" / f"{identity}.json")
+    return str(root / "pending-approvals" / f"{identity}.json")
 
 
 def load_pending_approval(path: str) -> dict[str, Any] | None:

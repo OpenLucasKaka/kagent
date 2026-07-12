@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from kagent.utils.json_output import json_ready
+from kagent.utils.paths import kagent_state_dir, migrate_legacy_kagent_state
 
 SESSION_MEMORY_SCHEMA_VERSION = "2"
 SESSION_MEMORY_ENV_VAR = "KAGENT_SESSION_MEMORY_PATH"
@@ -84,13 +85,8 @@ def default_runtime_session_memory_path(
     source = os.environ if env is None else env
     if SESSION_MEMORY_ENV_VAR in source:
         return source[SESSION_MEMORY_ENV_VAR]
-    state_home = source.get("XDG_STATE_HOME", "").strip()
-    if state_home:
-        return str(Path(state_home) / "kagent" / "session-memory.json")
-    home = source.get("HOME", "").strip()
-    if not home:
-        return ""
-    return str(Path(home) / ".local" / "state" / "kagent" / "session-memory.json")
+    migrate_legacy_kagent_state(source)
+    return str(kagent_state_dir(source) / "session-memory.json")
 
 
 def default_runtime_history_path(
@@ -99,13 +95,8 @@ def default_runtime_history_path(
     source = os.environ if env is None else env
     if HISTORY_ENV_VAR in source:
         return source[HISTORY_ENV_VAR]
-    state_home = source.get("XDG_STATE_HOME", "").strip()
-    if state_home:
-        return str(Path(state_home) / "kagent" / "history")
-    home = source.get("HOME", "").strip()
-    if not home:
-        return ""
-    return str(Path(home) / ".local" / "state" / "kagent" / "history")
+    migrate_legacy_kagent_state(source)
+    return str(kagent_state_dir(source) / "history")
 
 
 def runtime_prompt_history(path: str):

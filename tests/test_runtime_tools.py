@@ -5,8 +5,10 @@ import time
 
 import pytest
 
+import kagent.runtime.patch_checkpoints as patch_checkpoints
 from kagent.runtime import file_transaction
 from kagent.runtime import tools as runtime_tools
+from kagent.runtime.patch_checkpoints import PatchCheckpointStore
 from kagent.runtime.policy import RuntimePolicy
 from kagent.runtime.tools import (
     RuntimeToolSpec,
@@ -19,6 +21,44 @@ from kagent.runtime.tools import (
 @pytest.fixture(autouse=True)
 def isolate_patch_checkpoint_state(tmp_path, monkeypatch):
     monkeypatch.setenv("KAGENT_PATCH_STATE_DIR", str(tmp_path / "patch-state"))
+
+
+def test_patch_checkpoint_store_defaults_to_kagent_home_after_migration(
+    tmp_path,
+    monkeypatch,
+):
+    calls = []
+    monkeypatch.setattr(
+        patch_checkpoints,
+        "migrate_legacy_kagent_state",
+        lambda env: calls.append(env),
+        raising=False,
+    )
+    env = {"HOME": str(tmp_path)}
+
+    store = PatchCheckpointStore.from_environment(env)
+
+    assert store.state_root == tmp_path / ".kagent" / "state" / "patches"
+    assert calls == [env]
+
+
+def test_patch_checkpoint_store_explicit_override_skips_migration(
+    tmp_path,
+    monkeypatch,
+):
+    explicit = tmp_path / "patch-state"
+    monkeypatch.setattr(
+        patch_checkpoints,
+        "migrate_legacy_kagent_state",
+        lambda env: (_ for _ in ()).throw(AssertionError("migration called")),
+        raising=False,
+    )
+
+    store = PatchCheckpointStore.from_environment(
+        {"KAGENT_PATCH_STATE_DIR": str(explicit)}
+    )
+
+    assert store.state_root == explicit
 
 
 def test_note_tool_returns_structured_observation():

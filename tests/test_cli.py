@@ -1608,21 +1608,37 @@ def test_cli_prompt_toolkit_prompt_fragments_keep_arrow_inside_input_bar():
     ]
 
 
-def test_cli_defaults_history_to_xdg_state(monkeypatch, tmp_path):
+def test_cli_defaults_history_to_kagent_home_after_migration(monkeypatch, tmp_path):
+    import kagent.cli.memory as memory_module
     from kagent.cli.memory import default_runtime_history_path
 
-    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
-    monkeypatch.setenv("HOME", "/Users/kaka")
+    calls = []
+    monkeypatch.setattr(
+        memory_module,
+        "migrate_legacy_kagent_state",
+        lambda env: calls.append(env),
+        raising=False,
+    )
+    env = {"HOME": str(tmp_path)}
 
-    assert default_runtime_history_path() == str(tmp_path / "kagent" / "history")
+    assert default_runtime_history_path(env) == str(
+        tmp_path / ".kagent" / "state" / "history"
+    )
+    assert calls == [env]
 
 
 def test_cli_history_can_be_disabled_by_env(monkeypatch):
+    import kagent.cli.memory as memory_module
     from kagent.cli.memory import default_runtime_history_path
 
-    monkeypatch.setenv("KAGENT_HISTORY_PATH", "")
+    monkeypatch.setattr(
+        memory_module,
+        "migrate_legacy_kagent_state",
+        lambda env: (_ for _ in ()).throw(AssertionError("migration called")),
+        raising=False,
+    )
 
-    assert default_runtime_history_path() == ""
+    assert default_runtime_history_path({"KAGENT_HISTORY_PATH": ""}) == ""
 
 
 def test_cli_history_file_is_owner_only_and_redacted(tmp_path):
@@ -3182,18 +3198,30 @@ def test_cli_session_memory_requires_interactive_runtime():
     assert "Traceback" not in completed.stderr
 
 
-def test_cli_defaults_session_memory_to_xdg_state_for_tty(monkeypatch, tmp_path):
+def test_cli_defaults_session_memory_to_kagent_home_for_tty(monkeypatch, tmp_path):
+    import kagent.cli.memory as memory_module
     from kagent.cli.main import _session_memory_path_from_args
 
-    state_home = tmp_path / "state"
-    monkeypatch.setenv("XDG_STATE_HOME", str(state_home))
+    calls = []
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.delenv("KAGENT_HOME", raising=False)
+    monkeypatch.delenv("KAGENT_SESSION_MEMORY_PATH", raising=False)
+    monkeypatch.setattr(
+        memory_module,
+        "migrate_legacy_kagent_state",
+        lambda env: calls.append(env),
+        raising=False,
+    )
 
     memory_path = _session_memory_path_from_args(
         Namespace(session_memory=""),
         interactive_tty=True,
     )
 
-    assert memory_path == str(state_home / "kagent" / "session-memory.json")
+    assert memory_path == str(
+        tmp_path / ".kagent" / "state" / "session-memory.json"
+    )
+    assert len(calls) == 1
 
 
 def test_cli_does_not_default_session_memory_for_piped_interactive_runs(

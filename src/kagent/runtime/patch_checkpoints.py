@@ -5,7 +5,7 @@ import os
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
 from kagent.runtime.checkpoint_storage import (
     FILE_MODE,
@@ -28,6 +28,7 @@ from kagent.runtime.file_transaction import (
     validate_workspace_targets,
     workspace_transaction,
 )
+from kagent.utils.paths import kagent_state_dir, migrate_legacy_kagent_state
 
 
 @dataclass(frozen=True)
@@ -43,13 +44,16 @@ class PatchCheckpointStore:
         self.state_root = Path(state_root).expanduser()
 
     @classmethod
-    def from_environment(cls) -> "PatchCheckpointStore":
-        configured = os.environ.get("KAGENT_PATCH_STATE_DIR", "").strip()
+    def from_environment(
+        cls,
+        env: Mapping[str, str] | None = None,
+    ) -> "PatchCheckpointStore":
+        source = os.environ if env is None else env
+        configured = source.get("KAGENT_PATCH_STATE_DIR", "").strip()
         if configured:
             return cls(configured)
-        state_home = os.environ.get("XDG_STATE_HOME", "").strip()
-        root = Path(state_home).expanduser() if state_home else Path.home() / ".local/state"
-        return cls(root / "kagent" / "patches")
+        migrate_legacy_kagent_state(source)
+        return cls(kagent_state_dir(source) / "patches")
 
     def prepare(
         self,

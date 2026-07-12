@@ -1,5 +1,6 @@
 import io
 import json
+from pathlib import Path
 
 import pytest
 
@@ -7,6 +8,7 @@ import kagent.cli.pending_approval as pending_approval_store
 import kagent.cli.stdio_runtime as stdio_runtime_module
 from kagent.cli.pending_approval import (
     clear_pending_approval,
+    default_pending_approval_path,
     load_pending_approval,
     save_pending_approval,
 )
@@ -34,6 +36,45 @@ def test_pending_approval_store_is_owner_only_and_atomic(tmp_path):
     assert path.parent.stat().st_mode & 0o777 == 0o700
     clear_pending_approval(str(path))
     assert not path.exists()
+
+
+def test_default_pending_approval_path_uses_kagent_home_after_migration(
+    tmp_path,
+    monkeypatch,
+):
+    calls = []
+    monkeypatch.setattr(
+        pending_approval_store,
+        "migrate_legacy_kagent_state",
+        lambda env: calls.append(env),
+        raising=False,
+    )
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    env = {"HOME": str(tmp_path)}
+
+    path = Path(default_pending_approval_path(env, workspace=workspace))
+
+    assert path.parent == tmp_path / ".kagent" / "state" / "pending-approvals"
+    assert path.suffix == ".json"
+    assert calls == [env]
+
+
+def test_default_pending_approval_path_explicit_override_skips_migration(
+    tmp_path,
+    monkeypatch,
+):
+    explicit = tmp_path / "pending.json"
+    monkeypatch.setattr(
+        pending_approval_store,
+        "migrate_legacy_kagent_state",
+        lambda env: (_ for _ in ()).throw(AssertionError("migration called")),
+        raising=False,
+    )
+
+    assert default_pending_approval_path(
+        {"KAGENT_PENDING_APPROVAL_PATH": str(explicit)}
+    ) == str(explicit)
 
 
 def test_pending_approval_store_rejects_symlink_paths(tmp_path):

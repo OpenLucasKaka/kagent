@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, Iterator, List, Mapping, Optional
 
 from kagent.runtime.redaction import REDACTED_VALUE, redact_runtime_text
+from kagent.utils.paths import kagent_config_dir, migrate_legacy_kagent_state
 
 DEFAULT_LLM_MODEL = "qwen3.5-122b-a10b"
 PROVIDER_CONFIG_SCHEMA_VERSION = "1"
@@ -128,10 +129,8 @@ def default_provider_config_path(env: Optional[Mapping[str, str]] = None) -> str
     source = env if env is not None else environ
     if source.get("KAGENT_LLM_CONFIG_PATH"):
         return source["KAGENT_LLM_CONFIG_PATH"]
-    config_home = source.get("XDG_CONFIG_HOME")
-    if config_home:
-        return str(Path(config_home) / "kagent" / "provider.json")
-    return str(Path.home() / ".config" / "kagent" / "provider.json")
+    migrate_legacy_kagent_state(source)
+    return str(kagent_config_dir(source) / "provider.json")
 
 
 def load_provider_config(path: str = "") -> LLMProviderConfig:

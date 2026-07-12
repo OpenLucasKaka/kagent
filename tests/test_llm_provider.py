@@ -3,6 +3,7 @@ import stat
 import urllib.error
 from pathlib import Path
 
+import kagent.providers.llm as llm_provider
 from kagent.providers.llm import (
     DEFAULT_LLM_MODEL,
     FakeLLMProvider,
@@ -287,14 +288,40 @@ def test_build_llm_provider_uses_configured_provider_kind():
     assert provider.config.provider == ProviderKind.DEEPSEEK
 
 
-def test_default_provider_config_path_respects_xdg_and_explicit_override(tmp_path):
+def test_default_provider_config_path_uses_kagent_home_after_migration(
+    tmp_path,
+    monkeypatch,
+):
+    calls = []
+    monkeypatch.setattr(
+        llm_provider,
+        "migrate_legacy_kagent_state",
+        lambda env: calls.append(env),
+        raising=False,
+    )
+
+    env = {"HOME": str(tmp_path)}
+
+    assert default_provider_config_path(env) == str(
+        tmp_path / ".kagent" / "config" / "provider.json"
+    )
+    assert calls == [env]
+
+
+def test_default_provider_config_path_explicit_override_skips_migration(
+    tmp_path,
+    monkeypatch,
+):
     explicit = tmp_path / "explicit.json"
+    monkeypatch.setattr(
+        llm_provider,
+        "migrate_legacy_kagent_state",
+        lambda env: (_ for _ in ()).throw(AssertionError("migration called")),
+        raising=False,
+    )
 
     assert default_provider_config_path({"KAGENT_LLM_CONFIG_PATH": str(explicit)}) == str(
         explicit
-    )
-    assert default_provider_config_path({"XDG_CONFIG_HOME": str(tmp_path)}) == str(
-        tmp_path / "kagent" / "provider.json"
     )
 
 
