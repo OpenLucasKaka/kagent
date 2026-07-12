@@ -218,6 +218,8 @@ def test_product_docs_document_the_unified_user_home():
         assert "~/.kagent/state/session-memory.json" in document
         assert "~/.kagent/state/history" in document
         assert "~/.kagent/cache/npm-python" in document
+        assert "~/.kagent/cache/npm-self-update.json" in document
+        assert "~/.kagent/.migration-v1-complete" in document
         assert "$PWD/.kagent" in document
         assert "explicit override" in document
         assert "legacy" in document

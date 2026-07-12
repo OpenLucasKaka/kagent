@@ -303,6 +303,8 @@ global `~/.kagent` root:
 ~/.kagent/state/pending-approvals/
 ~/.kagent/state/patches/
 ~/.kagent/cache/npm-python/
+~/.kagent/cache/npm-self-update.json
+~/.kagent/.migration-v1-complete
 ```
 
 Set `KAGENT_HOME` to relocate the shared root. Existing explicit overrides take
@@ -320,7 +322,9 @@ symlink and unexpected file types, writes atomically, and records completion
 only after all eligible copies succeed. The legacy sources remain untouched.
 When `KAGENT_HOME` is explicit, legacy discovery is skipped. Disposable XDG
 cache is not migrated; cache is rebuilt at `~/.kagent/cache/npm-python` when
-the npm launcher next needs Python.
+the npm launcher next needs Python. Update-check metadata is stored at
+`~/.kagent/cache/npm-self-update.json`, and successful durable migration is
+recorded by `~/.kagent/.migration-v1-complete`.
 
 Do not confuse that user-level root with repository state. The project-local
 `$PWD/.kagent/runtime-workspace` and `$PWD/.kagent/skills` directories remain

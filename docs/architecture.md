@@ -20,6 +20,8 @@ current paths:
 ~/.kagent/state/pending-approvals/
 ~/.kagent/state/patches/
 ~/.kagent/cache/npm-python/
+~/.kagent/cache/npm-self-update.json
+~/.kagent/.migration-v1-complete
 ```
 
 Path precedence is explicit override > `KAGENT_HOME`-derived path > default
@@ -36,7 +38,9 @@ patch checkpoints. Migration must never overwrite an existing destination,
 leaves legacy sources intact, uses owner-only modes, rejects symlink or
 non-regular layouts, copies atomically, and writes its completion marker only
 after all eligible items succeed. An explicit `KAGENT_HOME` skips discovery of
-legacy XDG state.
+legacy XDG state. The marker path is `~/.kagent/.migration-v1-complete`; npm
+self-update metadata is stored separately at
+`~/.kagent/cache/npm-self-update.json`.
 
 This global user boundary does not absorb project data. The project-local
 `$PWD/.kagent/runtime-workspace` and `$PWD/.kagent/skills` directories retain

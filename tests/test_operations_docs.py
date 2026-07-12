@@ -447,6 +447,8 @@ def test_operations_runbook_documents_unified_kagent_home_migration():
     assert "~/.kagent/state/pending-approvals" in runbook
     assert "~/.kagent/state/patches" in runbook
     assert "~/.kagent/cache/npm-python" in runbook
+    assert "~/.kagent/cache/npm-self-update.json" in runbook
+    assert "~/.kagent/.migration-v1-complete" in runbook
     assert "explicit overrides take precedence over it" in normalized
     assert "XDG variables are consulted only as legacy migration sources" in normalized
     assert "never overwrites an existing destination" in normalized

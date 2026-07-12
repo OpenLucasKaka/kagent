@@ -61,6 +61,8 @@ Kagent keeps user-level product data under the global `~/.kagent` directory:
 ~/.kagent/state/pending-approvals/
 ~/.kagent/state/patches/
 ~/.kagent/cache/npm-python/
+~/.kagent/cache/npm-self-update.json
+~/.kagent/.migration-v1-complete
 ```
 
 Set `KAGENT_HOME` to move that shared root. Existing explicit override
@@ -76,7 +78,10 @@ overwritten, legacy sources remain untouched, owner-only permissions and
 symlink checks are enforced, and disposable cache data is rebuilt under
 `~/.kagent/cache/npm-python` instead of migrated. XDG variables are legacy
 migration sources, not current defaults. An explicit `KAGENT_HOME` skips legacy
-discovery so a custom home cannot import unrelated state.
+discovery so a custom home cannot import unrelated state. The
+`~/.kagent/.migration-v1-complete` marker is written only after all eligible
+durable data has migrated successfully; npm update metadata lives at
+`~/.kagent/cache/npm-self-update.json`.
 
 The project-local `$PWD/.kagent` directory remains separate from the global
 `~/.kagent`: runtime workspaces and project skills continue to live under
