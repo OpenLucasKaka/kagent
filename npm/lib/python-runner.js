@@ -7,7 +7,7 @@ const https = require("https");
 const path = require("path");
 const readline = require("readline");
 
-const { kagentCachePath } = require("./kagent-home");
+const { kagentCachePath, resolveKagentHome } = require("./kagent-home");
 
 const GITHUB_PACKAGE_JSON_URL = "https://raw.githubusercontent.com/OpenLucasKaka/Kagent/main/package.json";
 const GITHUB_HEAD_URL = "https://api.github.com/repos/OpenLucasKaka/Kagent/commits/main";
@@ -65,8 +65,86 @@ function metadataCacheRoot(env = process.env) {
   return path.dirname(kagentCachePath("npm-python", env));
 }
 
-function selfUpdateStatePath() {
-  return path.join(metadataCacheRoot(), "npm-self-update.json");
+function selfUpdateStatePath(env = process.env) {
+  return path.join(metadataCacheRoot(env), "npm-self-update.json");
+}
+
+function rejectSymlinks(targetPath) {
+  const resolved = path.resolve(targetPath);
+  const parsed = path.parse(resolved);
+  const parts = resolved.slice(parsed.root.length).split(path.sep).filter(Boolean);
+  let current = parsed.root;
+  for (const part of parts) {
+    current = path.join(current, part);
+    let stat;
+    try {
+      stat = fs.lstatSync(current);
+    } catch (error) {
+      if (error.code === "ENOENT") {
+        return;
+      }
+      throw error;
+    }
+    if (stat.isSymbolicLink()) {
+      throw new Error(`refusing symbolic link in managed path: ${current}`);
+    }
+  }
+}
+
+function ensurePrivateDirectory(directory) {
+  rejectSymlinks(directory);
+  fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
+  rejectSymlinks(directory);
+  const stat = fs.lstatSync(directory);
+  if (!stat.isDirectory()) {
+    throw new Error(`managed path is not a directory: ${directory}`);
+  }
+  fs.chmodSync(directory, 0o700);
+  return directory;
+}
+
+function ensureCacheRoot(env = process.env) {
+  if (env.KAGENT_NODE_VENV) {
+    return ensurePrivateDirectory(path.resolve(env.KAGENT_NODE_VENV));
+  }
+  const home = ensurePrivateDirectory(resolveKagentHome(env));
+  const cache = ensurePrivateDirectory(path.join(home, "cache"));
+  return ensurePrivateDirectory(path.join(cache, "npm-python"));
+}
+
+function ensureMetadataCacheRoot(env = process.env) {
+  const home = ensurePrivateDirectory(resolveKagentHome(env));
+  return ensurePrivateDirectory(path.join(home, "cache"));
+}
+
+function writePrivateFile(filePath, body) {
+  rejectSymlinks(filePath);
+  fs.writeFileSync(filePath, body, { encoding: "utf8", mode: 0o600 });
+  rejectSymlinks(filePath);
+  const stat = fs.lstatSync(filePath);
+  if (!stat.isFile()) {
+    throw new Error(`managed path is not a file: ${filePath}`);
+  }
+  fs.chmodSync(filePath, 0o600);
+}
+
+function privateFileStat(filePath) {
+  let stat;
+  try {
+    stat = fs.lstatSync(filePath);
+  } catch (error) {
+    if (error.code === "ENOENT") {
+      return null;
+    }
+    throw error;
+  }
+  if (stat.isSymbolicLink()) {
+    throw new Error(`refusing symbolic link in managed path: ${filePath}`);
+  }
+  if (!stat.isFile()) {
+    throw new Error(`managed path is not a file: ${filePath}`);
+  }
+  return stat;
 }
 
 function candidatePythons() {
@@ -216,9 +294,10 @@ async function fetchLatestGitHubUpdateInfo() {
   return { version, headSha };
 }
 
-function readSelfUpdateState() {
-  const statePath = selfUpdateStatePath();
-  if (!fs.existsSync(statePath)) {
+function readSelfUpdateState(env = process.env) {
+  const statePath = selfUpdateStatePath(env);
+  rejectSymlinks(statePath);
+  if (!privateFileStat(statePath)) {
     return {};
   }
   try {
@@ -229,13 +308,9 @@ function readSelfUpdateState() {
   }
 }
 
-function writeSelfUpdateState(state) {
-  const statePath = selfUpdateStatePath();
-  fs.mkdirSync(path.dirname(statePath), { recursive: true, mode: 0o700 });
-  fs.writeFileSync(statePath, `${JSON.stringify(state, null, 2)}\n`, {
-    encoding: "utf8",
-    mode: 0o600
-  });
+function writeSelfUpdateState(state, env = process.env) {
+  const statePath = path.join(ensureMetadataCacheRoot(env), "npm-self-update.json");
+  writePrivateFile(statePath, `${JSON.stringify(state, null, 2)}\n`);
 }
 
 function latestSelfUpdateState(latest, extra) {
@@ -392,7 +467,7 @@ function collectRelativeFiles(directory, relativeDirectory, output) {
 
 function markerMatches(venvDir, expected) {
   const pathToMarker = markerPath(venvDir);
-  if (!fs.existsSync(pathToMarker)) {
+  if (!privateFileStat(pathToMarker)) {
     return false;
   }
   try {
@@ -408,23 +483,18 @@ function markerMatches(venvDir, expected) {
 }
 
 function writeMarker(venvDir, marker) {
-  fs.writeFileSync(markerPath(venvDir), `${JSON.stringify(marker, null, 2)}\n`, {
-    encoding: "utf8",
-    mode: 0o600
-  });
+  writePrivateFile(markerPath(venvDir), `${JSON.stringify(marker, null, 2)}\n`);
 }
 
 function ensureVenv(root, version) {
-  const venvDir = path.join(cacheRoot(), version);
+  const venvDir = path.join(ensureCacheRoot(), version);
+  ensurePrivateDirectory(venvDir);
   const expectedMarker = installMarker(root, version);
   const pythonPath = venvPythonPath(venvDir);
   if (fs.existsSync(pythonPath) && markerMatches(venvDir, expectedMarker)) {
     return venvDir;
   }
 
-  fs.mkdirSync(path.dirname(venvDir), { recursive: true, mode: 0o700 });
-  fs.mkdirSync(venvDir, { recursive: true, mode: 0o700 });
-  fs.chmodSync(venvDir, 0o700);
   if (!fs.existsSync(pythonPath)) {
     const python = findPython();
     process.stderr.write(`kagent: preparing Python runtime in ${venvDir}\n`);
@@ -505,10 +575,14 @@ module.exports = {
   spawnPythonModule,
   _internals: {
     cacheRoot,
+    ensureCacheRoot,
+    ensurePrivateDirectory,
     hasSelfUpdate,
     isNewerVersion,
     metadataCacheRoot,
     maybePrintNodeHandledOutput,
-    shouldCheckSelfUpdate
+    readSelfUpdateState,
+    shouldCheckSelfUpdate,
+    writeSelfUpdateState
   }
 };

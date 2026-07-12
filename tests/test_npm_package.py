@@ -2572,6 +2572,131 @@ assert.equal(
     assert completed.returncode == 0, completed.stderr
 
 
+def test_npm_runner_hardens_cache_and_self_update_permissions(tmp_path):
+    node = shutil.which("node")
+    if node is None:
+        return
+
+    script = r"""
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
+const { _internals } = require("./npm/lib/python-runner");
+
+const root = process.argv[1];
+const home = path.join(root, "home");
+const cache = path.join(home, "cache");
+const runtime = path.join(cache, "npm-python");
+fs.mkdirSync(runtime, {recursive: true, mode: 0o755});
+for (const directory of [home, cache, runtime]) fs.chmodSync(directory, 0o755);
+
+assert.equal(_internals.ensureCacheRoot({KAGENT_HOME: home}), runtime);
+for (const directory of [home, cache, runtime]) {
+  assert.equal(fs.statSync(directory).mode & 0o777, 0o700, directory);
+}
+
+const statePath = path.join(cache, "npm-self-update.json");
+fs.writeFileSync(statePath, "{}\n", {mode: 0o644});
+_internals.writeSelfUpdateState({checked: true}, {KAGENT_HOME: home});
+assert.equal(fs.statSync(statePath).mode & 0o777, 0o600);
+
+const explicit = path.join(root, "explicit-venv");
+fs.mkdirSync(explicit, {mode: 0o755});
+assert.equal(
+  _internals.ensureCacheRoot({KAGENT_HOME: home, KAGENT_NODE_VENV: explicit}),
+  explicit,
+);
+assert.equal(fs.statSync(explicit).mode & 0o777, 0o700);
+"""
+
+    completed = subprocess.run(
+        [node, "-e", script, str(tmp_path)],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+
+
+def test_npm_runner_rejects_symlinks_in_managed_paths(tmp_path):
+    node = shutil.which("node")
+    if node is None:
+        return
+
+    script = r"""
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
+const { _internals } = require("./npm/lib/python-runner");
+
+const root = process.argv[1];
+const target = path.join(root, "target");
+fs.mkdirSync(target);
+
+function rejectsSymlink(name, prepare, action) {
+  const testRoot = path.join(root, name);
+  fs.mkdirSync(testRoot);
+  prepare(testRoot);
+  assert.throws(action.bind(null, testRoot), /symbolic link/);
+}
+
+rejectsSymlink("home-link", (testRoot) => {
+  fs.symlinkSync(target, path.join(testRoot, "home"));
+}, (testRoot) => {
+  assert.throws(() => _internals.readSelfUpdateState({
+    KAGENT_HOME: path.join(testRoot, "home"),
+  }), /symbolic link/);
+  _internals.ensureCacheRoot({KAGENT_HOME: path.join(testRoot, "home")});
+});
+rejectsSymlink("cache-link", (testRoot) => {
+  const home = path.join(testRoot, "home");
+  fs.mkdirSync(home);
+  fs.symlinkSync(target, path.join(home, "cache"));
+}, (testRoot) => {
+  _internals.ensureCacheRoot({KAGENT_HOME: path.join(testRoot, "home")});
+});
+rejectsSymlink("runtime-link", (testRoot) => {
+  const cache = path.join(testRoot, "home", "cache");
+  fs.mkdirSync(cache, {recursive: true});
+  fs.symlinkSync(target, path.join(cache, "npm-python"));
+}, (testRoot) => {
+  _internals.ensureCacheRoot({KAGENT_HOME: path.join(testRoot, "home")});
+});
+rejectsSymlink("version-link", (testRoot) => {
+  fs.symlinkSync(target, path.join(testRoot, "runtime-version"));
+}, (testRoot) => {
+  _internals.ensurePrivateDirectory(path.join(testRoot, "runtime-version"));
+});
+rejectsSymlink("explicit-link", (testRoot) => {
+  fs.symlinkSync(target, path.join(testRoot, "venv"));
+}, (testRoot) => {
+  _internals.ensureCacheRoot({KAGENT_NODE_VENV: path.join(testRoot, "venv")});
+});
+rejectsSymlink("state-link", (testRoot) => {
+  const cache = path.join(testRoot, "home", "cache");
+  fs.mkdirSync(cache, {recursive: true});
+  fs.symlinkSync(path.join(target, "state.json"), path.join(cache, "npm-self-update.json"));
+}, (testRoot) => {
+  assert.throws(() => _internals.readSelfUpdateState({
+    KAGENT_HOME: path.join(testRoot, "home"),
+  }), /symbolic link/);
+  _internals.writeSelfUpdateState({checked: true}, {
+    KAGENT_HOME: path.join(testRoot, "home"),
+  });
+});
+"""
+
+    completed = subprocess.run(
+        [node, "-e", script, str(tmp_path)],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+
+
 def test_npm_runner_reinstalls_cached_python_runtime_when_sources_change():
     runner = Path("npm/lib/python-runner.js").read_text(encoding="utf-8")
 
