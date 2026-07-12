@@ -113,6 +113,33 @@ def test_stdio_runtime_reports_malformed_json_as_structured_error(tmp_path):
     assert events[-1]["error_code"] == "invalid_json"
 
 
+def test_stdio_runtime_prunes_expired_pending_approvals_on_startup(tmp_path):
+    pending_directory = tmp_path / "pending-approvals"
+    current = pending_directory / "123e4567-e89b-42d3-a456-426614174000.json"
+    stale = pending_directory / "223e4567-e89b-42d3-a456-426614174000.json"
+    payload = {
+        "action": {"id": "step-1", "tool": "open_url", "input": {}},
+        "goal": "open page",
+        "runtime_goal": "open page",
+        "plan": {"actions": []},
+        "phase": "awaiting_approval",
+    }
+    stdio_runtime.save_pending_approval(str(current), payload)
+    stale.write_text("stale", encoding="utf-8")
+    stale_time = time.time() - (25 * 60 * 60)
+    os.utime(stale, (stale_time, stale_time))
+
+    session = stdio_runtime.StdioRuntimeSession(
+        io.StringIO(),
+        memory_path=str(tmp_path / "memory.json"),
+        pending_approval_path=str(current),
+    )
+
+    assert not stale.exists()
+    assert session.pending_approval is not None
+    assert session.pending_approval.action["id"] == "step-1"
+
+
 def test_stdio_runtime_reports_invalid_iteration_budget_without_crashing(tmp_path):
     request = {
         "type": "run_request",

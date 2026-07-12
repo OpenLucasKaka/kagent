@@ -3,18 +3,30 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
+import stat
 import tempfile
 import time
 from pathlib import Path
 from typing import Any, Mapping
 
-from kagent.utils.paths import kagent_state_dir, migrate_legacy_kagent_state
+from kagent.utils.paths import (
+    ensure_directory_fd_matches_path,
+    kagent_state_dir,
+    migrate_legacy_kagent_state,
+    open_directory_fd,
+)
 
 PENDING_APPROVAL_PATH_ENV_VAR = "KAGENT_PENDING_APPROVAL_PATH"
 _SCHEMA_VERSION = "1"
 _MAX_SNAPSHOT_AGE_SECONDS = 24 * 60 * 60
 _MAX_CLOCK_SKEW_SECONDS = 5 * 60
 _VALID_PHASES = {"awaiting_approval", "approved_executing"}
+_PENDING_APPROVAL_FILE_PATTERN = re.compile(
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-"
+    r"[89ab][0-9a-f]{3}-[0-9a-f]{12}\.json$",
+    re.IGNORECASE,
+)
 
 
 def default_pending_approval_path(
@@ -33,6 +45,46 @@ def default_pending_approval_path(
         str(workspace_root.resolve()).encode("utf-8")
     ).hexdigest()
     return str(root / "pending-approvals" / f"{identity}.json")
+
+
+def prune_expired_pending_approvals(directory: str | Path) -> None:
+    target = Path(os.path.abspath(directory))
+    try:
+        directory_fd = open_directory_fd(target)
+    except FileNotFoundError:
+        return
+    cutoff = time.time() - _MAX_SNAPSHOT_AGE_SECONDS
+    try:
+        ensure_directory_fd_matches_path(target, directory_fd)
+        with os.scandir(directory_fd) as entries:
+            for entry in entries:
+                if not _PENDING_APPROVAL_FILE_PATTERN.fullmatch(entry.name):
+                    continue
+                flags = (
+                    os.O_RDONLY
+                    | getattr(os, "O_CLOEXEC", 0)
+                    | getattr(os, "O_NOFOLLOW", 0)
+                    | getattr(os, "O_NONBLOCK", 0)
+                )
+                try:
+                    candidate_fd = os.open(entry.name, flags, dir_fd=directory_fd)
+                except OSError:
+                    continue
+                try:
+                    candidate_stat = os.fstat(candidate_fd)
+                    if (
+                        stat.S_ISREG(candidate_stat.st_mode)
+                        and candidate_stat.st_mtime < cutoff
+                    ):
+                        try:
+                            os.unlink(entry.name, dir_fd=directory_fd)
+                        except FileNotFoundError:
+                            pass
+                finally:
+                    os.close(candidate_fd)
+        ensure_directory_fd_matches_path(target, directory_fd)
+    finally:
+        os.close(directory_fd)
 
 
 def load_pending_approval(path: str) -> dict[str, Any] | None:

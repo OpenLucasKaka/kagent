@@ -1,5 +1,6 @@
 import io
 import json
+import os
 from pathlib import Path
 
 import pytest
@@ -134,6 +135,65 @@ def test_pending_approval_store_removes_expired_snapshot(tmp_path, monkeypatch):
 
     assert load_pending_approval(str(path)) is None
     assert not path.exists()
+
+
+def test_prune_expired_pending_approvals_removes_only_stale_uuid_files(tmp_path):
+    directory = tmp_path / "pending-approvals"
+    directory.mkdir()
+    stale = directory / "123e4567-e89b-42d3-a456-426614174000.json"
+    fresh = directory / "223e4567-e89b-42d3-a456-426614174000.json"
+    unrelated = directory / "unrelated.json"
+    matching_directory = directory / "323e4567-e89b-42d3-a456-426614174000.json"
+    for path in (stale, fresh, unrelated):
+        path.write_text(path.name, encoding="utf-8")
+    matching_directory.mkdir()
+    stale_time = pending_approval_store.time.time() - (25 * 60 * 60)
+    os.utime(stale, (stale_time, stale_time))
+    os.utime(unrelated, (stale_time, stale_time))
+    os.utime(matching_directory, (stale_time, stale_time))
+
+    pending_approval_store.prune_expired_pending_approvals(directory)
+
+    assert not stale.exists()
+    assert fresh.exists()
+    assert unrelated.exists()
+    assert matching_directory.is_dir()
+
+
+def test_prune_expired_pending_approvals_ignores_missing_directory(tmp_path):
+    pending_approval_store.prune_expired_pending_approvals(tmp_path / "missing")
+
+
+def test_prune_expired_pending_approvals_rejects_symlinked_parent(tmp_path):
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    stale = outside / "123e4567-e89b-42d3-a456-426614174000.json"
+    stale.write_text("outside", encoding="utf-8")
+    stale_time = pending_approval_store.time.time() - (25 * 60 * 60)
+    os.utime(stale, (stale_time, stale_time))
+    linked = tmp_path / "linked"
+    linked.symlink_to(outside, target_is_directory=True)
+
+    with pytest.raises(ValueError, match="must not contain symlinks"):
+        pending_approval_store.prune_expired_pending_approvals(linked)
+
+    assert stale.read_text(encoding="utf-8") == "outside"
+
+
+def test_prune_expired_pending_approvals_does_not_follow_matching_symlink(tmp_path):
+    directory = tmp_path / "pending-approvals"
+    directory.mkdir()
+    outside = tmp_path / "outside.json"
+    outside.write_text("outside", encoding="utf-8")
+    stale_time = pending_approval_store.time.time() - (25 * 60 * 60)
+    os.utime(outside, (stale_time, stale_time))
+    candidate = directory / "123e4567-e89b-42d3-a456-426614174000.json"
+    candidate.symlink_to(outside)
+
+    pending_approval_store.prune_expired_pending_approvals(directory)
+
+    assert candidate.is_symlink()
+    assert outside.read_text(encoding="utf-8") == "outside"
 
 
 def test_stdio_runtime_does_not_replay_interrupted_approved_action(

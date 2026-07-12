@@ -65,9 +65,9 @@ def _directory_open_flags() -> int:
     )
 
 
-def _open_directory(path: Path, *, create: bool = False) -> int:
+def open_directory_fd(path: Path, *, create: bool = False) -> int:
     if not path.is_absolute():
-        raise ValueError(f"migration directory must be absolute: {path}")
+        raise ValueError(f"directory path must be absolute: {path}")
     flags = _directory_open_flags()
     current_fd = os.open(path.anchor, flags)
     try:
@@ -85,11 +85,11 @@ def _open_directory(path: Path, *, create: bool = False) -> int:
                     next_fd = os.open(part, flags, dir_fd=current_fd)
                 except OSError as exc:
                     raise ValueError(
-                        f"migration path must not contain symlinks or non-directories: {path}"
+                        f"directory path must not contain symlinks or non-directories: {path}"
                     ) from exc
             except OSError as exc:
                 raise ValueError(
-                    f"migration path must not contain symlinks or non-directories: {path}"
+                    f"directory path must not contain symlinks or non-directories: {path}"
                 ) from exc
             os.close(current_fd)
             current_fd = next_fd
@@ -99,25 +99,25 @@ def _open_directory(path: Path, *, create: bool = False) -> int:
         raise
 
 
-def _ensure_directory_fd_matches_path(path: Path, directory_fd: int) -> None:
+def ensure_directory_fd_matches_path(path: Path, directory_fd: int) -> None:
     try:
         path_stat = os.stat(path, follow_symlinks=False)
     except OSError as exc:
-        raise ValueError(f"migration directory changed during operation: {path}") from exc
+        raise ValueError(f"directory changed during operation: {path}") from exc
     descriptor_stat = os.fstat(directory_fd)
     if (
         not stat.S_ISDIR(path_stat.st_mode)
         or path_stat.st_dev != descriptor_stat.st_dev
         or path_stat.st_ino != descriptor_stat.st_ino
     ):
-        raise ValueError(f"migration directory changed or became a symlink: {path}")
+        raise ValueError(f"directory changed or became a symlink: {path}")
 
 
 def _ensure_private_directory(path: Path) -> None:
-    directory_fd = _open_directory(path, create=True)
+    directory_fd = open_directory_fd(path, create=True)
     try:
         os.fchmod(directory_fd, _OWNER_DIRECTORY_MODE)
-        _ensure_directory_fd_matches_path(path, directory_fd)
+        ensure_directory_fd_matches_path(path, directory_fd)
     finally:
         os.close(directory_fd)
 
@@ -136,7 +136,7 @@ def _legacy_root(
 
 def _path_kind(path: Path) -> Optional[str]:
     try:
-        parent_fd = _open_directory(path.parent)
+        parent_fd = open_directory_fd(path.parent)
     except FileNotFoundError:
         return None
     try:
@@ -144,7 +144,7 @@ def _path_kind(path: Path) -> Optional[str]:
             mode = os.stat(path.name, dir_fd=parent_fd, follow_symlinks=False).st_mode
         except FileNotFoundError:
             return None
-        _ensure_directory_fd_matches_path(path.parent, parent_fd)
+        ensure_directory_fd_matches_path(path.parent, parent_fd)
     finally:
         os.close(parent_fd)
     if stat.S_ISREG(mode):
@@ -157,7 +157,7 @@ def _path_kind(path: Path) -> Optional[str]:
 
 
 def _open_source_file(path: Path) -> int:
-    parent_fd = _open_directory(path.parent)
+    parent_fd = open_directory_fd(path.parent)
     try:
         flags = (
             os.O_RDONLY
@@ -174,7 +174,7 @@ def _open_source_file(path: Path) -> int:
         try:
             if not stat.S_ISREG(os.fstat(source_fd).st_mode):
                 raise ValueError(f"migration source must be a regular file: {path}")
-            _ensure_directory_fd_matches_path(path.parent, parent_fd)
+            ensure_directory_fd_matches_path(path.parent, parent_fd)
             return source_fd
         except BaseException:
             os.close(source_fd)
@@ -226,11 +226,11 @@ def _destination_entry_exists(parent_fd: int, name: str, path: Path) -> bool:
 
 def _atomic_copy_file(source: Path, destination: Path) -> None:
     _ensure_private_directory(destination.parent)
-    destination_parent_fd = _open_directory(destination.parent)
+    destination_parent_fd = open_directory_fd(destination.parent)
     try:
-        _ensure_directory_fd_matches_path(destination.parent, destination_parent_fd)
+        ensure_directory_fd_matches_path(destination.parent, destination_parent_fd)
         if _destination_entry_exists(destination_parent_fd, destination.name, destination):
-            _ensure_directory_fd_matches_path(destination.parent, destination_parent_fd)
+            ensure_directory_fd_matches_path(destination.parent, destination_parent_fd)
             return
         source_fd = _open_source_file(source)
         try:
@@ -259,7 +259,7 @@ def _atomic_copy_file(source: Path, destination: Path) -> None:
                         _destination_entry_exists(
                             destination_parent_fd, destination.name, destination
                         )
-                    _ensure_directory_fd_matches_path(destination.parent, destination_parent_fd)
+                    ensure_directory_fd_matches_path(destination.parent, destination_parent_fd)
                 finally:
                     try:
                         os.unlink(temporary_name, dir_fd=destination_parent_fd)
@@ -274,10 +274,10 @@ def _atomic_copy_file(source: Path, destination: Path) -> None:
 def _scan_directory(source: Path) -> Tuple[List[Path], List[Path]]:
     directories: List[Path] = []
     files: List[Path] = []
-    root_fd = _open_directory(source)
+    root_fd = open_directory_fd(source)
 
     def scan(directory_fd: int, directory: Path) -> None:
-        _ensure_directory_fd_matches_path(directory, directory_fd)
+        ensure_directory_fd_matches_path(directory, directory_fd)
         with os.scandir(directory_fd) as entries:
             for entry in entries:
                 entry_path = directory / entry.name
@@ -306,7 +306,7 @@ def _scan_directory(source: Path) -> Tuple[List[Path], List[Path]]:
                         "migration directories must contain only regular files and directories: "
                         f"{entry_path}"
                     )
-        _ensure_directory_fd_matches_path(directory, directory_fd)
+        ensure_directory_fd_matches_path(directory, directory_fd)
 
     try:
         scan(root_fd, source)
@@ -344,7 +344,7 @@ def _write_marker(marker: Path) -> None:
     if marker_kind is not None:
         if marker_kind != "file":
             raise ValueError(f"migration marker must be a regular file: {marker}")
-        parent_fd = _open_directory(marker.parent)
+        parent_fd = open_directory_fd(marker.parent)
         try:
             flags = (
                 os.O_RDONLY
@@ -357,14 +357,14 @@ def _write_marker(marker: Path) -> None:
                 if not stat.S_ISREG(os.fstat(marker_fd).st_mode):
                     raise ValueError(f"migration marker must be a regular file: {marker}")
                 os.fchmod(marker_fd, _OWNER_FILE_MODE)
-                _ensure_directory_fd_matches_path(marker.parent, parent_fd)
+                ensure_directory_fd_matches_path(marker.parent, parent_fd)
             finally:
                 os.close(marker_fd)
         finally:
             os.close(parent_fd)
         return
     _ensure_private_directory(marker.parent)
-    parent_fd = _open_directory(marker.parent)
+    parent_fd = open_directory_fd(marker.parent)
     try:
         temporary_fd, temporary_name = _open_temporary_file(parent_fd, marker.name)
         try:
@@ -383,7 +383,7 @@ def _write_marker(marker: Path) -> None:
             except FileExistsError:
                 if _path_kind(marker) != "file":
                     raise ValueError(f"migration marker must be a regular file: {marker}")
-            _ensure_directory_fd_matches_path(marker.parent, parent_fd)
+            ensure_directory_fd_matches_path(marker.parent, parent_fd)
         finally:
             try:
                 os.unlink(temporary_name, dir_fd=parent_fd)

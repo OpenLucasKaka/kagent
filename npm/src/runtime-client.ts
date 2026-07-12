@@ -31,9 +31,6 @@ type PythonRunner = {
 };
 
 const pythonRunner = require("./python-runner") as PythonRunner;
-const PENDING_APPROVAL_MAX_AGE_MS = 24 * 60 * 60 * 1000;
-const PENDING_APPROVAL_FILE_PATTERN =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.json$/i;
 const APPROVAL_EXECUTION_INTERRUPTED_MESSAGE =
   "The approved action was interrupted and was not replayed because its side-effect state is uncertain.";
 
@@ -77,7 +74,6 @@ export function createRuntimeSessionClient(): RuntimeSessionClient {
   const configuredPendingApprovalPath = process.env.KAGENT_PENDING_APPROVAL_PATH;
   const pendingApprovalPath = configuredPendingApprovalPath || (() => {
     const pendingApprovalDirectory = kagentStatePath("pending-approvals");
-    cleanupExpiredPendingApprovals(pendingApprovalDirectory);
     return path.join(pendingApprovalDirectory, `${sessionId}.json`);
   })();
   let child: ChildProcessWithoutNullStreams | null = null;
@@ -472,67 +468,6 @@ export function createRuntimeSessionClient(): RuntimeSessionClient {
       }
     }
   }
-}
-
-function cleanupExpiredPendingApprovals(directory: string): void {
-  const directoryFlag = fs.constants.O_DIRECTORY;
-  const noFollowFlag = fs.constants.O_NOFOLLOW;
-  if (
-    typeof directoryFlag !== "number" ||
-    typeof noFollowFlag !== "number"
-  ) {
-    return;
-  }
-  let directoryFd: number | null = null;
-  try {
-    directoryFd = fs.openSync(
-      directory,
-      fs.constants.O_RDONLY | directoryFlag | noFollowFlag,
-    );
-    if (!fs.fstatSync(directoryFd).isDirectory()) {
-      return;
-    }
-    const anchoredDirectory = openedDirectoryPath(directoryFd);
-    if (!anchoredDirectory) {
-      return;
-    }
-    const entries = fs.readdirSync(anchoredDirectory, { withFileTypes: true });
-    const cutoff = Date.now() - PENDING_APPROVAL_MAX_AGE_MS;
-    for (const entry of entries) {
-      if (!PENDING_APPROVAL_FILE_PATTERN.test(entry.name)) {
-        continue;
-      }
-      const candidate = path.join(anchoredDirectory, entry.name);
-      try {
-        const stats = fs.lstatSync(candidate);
-        if (stats.isFile() && stats.mtimeMs < cutoff) {
-          fs.unlinkSync(candidate);
-        }
-      } catch {
-        // A concurrent runtime may have replaced or removed the snapshot.
-      }
-    }
-  } catch {
-    // Refuse to clean when the directory cannot be opened without following links.
-  } finally {
-    if (directoryFd !== null) {
-      try {
-        fs.closeSync(directoryFd);
-      } catch {
-        // The descriptor is no longer usable; cleanup remains best-effort.
-      }
-    }
-  }
-}
-
-function openedDirectoryPath(directoryFd: number): string | null {
-  if (process.platform === "darwin") {
-    return path.join("/dev/fd", String(directoryFd));
-  }
-  if (process.platform === "linux") {
-    return path.join("/proc/self/fd", String(directoryFd));
-  }
-  return null;
 }
 
 function errorMessage(error: unknown): string {

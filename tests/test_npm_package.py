@@ -2320,7 +2320,7 @@ main().catch((error) => {
     assert completed.returncode == 0, completed.stderr
 
 
-def test_npm_runtime_client_safely_cleans_expired_orphan_approval_snapshots():
+def test_npm_runtime_client_leaves_expired_approval_cleanup_to_python():
     node = shutil.which("node")
     if node is None:
         return
@@ -2348,28 +2348,6 @@ const staleTime = new Date(Date.now() - (25 * 60 * 60 * 1000));
 fs.utimesSync(stalePath, staleTime, staleTime);
 fs.utimesSync(unrelatedPath, staleTime, staleTime);
 
-function supportsAnchoredDirectoryCleanup(directory) {
-  if (process.platform !== "darwin" && process.platform !== "linux") {
-    return false;
-  }
-  const fd = fs.openSync(
-    directory,
-    fs.constants.O_RDONLY | fs.constants.O_DIRECTORY | fs.constants.O_NOFOLLOW,
-  );
-  const anchor = process.platform === "darwin"
-    ? path.join("/dev/fd", String(fd))
-    : path.join("/proc/self/fd", String(fd));
-  try {
-    fs.readdirSync(anchor);
-    return true;
-  } catch (_error) {
-    return false;
-  } finally {
-    fs.closeSync(fd);
-  }
-}
-const cleanupAvailable = supportsAnchoredDirectoryCleanup(pendingDirectory);
-
 const runnerPath = require.resolve("./npm/lib/python-runner");
 require.cache[runnerPath] = {
   id: runnerPath,
@@ -2392,7 +2370,7 @@ require.cache[runnerPath] = {
 
 const {createRuntimeSessionClient} = require("./npm/lib/runtime-client");
 const client = createRuntimeSessionClient();
-assert.equal(fs.existsSync(stalePath), !cleanupAvailable);
+assert.equal(fs.existsSync(stalePath), true);
 assert.equal(fs.existsSync(freshPath), true);
 assert.equal(fs.existsSync(unrelatedPath), true);
 client.close();
@@ -2408,6 +2386,11 @@ fs.rmSync(root, {recursive: true, force: true});
     )
 
     assert completed.returncode == 0, completed.stderr
+
+    runtime_client_source = Path("npm/src/runtime-client.ts").read_text(encoding="utf-8")
+    runtime_client_lib = Path("npm/lib/runtime-client.js").read_text(encoding="utf-8")
+    assert "cleanupExpiredPendingApprovals" not in runtime_client_source
+    assert "cleanupExpiredPendingApprovals" not in runtime_client_lib
 
 
 def test_npm_runtime_client_does_not_clean_through_symlinked_approval_directory():

@@ -5,6 +5,7 @@ import sys
 import threading
 import warnings
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Dict, Iterable, TextIO
 
 from kagent.cli.conversation import (
@@ -22,6 +23,7 @@ from kagent.cli.pending_approval import (
     clear_pending_approval,
     default_pending_approval_path,
     load_pending_approval,
+    prune_expired_pending_approvals,
     save_pending_approval,
 )
 from kagent.cli.provider import RuntimeProviderConfigError, runtime_provider_config_message
@@ -92,6 +94,8 @@ class StdioRuntimeSession:
             if pending_approval_path is None
             else pending_approval_path
         )
+        if self.pending_approval_path:
+            prune_expired_pending_approvals(Path(self.pending_approval_path).parent)
         persisted_pending = load_pending_approval(self.pending_approval_path)
         self.pending_approval = (
             PendingApproval(**persisted_pending) if persisted_pending else None
