@@ -7,6 +7,42 @@ The newer Codex-style runtime adds the first non-coding agent layer: LLM-compati
 planning, strict JSON plan parsing, policy-gated tool execution, structured
 observations, and fake-provider tests that do not require network credentials.
 
+## User and project storage boundaries
+
+`kagent.utils.paths` is the shared Python authority for user-level storage. It
+resolves `KAGENT_HOME`, defaulting to the global `~/.kagent`, and derives these
+current paths:
+
+```text
+~/.kagent/config/provider.json
+~/.kagent/state/session-memory.json
+~/.kagent/state/history
+~/.kagent/state/pending-approvals/
+~/.kagent/state/patches/
+~/.kagent/cache/npm-python/
+```
+
+Path precedence is explicit override > `KAGENT_HOME`-derived path > default
+`~/.kagent` path. Existing component-specific variables therefore remain the
+highest-priority controls, while Python and Node agree on the shared root. The
+npm launcher rebuilds its disposable Python runtime beneath
+`~/.kagent/cache/npm-python`; cache is rebuilt rather than copied from the old
+layout.
+
+XDG config and state directories are legacy migration sources only. Before a
+default durable path is consumed, Python performs a one-time, idempotent copy
+of provider config, session memory, prompt history, pending approvals, and
+patch checkpoints. Migration must never overwrite an existing destination,
+leaves legacy sources intact, uses owner-only modes, rejects symlink or
+non-regular layouts, copies atomically, and writes its completion marker only
+after all eligible items succeed. An explicit `KAGENT_HOME` skips discovery of
+legacy XDG state.
+
+This global user boundary does not absorb project data. The project-local
+`$PWD/.kagent/runtime-workspace` and `$PWD/.kagent/skills` directories retain
+their current working-directory semantics and remain separate from global
+`~/.kagent` configuration, durable state, and cache.
+
 ## LangGraph runtime
 
 `core/agent.py` owns the LangGraph runtime topology:

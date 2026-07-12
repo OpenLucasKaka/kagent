@@ -1,5 +1,16 @@
 # Iteration Log
 
+## 2026-07-12
+
+- Unified user-level storage under `~/.kagent` for provider configuration,
+  durable state, and npm-managed cache, with `KAGENT_HOME` as the shared root
+  override and existing component-specific overrides retaining precedence.
+- Added safe one-time migration from legacy XDG config and state locations;
+  destinations are never overwritten, legacy sources remain untouched, unsafe
+  symlink layouts are rejected, and disposable cache data is rebuilt.
+- Kept project-local `$PWD/.kagent/runtime-workspace` and `$PWD/.kagent/skills`
+  separate from the global user home.
+
 ## 2026-07-11
 
 - Extracted grapheme-aware terminal editing, slash-command discovery,

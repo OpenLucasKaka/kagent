@@ -436,6 +436,27 @@ def test_operations_runbook_documents_continuous_iteration_and_failure_triage():
     assert "curl" in runbook
 
 
+def test_operations_runbook_documents_unified_kagent_home_migration():
+    runbook = Path("docs/operations.md").read_text()
+    normalized = " ".join(runbook.split())
+
+    assert "KAGENT_HOME" in runbook
+    assert "~/.kagent/config/provider.json" in runbook
+    assert "~/.kagent/state/session-memory.json" in runbook
+    assert "~/.kagent/state/history" in runbook
+    assert "~/.kagent/state/pending-approvals" in runbook
+    assert "~/.kagent/state/patches" in runbook
+    assert "~/.kagent/cache/npm-python" in runbook
+    assert "explicit overrides take precedence over it" in normalized
+    assert "XDG variables are consulted only as legacy migration sources" in normalized
+    assert "never overwrites an existing destination" in normalized
+    assert "legacy sources remain untouched" in normalized
+    assert "cache is rebuilt" in normalized
+    assert "global `~/.kagent`" in normalized
+    assert "The project-local" in normalized
+    assert "$PWD/.kagent/runtime-workspace" in normalized
+
+
 def test_operations_runbook_documents_cross_replica_cancellation_triage():
     runbook = Path("docs/operations.md").read_text()
 

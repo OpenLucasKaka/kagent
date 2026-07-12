@@ -188,7 +188,7 @@ def test_readme_documents_console_script_entrypoints():
     assert "KAGENT_SESSION_MEMORY_PATH" in readme
     assert "session-memory.json" in readme
     assert "KAGENT_HISTORY_PATH" in readme
-    assert "kagent/history" in readme
+    assert "~/.kagent/state/history" in readme
     assert "prompt history" in readme
     assert "/reset" in readme
     assert "/doctor" in readme
@@ -205,6 +205,34 @@ def test_readme_documents_console_script_entrypoints():
     assert "--runtime-plan" in readme
     assert "--max-iterations" in readme
     assert "JSON integers" in readme
+
+
+def test_product_docs_document_the_unified_user_home():
+    readme = Path("README.md").read_text()
+    architecture = Path("docs/architecture.md").read_text()
+    iteration_log = Path("docs/iteration_log.md").read_text()
+
+    for document in (readme, architecture):
+        assert "KAGENT_HOME" in document
+        assert "~/.kagent/config/provider.json" in document
+        assert "~/.kagent/state/session-memory.json" in document
+        assert "~/.kagent/state/history" in document
+        assert "~/.kagent/cache/npm-python" in document
+        assert "$PWD/.kagent" in document
+        assert "explicit override" in document
+        assert "legacy" in document
+        assert "XDG" in document
+
+    assert "XDG variables are legacy" in readme
+    assert "migration sources, not current defaults" in readme
+    assert "global `~/.kagent`" in readme
+    assert "project-local `$PWD/.kagent`" in readme
+    assert "never overwrite" in architecture
+    assert "symlink" in architecture
+    assert "cache is rebuilt" in architecture
+    assert "Unified user-level storage under `~/.kagent`" in iteration_log
+    assert "KAGENT_HOME" in iteration_log
+    assert "legacy XDG" in iteration_log
 
 
 def test_readme_positions_deterministic_graph_as_smoke_not_demo():

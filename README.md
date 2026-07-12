@@ -29,9 +29,8 @@ and then opens the terminal agent. If no provider is configured yet, kagent
 starts a first-time setup flow. The setup first asks you to choose Qwen,
 DeepSeek, Ollama, or OpenAI-compatible/custom from a provider menu, then asks
 for that provider's Base URL, model, and API key. The local provider config is
-stored at `${XDG_CONFIG_HOME:-~/.config}/kagent/provider.json` with owner-only
-permissions. Use `kagent --classic` to bypass the Ink UI and run the Python CLI
-directly.
+stored at `~/.kagent/config/provider.json` with owner-only permissions. Use
+`kagent --classic` to bypass the Ink UI and run the Python CLI directly.
 
 Interactive `kagent` launches check GitHub for updates. For this GitHub-based
 install path, kagent compares both the package version and the `main` commit
@@ -50,6 +49,38 @@ kagent --configure
 Environment variables still override the local config for CI or temporary
 operator sessions: `KAGENT_LLM_PROVIDER`, `KAGENT_LLM_BASE_URL`,
 `KAGENT_LLM_API_KEY`, and `KAGENT_LLM_MODEL`.
+
+### User and project data
+
+Kagent keeps user-level product data under the global `~/.kagent` directory:
+
+```text
+~/.kagent/config/provider.json
+~/.kagent/state/session-memory.json
+~/.kagent/state/history
+~/.kagent/state/pending-approvals/
+~/.kagent/state/patches/
+~/.kagent/cache/npm-python/
+```
+
+Set `KAGENT_HOME` to move that shared root. Existing explicit override
+variables, such as `KAGENT_LLM_CONFIG_PATH`, `KAGENT_SESSION_MEMORY_PATH`,
+`KAGENT_HISTORY_PATH`, `KAGENT_PENDING_APPROVAL_PATH`,
+`KAGENT_PATCH_STATE_DIR`, and `KAGENT_NODE_VENV`, retain higher precedence than
+`KAGENT_HOME`. The default is used only when neither an explicit override nor
+`KAGENT_HOME` is set.
+
+On first use of the default home, Kagent safely copies durable provider and
+state data from the former XDG locations. Existing destinations are never
+overwritten, legacy sources remain untouched, owner-only permissions and
+symlink checks are enforced, and disposable cache data is rebuilt under
+`~/.kagent/cache/npm-python` instead of migrated. XDG variables are legacy
+migration sources, not current defaults. An explicit `KAGENT_HOME` skips legacy
+discovery so a custom home cannot import unrelated state.
+
+The project-local `$PWD/.kagent` directory remains separate from the global
+`~/.kagent`: runtime workspaces and project skills continue to live under
+`$PWD/.kagent/runtime-workspace` and `$PWD/.kagent/skills`.
 
 One-shot runs use the same command:
 
@@ -142,10 +173,10 @@ shows the current summary/facts/open-items/recent-turns view. The CLI
 defaults to the runtime for both `kagent` and `kagent "goal"`; use
 `--deterministic` only for the legacy regression graph. Runtime turns use three
 planning iterations by default. TTY sessions persist memory by default at
-`${XDG_STATE_HOME:-~/.local/state}/kagent/session-memory.json`; set
+`~/.kagent/state/session-memory.json`; set
 `KAGENT_SESSION_MEMORY_PATH` to override that path or to an empty value to
 disable default persistence. Prompt history is stored owner-only at
-`${XDG_STATE_HOME:-~/.local/state}/kagent/history`; set `KAGENT_HISTORY_PATH`
+`~/.kagent/state/history`; set `KAGENT_HISTORY_PATH`
 to override it or to an empty value to disable persisted prompt history. Both
 memory and prompt history redact common API keys, bearer tokens, and URL
 credentials before writing to disk. Use `--max-iterations` to override the iteration

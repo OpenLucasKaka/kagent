@@ -291,6 +291,41 @@ kagent-serve --host 127.0.0.1 --port 8000
 
 ## Codex-style runtime configuration
 
+### Unified Kagent home
+
+User-level configuration, durable state, and npm-managed cache now share the
+global `~/.kagent` root:
+
+```text
+~/.kagent/config/provider.json
+~/.kagent/state/session-memory.json
+~/.kagent/state/history
+~/.kagent/state/pending-approvals/
+~/.kagent/state/patches/
+~/.kagent/cache/npm-python/
+```
+
+Set `KAGENT_HOME` to relocate the shared root. Existing explicit overrides take
+precedence over it: `KAGENT_LLM_CONFIG_PATH`, `KAGENT_SESSION_MEMORY_PATH`,
+`KAGENT_HISTORY_PATH`, `KAGENT_PENDING_APPROVAL_PATH`,
+`KAGENT_PATCH_STATE_DIR`, and `KAGENT_NODE_VENV` continue to select their exact
+component paths. Without an explicit override, paths come from `KAGENT_HOME`;
+without either, they come from `~/.kagent`.
+
+On the first default-path read, durable data is copied from the former XDG
+config and state locations. XDG variables are consulted only as legacy
+migration sources, never as current write defaults. Migration never overwrites
+an existing destination, enforces `0700` directories and `0600` files, rejects
+symlink and unexpected file types, writes atomically, and records completion
+only after all eligible copies succeed. The legacy sources remain untouched.
+When `KAGENT_HOME` is explicit, legacy discovery is skipped. Disposable XDG
+cache is not migrated; cache is rebuilt at `~/.kagent/cache/npm-python` when
+the npm launcher next needs Python.
+
+Do not confuse that user-level root with repository state. The project-local
+`$PWD/.kagent/runtime-workspace` and `$PWD/.kagent/skills` directories remain
+bound to the current workspace and separate from global `~/.kagent` data.
+
 The Codex-style runtime can use a fake provider for deterministic tests or an
 OpenAI-compatible chat-completions endpoint for real planning. Configure real
 planning with:
@@ -574,7 +609,7 @@ Ink launches the Python runtime in the directory where the user started
 `kagent`, so workspace tools never inherit the npm installation directory.
 Each terminal session receives a stable restart ID and stores an approval
 snapshot at an owner-only path under
-`${XDG_STATE_HOME:-~/.local/state}/kagent/pending-approvals`. The snapshot is
+`~/.kagent/state/pending-approvals`. The snapshot is
 written atomically before the approval is shown and contains the resumable plan;
 a controlled Python child restart reloads it and re-emits the same approval
 instead of rerunning completed actions. Approved actions are marked as executing
@@ -597,7 +632,7 @@ are not sent to the model as runtime goals.
 The default turn budget is three planning iterations; add
 `--max-iterations N` only when a workflow needs a
 different budget. TTY sessions persist compact memory across shell restarts by
-default at `${XDG_STATE_HOME:-~/.local/state}/kagent/session-memory.json`;
+default at `~/.kagent/state/session-memory.json`;
 piped interactive runs keep memory in-process and do not write a default file.
 Add `--session-memory PATH` for an explicit memory file. Set
 `KAGENT_SESSION_MEMORY_PATH` to override the default location, or set it to an
@@ -614,7 +649,7 @@ older turns are folded into a bounded summary, durable facts, and open items,
 while recent turns remain available verbatim for follow-up resolution.
 
 TTY prompt history is persisted separately at
-`${XDG_STATE_HOME:-~/.local/state}/kagent/history`, with the same owner-only
+`~/.kagent/state/history`, with the same owner-only
 directory and file permissions. Set `KAGENT_HISTORY_PATH` to override that
 location, or set it to an empty value to disable persisted prompt history.
 Prompt history is redacted before writes and again while loading, so common API
@@ -756,7 +791,8 @@ operations; move operations use `*** Move to: PATH` and report
 in observations. Multi-file patches use a workspace advisory lock, same-directory
 atomic replacement, and compensating rollback so a failed commit does not leave
 partially updated files. Each successful patch records an owner-only checkpoint
-under `${KAGENT_PATCH_STATE_DIR:-${XDG_STATE_HOME:-~/.local/state}/kagent/patches}`.
+under `~/.kagent/state/patches` by default; `KAGENT_PATCH_STATE_DIR` is the
+explicit override.
 Checkpoint manifests are authenticated with a generated owner-only HMAC key.
 If a process exits during a multi-file commit, the next patch history, apply, or
 revert operation detects the prepared journal and restores every file to its
