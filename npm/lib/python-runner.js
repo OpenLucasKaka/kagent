@@ -94,12 +94,27 @@ function rejectSymlinks(targetPath) {
 function ensurePrivateDirectory(directory) {
   rejectSymlinks(directory);
   fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
-  rejectSymlinks(directory);
-  const stat = fs.lstatSync(directory);
-  if (!stat.isDirectory()) {
-    throw new Error(`managed path is not a directory: ${directory}`);
+  let directoryFd;
+  try {
+    directoryFd = fs.openSync(
+      directory,
+      fs.constants.O_RDONLY | fs.constants.O_DIRECTORY | fs.constants.O_NOFOLLOW
+    );
+  } catch (error) {
+    if (error.code === "ELOOP") {
+      throw new Error(`refusing symbolic link in managed path: ${directory}`);
+    }
+    throw error;
   }
-  fs.chmodSync(directory, 0o700);
+  try {
+    const stat = fs.fstatSync(directoryFd);
+    if (!stat.isDirectory()) {
+      throw new Error(`managed path is not a directory: ${directory}`);
+    }
+    fs.fchmodSync(directoryFd, 0o700);
+  } finally {
+    fs.closeSync(directoryFd);
+  }
   return directory;
 }
 
@@ -119,13 +134,32 @@ function ensureMetadataCacheRoot(env = process.env) {
 
 function writePrivateFile(filePath, body) {
   rejectSymlinks(filePath);
-  fs.writeFileSync(filePath, body, { encoding: "utf8", mode: 0o600 });
-  rejectSymlinks(filePath);
-  const stat = fs.lstatSync(filePath);
-  if (!stat.isFile()) {
-    throw new Error(`managed path is not a file: ${filePath}`);
+  let fileFd;
+  try {
+    fileFd = fs.openSync(
+      filePath,
+      fs.constants.O_WRONLY |
+        fs.constants.O_CREAT |
+        fs.constants.O_TRUNC |
+        fs.constants.O_NOFOLLOW,
+      0o600
+    );
+  } catch (error) {
+    if (error.code === "ELOOP") {
+      throw new Error(`refusing symbolic link in managed path: ${filePath}`);
+    }
+    throw error;
   }
-  fs.chmodSync(filePath, 0o600);
+  try {
+    const stat = fs.fstatSync(fileFd);
+    if (!stat.isFile()) {
+      throw new Error(`managed path is not a file: ${filePath}`);
+    }
+    fs.writeFileSync(fileFd, body, { encoding: "utf8" });
+    fs.fchmodSync(fileFd, 0o600);
+  } finally {
+    fs.closeSync(fileFd);
+  }
 }
 
 function privateFileStat(filePath) {

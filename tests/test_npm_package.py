@@ -2619,6 +2619,29 @@ assert.equal(fs.statSync(explicit).mode & 0o777, 0o700);
     assert completed.returncode == 0, completed.stderr
 
 
+def test_npm_runner_uses_nofollow_file_descriptors_for_final_components():
+    runner = Path("npm/lib/python-runner.js").read_text(encoding="utf-8")
+
+    assert "fs.constants.O_NOFOLLOW" in runner
+    assert "fs.constants.O_DIRECTORY" in runner
+    assert "fs.constants.O_RDONLY" in runner
+    assert "directoryFd = fs.openSync(" in runner
+    assert "fs.fstatSync(directoryFd)" in runner
+    assert "fs.fchmodSync(directoryFd, 0o700)" in runner
+    assert "fs.closeSync(directoryFd)" in runner
+    assert "fileFd = fs.openSync(" in runner
+    assert "fs.constants.O_WRONLY" in runner
+    assert "fs.constants.O_CREAT" in runner
+    assert "fs.constants.O_TRUNC" in runner
+    assert "fs.fstatSync(fileFd)" in runner
+    assert "fs.fchmodSync(fileFd, 0o600)" in runner
+    assert "fs.writeFileSync(fileFd" in runner
+    assert "fs.closeSync(fileFd)" in runner
+    assert "fs.chmodSync(directory" not in runner
+    assert "fs.chmodSync(filePath" not in runner
+    assert "fs.writeFileSync(filePath" not in runner
+
+
 def test_npm_runner_rejects_symlinks_in_managed_paths(tmp_path):
     node = shutil.which("node")
     if node is None:
