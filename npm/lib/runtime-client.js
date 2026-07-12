@@ -6,9 +6,9 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.createRuntimeSessionClient = createRuntimeSessionClient;
 const node_crypto_1 = require("node:crypto");
 const node_fs_1 = __importDefault(require("node:fs"));
-const node_os_1 = __importDefault(require("node:os"));
 const node_path_1 = __importDefault(require("node:path"));
 const node_readline_1 = __importDefault(require("node:readline"));
+const kagent_home_1 = require("./kagent-home");
 const protocol_1 = require("./protocol");
 const pythonRunner = require("./python-runner");
 const PENDING_APPROVAL_MAX_AGE_MS = 24 * 60 * 60 * 1000;
@@ -16,13 +16,12 @@ const PENDING_APPROVAL_FILE_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}
 const APPROVAL_EXECUTION_INTERRUPTED_MESSAGE = "The approved action was interrupted and was not replayed because its side-effect state is uncertain.";
 function createRuntimeSessionClient() {
     const sessionId = (0, node_crypto_1.randomUUID)();
-    const stateHome = process.env.XDG_STATE_HOME || node_path_1.default.join(node_os_1.default.homedir(), ".local", "state");
     const configuredPendingApprovalPath = process.env.KAGENT_PENDING_APPROVAL_PATH;
-    const pendingApprovalDirectory = node_path_1.default.join(stateHome, "kagent", "pending-approvals");
-    if (!configuredPendingApprovalPath) {
+    const pendingApprovalPath = configuredPendingApprovalPath || (() => {
+        const pendingApprovalDirectory = (0, kagent_home_1.kagentStatePath)("pending-approvals");
         cleanupExpiredPendingApprovals(pendingApprovalDirectory);
-    }
-    const pendingApprovalPath = configuredPendingApprovalPath || node_path_1.default.join(pendingApprovalDirectory, `${sessionId}.json`);
+        return node_path_1.default.join(pendingApprovalDirectory, `${sessionId}.json`);
+    })();
     let child = null;
     let stdout = null;
     let currentHandler = null;

@@ -1,9 +1,10 @@
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import readline from "node:readline";
+
+import { kagentStatePath } from "./kagent-home";
 
 import {
   parseRuntimeProtocolLine,
@@ -73,14 +74,12 @@ export type RuntimeProviderState = {
 
 export function createRuntimeSessionClient(): RuntimeSessionClient {
   const sessionId = randomUUID();
-  const stateHome = process.env.XDG_STATE_HOME || path.join(os.homedir(), ".local", "state");
   const configuredPendingApprovalPath = process.env.KAGENT_PENDING_APPROVAL_PATH;
-  const pendingApprovalDirectory = path.join(stateHome, "kagent", "pending-approvals");
-  if (!configuredPendingApprovalPath) {
+  const pendingApprovalPath = configuredPendingApprovalPath || (() => {
+    const pendingApprovalDirectory = kagentStatePath("pending-approvals");
     cleanupExpiredPendingApprovals(pendingApprovalDirectory);
-  }
-  const pendingApprovalPath =
-    configuredPendingApprovalPath || path.join(pendingApprovalDirectory, `${sessionId}.json`);
+    return path.join(pendingApprovalDirectory, `${sessionId}.json`);
+  })();
   let child: ChildProcessWithoutNullStreams | null = null;
   let stdout: readline.Interface | null = null;
   let currentHandler: ((event: RuntimeClientEvent) => void) | null = null;

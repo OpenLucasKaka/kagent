@@ -4,9 +4,10 @@ const childProcess = require("child_process");
 const crypto = require("crypto");
 const fs = require("fs");
 const https = require("https");
-const os = require("os");
 const path = require("path");
 const readline = require("readline");
+
+const { kagentCachePath } = require("./kagent-home");
 
 const GITHUB_PACKAGE_JSON_URL = "https://raw.githubusercontent.com/OpenLucasKaka/Kagent/main/package.json";
 const GITHUB_HEAD_URL = "https://api.github.com/repos/OpenLucasKaka/Kagent/commits/main";
@@ -53,17 +54,15 @@ function versionOutputTarget(args) {
   return null;
 }
 
-function cacheRoot() {
-  if (process.env.KAGENT_NODE_VENV) {
-    return path.resolve(process.env.KAGENT_NODE_VENV);
+function cacheRoot(env = process.env) {
+  if (env.KAGENT_NODE_VENV) {
+    return path.resolve(env.KAGENT_NODE_VENV);
   }
-  const base = process.env.XDG_CACHE_HOME || path.join(os.homedir(), ".cache");
-  return path.join(base, "kagent", "npm-python");
+  return kagentCachePath("npm-python", env);
 }
 
-function metadataCacheRoot() {
-  const base = process.env.XDG_CACHE_HOME || path.join(os.homedir(), ".cache");
-  return path.join(base, "kagent");
+function metadataCacheRoot(env = process.env) {
+  return path.dirname(kagentCachePath("npm-python", env));
 }
 
 function selfUpdateStatePath() {
@@ -505,8 +504,10 @@ module.exports = {
   runPythonEntrypoint,
   spawnPythonModule,
   _internals: {
+    cacheRoot,
     hasSelfUpdate,
     isNewerVersion,
+    metadataCacheRoot,
     maybePrintNodeHandledOutput,
     shouldCheckSelfUpdate
   }

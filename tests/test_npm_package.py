@@ -2334,9 +2334,9 @@ const path = require("node:path");
 const {PassThrough} = require("node:stream");
 
 const root = fs.mkdtempSync(path.join(os.tmpdir(), "kagent-pending-"));
-process.env.XDG_STATE_HOME = root;
+process.env.KAGENT_HOME = root;
 delete process.env.KAGENT_PENDING_APPROVAL_PATH;
-const pendingDirectory = path.join(root, "kagent", "pending-approvals");
+const pendingDirectory = path.join(root, "state", "pending-approvals");
 fs.mkdirSync(pendingDirectory, {recursive: true});
 const stalePath = path.join(pendingDirectory, "123e4567-e89b-42d3-a456-426614174000.json");
 const freshPath = path.join(pendingDirectory, "223e4567-e89b-42d3-a456-426614174000.json");
@@ -2404,6 +2404,8 @@ const {PassThrough} = require("node:stream");
 const root = fs.mkdtempSync(path.join(os.tmpdir(), "kagent-uncertain-"));
 const pendingPath = path.join(root, "pending.json");
 process.env.KAGENT_PENDING_APPROVAL_PATH = pendingPath;
+delete process.env.KAGENT_HOME;
+delete process.env.HOME;
 const children = [];
 const writes = [];
 const runnerPath = require.resolve("./npm/lib/python-runner");
@@ -2533,6 +2535,41 @@ def test_npm_runner_uses_cache_venv_and_env_forwarding():
     assert '{ cwd: root, stdio: "pipe" }' in runner
     assert '"-e", root' not in runner
     assert "env: process.env" in runner
+
+
+def test_npm_runner_uses_unified_kagent_cache_paths():
+    node = shutil.which("node")
+    if node is None:
+        return
+
+    script = r"""
+const assert = require("node:assert/strict");
+const path = require("node:path");
+const { _internals } = require("./npm/lib/python-runner");
+
+const home = path.join(path.sep, "Users", "kaka");
+assert.equal(
+  _internals.cacheRoot({HOME: home}),
+  path.join(home, ".kagent", "cache", "npm-python"),
+);
+assert.equal(
+  _internals.metadataCacheRoot({HOME: home}),
+  path.join(home, ".kagent", "cache"),
+);
+assert.equal(
+  _internals.cacheRoot({HOME: home, KAGENT_HOME: "~/shared", KAGENT_NODE_VENV: "venv"}),
+  path.resolve("venv"),
+);
+"""
+
+    completed = subprocess.run(
+        [node, "-e", script],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert completed.returncode == 0, completed.stderr
 
 
 def test_npm_runner_reinstalls_cached_python_runtime_when_sources_change():
