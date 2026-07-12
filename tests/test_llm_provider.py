@@ -73,6 +73,28 @@ def test_provider_config_defaults_to_unconfigured_runtime():
     }
 
 
+def test_provider_config_from_sources_resolves_default_path_from_supplied_env(
+    tmp_path,
+    monkeypatch,
+):
+    loaded_paths = []
+    kagent_home = tmp_path / "isolated-kagent-home"
+    monkeypatch.setattr(
+        llm_provider,
+        "load_provider_config",
+        lambda path: loaded_paths.append(path) or LLMProviderConfig(),
+    )
+
+    LLMProviderConfig.from_sources(
+        {
+            "HOME": str(tmp_path / "isolated-user-home"),
+            "KAGENT_HOME": str(kagent_home),
+        }
+    )
+
+    assert loaded_paths == [str(kagent_home / "config" / "provider.json")]
+
+
 def test_provider_config_can_be_saved_loaded_and_overridden_by_env(tmp_path):
     config_path = tmp_path / "provider.json"
 

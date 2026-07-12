@@ -71,7 +71,9 @@ class LLMProviderConfig:
         config_path: str = "",
     ) -> "LLMProviderConfig":
         source = env if env is not None else environ
-        file_config = load_provider_config(config_path)
+        file_config = load_provider_config(
+            config_path or default_provider_config_path(source)
+        )
         merged = {
             "KAGENT_LLM_PROVIDER": file_config.provider.value,
             "KAGENT_LLM_BASE_URL": file_config.base_url,
