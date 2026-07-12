@@ -213,6 +213,7 @@ def test_product_docs_document_the_unified_user_home():
     iteration_log = Path("docs/iteration_log.md").read_text()
 
     for document in (readme, architecture):
+        normalized = " ".join(document.split())
         assert "KAGENT_HOME" in document
         assert "~/.kagent/config/provider.json" in document
         assert "~/.kagent/state/session-memory.json" in document
@@ -224,10 +225,14 @@ def test_product_docs_document_the_unified_user_home():
         assert "explicit override" in document
         assert "legacy" in document
         assert "XDG" in document
+        assert "default layout under `~/.kagent`" in normalized
+        assert "`KAGENT_HOME` relocates the entire user-level layout" in normalized
+        assert "config, state, cache, and migration marker" in normalized
+        assert "resolved `KAGENT_HOME` root" in normalized
 
     assert "XDG variables are legacy" in readme
     assert "migration sources, not current defaults" in readme
-    assert "global `~/.kagent`" in readme
+    assert "default layout under `~/.kagent`" in " ".join(readme.split())
     assert "project-local `$PWD/.kagent`" in readme
     assert "never overwrite" in architecture
     assert "symlink" in architecture

@@ -449,12 +449,16 @@ def test_operations_runbook_documents_unified_kagent_home_migration():
     assert "~/.kagent/cache/npm-python" in runbook
     assert "~/.kagent/cache/npm-self-update.json" in runbook
     assert "~/.kagent/.migration-v1-complete" in runbook
+    assert "default layout under `~/.kagent`" in normalized
+    assert "`KAGENT_HOME` relocates the entire user-level layout" in normalized
+    assert "config, state, cache, and migration marker" in normalized
+    assert "resolved `KAGENT_HOME` root" in normalized
     assert "explicit overrides take precedence over it" in normalized
     assert "XDG variables are consulted only as legacy migration sources" in normalized
     assert "never overwrites an existing destination" in normalized
     assert "legacy sources remain untouched" in normalized
-    assert "cache is rebuilt" in normalized
-    assert "global `~/.kagent`" in normalized
+    assert "`cache/npm-python` is rebuilt beneath the resolved root" in normalized
+    assert "default layout under `~/.kagent`" in normalized
     assert "The project-local" in normalized
     assert "$PWD/.kagent/runtime-workspace" in normalized
 

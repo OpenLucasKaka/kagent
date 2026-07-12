@@ -10,8 +10,8 @@ observations, and fake-provider tests that do not require network credentials.
 ## User and project storage boundaries
 
 `kagent.utils.paths` is the shared Python authority for user-level storage. It
-resolves `KAGENT_HOME`, defaulting to the global `~/.kagent`, and derives these
-current paths:
+resolves `KAGENT_HOME`, using `~/.kagent` only when no override is present. The
+following is the default layout under `~/.kagent`:
 
 ```text
 ~/.kagent/config/provider.json
@@ -26,10 +26,11 @@ current paths:
 
 Path precedence is explicit override > `KAGENT_HOME`-derived path > default
 `~/.kagent` path. Existing component-specific variables therefore remain the
-highest-priority controls, while Python and Node agree on the shared root. The
-npm launcher rebuilds its disposable Python runtime beneath
-`~/.kagent/cache/npm-python`; cache is rebuilt rather than copied from the old
-layout.
+highest-priority controls, while Python and Node agree on the shared root.
+`KAGENT_HOME` relocates the entire user-level layout: config, state, cache, and
+migration marker all move beneath the resolved `KAGENT_HOME` root. The npm
+launcher rebuilds its disposable Python runtime at `cache/npm-python` beneath
+that root; cache is rebuilt rather than copied from the old layout.
 
 XDG config and state directories are legacy migration sources only. Before a
 default durable path is consumed, Python performs a one-time, idempotent copy
@@ -38,14 +39,15 @@ patch checkpoints. Migration must never overwrite an existing destination,
 leaves legacy sources intact, uses owner-only modes, rejects symlink or
 non-regular layouts, copies atomically, and writes its completion marker only
 after all eligible items succeed. An explicit `KAGENT_HOME` skips discovery of
-legacy XDG state. The marker path is `~/.kagent/.migration-v1-complete`; npm
-self-update metadata is stored separately at
-`~/.kagent/cache/npm-self-update.json`.
+legacy XDG state. The marker is `.migration-v1-complete` in the resolved root;
+npm self-update metadata is stored separately at
+`cache/npm-self-update.json` beneath that root.
 
-This global user boundary does not absorb project data. The project-local
+This user-level boundary does not absorb project data. The project-local
 `$PWD/.kagent/runtime-workspace` and `$PWD/.kagent/skills` directories retain
-their current working-directory semantics and remain separate from global
-`~/.kagent` configuration, durable state, and cache.
+their current working-directory semantics and remain separate from the resolved
+user-level Kagent root (default `~/.kagent`) and its configuration, durable
+state, and cache.
 
 ## LangGraph runtime
 
