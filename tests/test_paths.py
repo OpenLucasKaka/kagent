@@ -132,16 +132,27 @@ def test_migration_uses_default_xdg_legacy_locations(tmp_path):
     assert (home / ".kagent" / "state" / "history").read_text() == "history"
 
 
-def test_migration_never_overwrites_an_existing_destination(tmp_path):
+@pytest.mark.parametrize(
+    ("legacy_root", "artifact", "destination_parts"),
+    [
+        ("XDG_CONFIG_HOME", "provider.json", ("config", "provider.json")),
+        ("XDG_STATE_HOME", "session-memory.json", ("state", "session-memory.json")),
+        ("XDG_STATE_HOME", "history", ("state", "history")),
+    ],
+)
+def test_migration_preserves_existing_destination_content_and_tightens_permissions(
+    tmp_path, legacy_root, artifact, destination_parts
+):
     env = _legacy_env(tmp_path)
-    source = Path(env["XDG_CONFIG_HOME"]) / "kagent" / "provider.json"
-    destination = Path(env["HOME"]) / ".kagent" / "config" / "provider.json"
+    source = Path(env[legacy_root]) / "kagent" / artifact
+    destination = Path(env["HOME"]) / ".kagent" / Path(*destination_parts)
     _write(source, "legacy")
     _write(destination, "current")
 
     migrate_legacy_kagent_state(env)
 
     assert destination.read_text(encoding="utf-8") == "current"
+    assert stat.S_IMODE(destination.stat().st_mode) == 0o600
 
 
 @pytest.mark.parametrize("artifact", ["pending-approvals", "patches"])

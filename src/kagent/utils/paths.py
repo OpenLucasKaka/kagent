@@ -224,14 +224,47 @@ def _destination_entry_exists(parent_fd: int, name: str, path: Path) -> bool:
     return True
 
 
+def _tighten_existing_destination(parent_fd: int, name: str, path: Path) -> bool:
+    flags = (
+        os.O_RDONLY
+        | getattr(os, "O_CLOEXEC", 0)
+        | getattr(os, "O_NOFOLLOW", 0)
+        | getattr(os, "O_NONBLOCK", 0)
+    )
+    try:
+        destination_fd = os.open(name, flags, dir_fd=parent_fd)
+    except FileNotFoundError:
+        return False
+    except OSError as exc:
+        raise ValueError(f"migration path must not contain symlinks: {path}") from exc
+    try:
+        descriptor_stat = os.fstat(destination_fd)
+        if stat.S_ISREG(descriptor_stat.st_mode):
+            os.fchmod(destination_fd, _OWNER_FILE_MODE)
+        entry_stat = os.stat(name, dir_fd=parent_fd, follow_symlinks=False)
+        if stat.S_ISLNK(entry_stat.st_mode):
+            raise ValueError(f"migration path must not contain symlinks: {path}")
+        if (
+            entry_stat.st_dev != descriptor_stat.st_dev
+            or entry_stat.st_ino != descriptor_stat.st_ino
+        ):
+            raise ValueError(f"migration destination changed during operation: {path}")
+        _ensure_directory_fd_matches_path(path.parent, parent_fd)
+        return True
+    finally:
+        os.close(destination_fd)
+
+
 def _atomic_copy_file(source: Path, destination: Path) -> None:
     _ensure_private_directory(destination.parent)
     destination_parent_fd = _open_directory(destination.parent)
     try:
         _ensure_directory_fd_matches_path(destination.parent, destination_parent_fd)
         if _destination_entry_exists(destination_parent_fd, destination.name, destination):
-            _ensure_directory_fd_matches_path(destination.parent, destination_parent_fd)
-            return
+            if _tighten_existing_destination(
+                destination_parent_fd, destination.name, destination
+            ):
+                return
         source_fd = _open_source_file(source)
         try:
             with _fdopen_stream(source_fd, "rb", closefd=False) as source_stream:
@@ -256,9 +289,12 @@ def _atomic_copy_file(source: Path, destination: Path) -> None:
                             follow_symlinks=False,
                         )
                     except FileExistsError:
-                        _destination_entry_exists(
+                        if not _tighten_existing_destination(
                             destination_parent_fd, destination.name, destination
-                        )
+                        ):
+                            raise ValueError(
+                                f"migration destination changed during operation: {destination}"
+                            )
                     _ensure_directory_fd_matches_path(destination.parent, destination_parent_fd)
                 finally:
                     try:
