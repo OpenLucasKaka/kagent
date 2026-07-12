@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.KagentInkApp = KagentInkApp;
 exports.isSessionCommandInput = isSessionCommandInput;
+const approval_choice_1 = require("./approval-choice");
 const app_state_1 = require("./app-state");
 const commands_1 = require("./commands");
 const editor_1 = require("./editor");
@@ -22,9 +23,12 @@ function KagentInkApp({ React, Ink, runtimeSessionFactory = runtime_client_1.cre
     const [showApprovalDetails, setShowApprovalDetails] = React.useState(false);
     const [selectedCommand, setSelectedCommand] = React.useState(null);
     const [terminalSize, setTerminalSize] = React.useState(() => currentTerminalSize());
+    const [activitySeconds, setActivitySeconds] = React.useState(0);
+    const [approvalChoice, setApprovalChoice] = React.useState("deny");
     const { transcript, status, statusText, approval, provider, setup, commandCatalog } = runtimeState;
     const commandMenu = (0, commands_1.updateCommandMenu)(commandCatalog, editor.value, selectedCommand);
     const terminalInputHandler = React.useRef(() => undefined);
+    const activityStartedAt = React.useRef(Date.now());
     terminalInputHandler.current = handleTerminalInput;
     function dispatchRuntime(action) {
         setRuntimeState((current) => (0, app_state_1.appRuntimeReducer)(current, action));
@@ -66,6 +70,10 @@ function KagentInkApp({ React, Ink, runtimeSessionFactory = runtime_client_1.cre
         runtime.configureProvider((0, provider_setup_1.providerConfiguration)(setup), handleProviderEvent);
     }, [React, runtime, setup]);
     React.useEffect(() => {
+        setApprovalChoice("deny");
+        setShowApprovalDetails(false);
+    }, [React, approval?.action_id]);
+    React.useEffect(() => {
         if (status !== "thinking" &&
             status !== "cancelling" &&
             status !== "starting" &&
@@ -75,6 +83,21 @@ function KagentInkApp({ React, Ink, runtimeSessionFactory = runtime_client_1.cre
         const timer = setInterval(() => {
             setFrame((current) => (current + 1) % ui_components_1.TERMINAL_SPINNER_FRAMES.length);
         }, 90);
+        return () => clearInterval(timer);
+    }, [React, setup?.stage, status]);
+    React.useEffect(() => {
+        if (status !== "thinking" &&
+            status !== "cancelling" &&
+            status !== "starting" &&
+            setup?.stage !== "saving") {
+            setActivitySeconds(0);
+            return undefined;
+        }
+        activityStartedAt.current = Date.now();
+        setActivitySeconds(0);
+        const timer = setInterval(() => {
+            setActivitySeconds(Math.floor((Date.now() - activityStartedAt.current) / 1000));
+        }, 250);
         return () => clearInterval(timer);
     }, [React, setup?.stage, status]);
     function handleTerminalInput(value, key) {
@@ -120,8 +143,9 @@ function KagentInkApp({ React, Ink, runtimeSessionFactory = runtime_client_1.cre
         if (key.name === "pageup" || key.name === "pagedown") {
             const pagingLayout = (0, ui_components_1.createTerminalLayout)(terminalSize.columns, terminalSize.rows, {
                 approval: approval !== null,
-                commandMenu: commandMenu !== null && status === "idle",
+                commandMenu: status === "idle" && commandMenu ? commandMenu : false,
                 prompt: editor.value,
+                promptCursor: editor.cursor,
             });
             setTranscriptOffset((current) => (0, transcript_1.moveTranscriptViewport)(transcript.entries, {
                 columns: pagingLayout.columns,
@@ -131,7 +155,7 @@ function KagentInkApp({ React, Ink, runtimeSessionFactory = runtime_client_1.cre
             return;
         }
         if (status === "approval") {
-            handleApprovalInput(value);
+            handleApprovalInput(value, key);
             return;
         }
         if (status === "cancelling") {
@@ -212,11 +236,7 @@ function KagentInkApp({ React, Ink, runtimeSessionFactory = runtime_client_1.cre
                 setSelectedCommand((0, commands_1.moveCommandSelection)(commandMenu, -1).selectedCommand);
                 return;
             }
-            if (editor.value.includes("\n")) {
-                setEditor((current) => (0, editor_1.moveCursorVertical)(current, -1));
-                return;
-            }
-            setEditor((current) => (0, editor_1.navigateHistory)(current, -1));
+            moveEditorVerticalOrHistory(-1);
             return;
         }
         if (key.name === "down") {
@@ -224,16 +244,25 @@ function KagentInkApp({ React, Ink, runtimeSessionFactory = runtime_client_1.cre
                 setSelectedCommand((0, commands_1.moveCommandSelection)(commandMenu, 1).selectedCommand);
                 return;
             }
-            if (editor.value.includes("\n")) {
-                setEditor((current) => (0, editor_1.moveCursorVertical)(current, 1));
-                return;
-            }
-            setEditor((current) => (0, editor_1.navigateHistory)(current, 1));
+            moveEditorVerticalOrHistory(1);
             return;
         }
         if (value && !key.ctrl && !key.meta) {
             setEditor((current) => (0, editor_1.insertInput)(current, value));
         }
+    }
+    function moveEditorVerticalOrHistory(direction) {
+        const promptLayout = (0, ui_components_1.createTerminalLayout)(terminalSize.columns, terminalSize.rows, {
+            approval: approval !== null,
+            commandMenu: false,
+            prompt: editor.value,
+            promptCursor: editor.cursor,
+        });
+        if ((0, editor_1.editorVisualLineCount)(editor.value, promptLayout.promptColumns) > 1) {
+            setEditor((current) => (0, editor_1.moveCursorVertical)(current, direction, promptLayout.promptColumns));
+            return;
+        }
+        setEditor((current) => (0, editor_1.navigateHistory)(current, direction));
     }
     function handleLifecycleEvent(event) {
         dispatchRuntime({ type: "runtime_event", channel: "lifecycle", event });
@@ -359,22 +388,26 @@ function KagentInkApp({ React, Ink, runtimeSessionFactory = runtime_client_1.cre
     function handleCommandEvent(event) {
         dispatchRuntime({ type: "runtime_event", channel: "command", event });
     }
-    function handleApprovalInput(value) {
+    function handleApprovalInput(value, key) {
         if (!approval) {
             return;
         }
-        const answer = value.toLowerCase();
-        if (answer === "d") {
+        const intent = (0, approval_choice_1.resolveApprovalInput)(approvalChoice, value, key.name);
+        if (!intent) {
+            return;
+        }
+        if (intent.type === "toggle_details") {
             setShowApprovalDetails((current) => !current);
             return;
         }
-        if (answer !== "y" && answer !== "n") {
+        if (intent.type === "select") {
+            setApprovalChoice(intent.choice);
             return;
         }
         setShowApprovalDetails(false);
-        dispatchRuntime({ type: "approval_response", approved: answer === "y" });
+        dispatchRuntime({ type: "approval_response", approved: intent.approved });
         try {
-            runtime.respondToApproval(approval.action_id, answer === "y");
+            runtime.respondToApproval(approval.action_id, intent.approved);
         }
         catch (error) {
             showError(errorMessage(error));
@@ -391,6 +424,9 @@ function KagentInkApp({ React, Ink, runtimeSessionFactory = runtime_client_1.cre
             approval: false,
             commandMenu: false,
         });
+        if (layout.tooNarrow) {
+            return React.createElement(ui_components_1.NarrowTerminal, { React, Box, Text });
+        }
         return React.createElement(Box, { flexDirection: "column", paddingX: layout.horizontalPadding }, React.createElement(ui_components_1.Header, {
             React,
             Box,
@@ -398,6 +434,7 @@ function KagentInkApp({ React, Ink, runtimeSessionFactory = runtime_client_1.cre
             compact: layout.compact,
             provider: null,
             setup: true,
+            workspace: process.cwd(),
         }), React.createElement(ui_components_1.ProviderSetupPanel, {
             React,
             Box,
@@ -407,10 +444,16 @@ function KagentInkApp({ React, Ink, runtimeSessionFactory = runtime_client_1.cre
         }));
     }
     const layout = (0, ui_components_1.createTerminalLayout)(terminalSize.columns, terminalSize.rows, {
-        approval: approval !== null,
-        commandMenu: commandMenu !== null && status === "idle",
+        approval: approval
+            ? { ...approval, showDetails: showApprovalDetails }
+            : false,
+        commandMenu: status === "idle" && commandMenu ? commandMenu : false,
         prompt: editor.value,
+        promptCursor: editor.cursor,
     });
+    if (layout.tooNarrow) {
+        return React.createElement(ui_components_1.NarrowTerminal, { React, Box, Text });
+    }
     const visibleTranscript = (0, transcript_1.selectTranscriptViewport)(transcript.entries, {
         columns: layout.columns,
         rows: layout.rows,
@@ -423,6 +466,7 @@ function KagentInkApp({ React, Ink, runtimeSessionFactory = runtime_client_1.cre
         compact: layout.compact,
         provider,
         setup: false,
+        workspace: process.cwd(),
     }), React.createElement(ui_components_1.TranscriptPosition, {
         React,
         Text,
@@ -433,10 +477,18 @@ function KagentInkApp({ React, Ink, runtimeSessionFactory = runtime_client_1.cre
             Box,
             Text,
             approval,
+            choice: approvalChoice,
             compact: layout.compact,
             showDetails: showApprovalDetails,
         })
-        : null, React.createElement(ui_components_1.StatusLine, { React, Text, frame, status, statusText }), commandMenu && status === "idle"
+        : null, React.createElement(ui_components_1.StatusLine, {
+        React,
+        Text,
+        elapsedSeconds: activitySeconds,
+        frame,
+        status,
+        statusText,
+    }), commandMenu && status === "idle"
         ? React.createElement(ui_components_1.CommandPalette, {
             React,
             Box,

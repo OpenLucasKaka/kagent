@@ -1,3 +1,7 @@
+import { splitGraphemes, terminalGraphemeWidth } from "./terminal-text";
+
+export { splitGraphemes } from "./terminal-text";
+
 export type EditorBuffer = {
   value: string;
   cursor: number;
@@ -13,8 +17,6 @@ export type Submission = {
   value: string | null;
   state: EditorState;
 };
-
-const GRAPHEME_SEGMENTER = new Intl.Segmenter(undefined, { granularity: "grapheme" });
 
 export function createEditorState(history: string[] = []): EditorState {
   return {
@@ -68,32 +70,38 @@ export function moveCursor<T extends EditorBuffer>(state: T, offset: number): T 
 export function moveCursorVertical<T extends EditorBuffer>(
   state: T,
   direction: -1 | 1,
+  columns = Number.MAX_SAFE_INTEGER,
 ): T {
   const characters = splitGraphemes(state.value);
   const cursor = clampCursor(state.cursor, characters.length);
-  const lineStart = previousLineBreak(characters, cursor - 1) + 1;
-  const column = cursor - lineStart;
-  if (direction < 0) {
-    const previousEnd = lineStart - 1;
-    if (previousEnd < 0) {
-      return state;
-    }
-    const previousStart = previousLineBreak(characters, previousEnd - 1) + 1;
-    return {
-      ...state,
-      cursor: Math.min(previousStart + column, previousEnd),
-    };
-  }
-  const currentEnd = nextLineBreak(characters, cursor);
-  if (currentEnd === characters.length) {
+  const positions = visualCursorPositions(characters, columns);
+  const current = positions[cursor];
+  const targetRow = current.row + direction;
+  if (targetRow < 0 || targetRow >= positions.at(-1)!.row + 1) {
     return state;
   }
-  const nextStart = currentEnd + 1;
-  const nextEnd = nextLineBreak(characters, nextStart);
+  let targetCursor = cursor;
+  let targetDistance = Number.MAX_SAFE_INTEGER;
+  positions.forEach((position, index) => {
+    if (position.row !== targetRow) {
+      return;
+    }
+    const distance = Math.abs(position.column - current.column);
+    if (distance < targetDistance) {
+      targetCursor = index;
+      targetDistance = distance;
+    }
+  });
   return {
     ...state,
-    cursor: Math.min(nextStart + column, nextEnd),
+    cursor: targetCursor,
   };
+}
+
+export function editorVisualLineCount(value: string, columns: number): number {
+  const positions = visualCursorPositions(splitGraphemes(value), columns);
+  const finalPosition = positions.at(-1)!;
+  return finalPosition.row + 1;
 }
 
 export function moveCursorToStart<T extends EditorBuffer>(state: T): T {
@@ -145,10 +153,6 @@ export function navigateHistory(state: EditorState, offset: number): EditorState
   };
 }
 
-export function splitGraphemes(value: string): string[] {
-  return Array.from(GRAPHEME_SEGMENTER.segment(value), ({ segment }) => segment);
-}
-
 function historyState(
   state: EditorState,
   historyIndex: number,
@@ -181,22 +185,33 @@ function clampCursor(cursor: number, length: number): number {
   return Math.min(Math.max(cursor, 0), length);
 }
 
-function previousLineBreak(characters: string[], start: number): number {
-  for (let index = start; index >= 0; index -= 1) {
-    if (characters[index] === "\n") {
-      return index;
+function visualCursorPositions(
+  characters: string[],
+  columns: number,
+): Array<{ row: number; column: number }> {
+  const safeColumns = Math.max(1, Math.trunc(columns));
+  const positions = [{ row: 0, column: 0 }];
+  let row = 0;
+  let column = 0;
+  characters.forEach((character) => {
+    if (character === "\n") {
+      row += 1;
+      column = 0;
+    } else {
+      const width = terminalGraphemeWidth(character);
+      if (column > 0 && column + width > safeColumns) {
+        row += 1;
+        column = 0;
+      }
+      column += width;
+      if (column >= safeColumns) {
+        row += 1;
+        column = 0;
+      }
     }
-  }
-  return -1;
-}
-
-function nextLineBreak(characters: string[], start: number): number {
-  for (let index = start; index < characters.length; index += 1) {
-    if (characters[index] === "\n") {
-      return index;
-    }
-  }
-  return characters.length;
+    positions.push({ row, column });
+  });
+  return positions;
 }
 
 function isPrintableGrapheme(character: string): boolean {

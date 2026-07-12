@@ -1,17 +1,20 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.splitGraphemes = void 0;
 exports.createEditorState = createEditorState;
 exports.insertInput = insertInput;
 exports.deleteBeforeCursor = deleteBeforeCursor;
 exports.deleteAtCursor = deleteAtCursor;
 exports.moveCursor = moveCursor;
 exports.moveCursorVertical = moveCursorVertical;
+exports.editorVisualLineCount = editorVisualLineCount;
 exports.moveCursorToStart = moveCursorToStart;
 exports.moveCursorToEnd = moveCursorToEnd;
 exports.submitInput = submitInput;
 exports.navigateHistory = navigateHistory;
-exports.splitGraphemes = splitGraphemes;
-const GRAPHEME_SEGMENTER = new Intl.Segmenter(undefined, { granularity: "grapheme" });
+const terminal_text_1 = require("./terminal-text");
+var terminal_text_2 = require("./terminal-text");
+Object.defineProperty(exports, "splitGraphemes", { enumerable: true, get: function () { return terminal_text_2.splitGraphemes; } });
 function createEditorState(history = []) {
     return {
         value: "",
@@ -22,16 +25,16 @@ function createEditorState(history = []) {
     };
 }
 function insertInput(state, rawInput) {
-    const characters = splitGraphemes(state.value);
+    const characters = (0, terminal_text_1.splitGraphemes)(state.value);
     const cursor = clampCursor(state.cursor, characters.length);
     const before = characters.slice(0, cursor).join("");
-    const inserted = splitGraphemes(rawInput).filter(isPrintableGrapheme).join("");
+    const inserted = (0, terminal_text_1.splitGraphemes)(rawInput).filter(isPrintableGrapheme).join("");
     const after = characters.slice(cursor).join("");
     const prefix = before + inserted;
-    return editBuffer(state, prefix + after, splitGraphemes(prefix).length);
+    return editBuffer(state, prefix + after, (0, terminal_text_1.splitGraphemes)(prefix).length);
 }
 function deleteBeforeCursor(state) {
-    const characters = splitGraphemes(state.value);
+    const characters = (0, terminal_text_1.splitGraphemes)(state.value);
     const cursor = clampCursor(state.cursor, characters.length);
     if (cursor === 0) {
         return state;
@@ -40,7 +43,7 @@ function deleteBeforeCursor(state) {
     return editBuffer(state, characters.join(""), cursor - 1);
 }
 function deleteAtCursor(state) {
-    const characters = splitGraphemes(state.value);
+    const characters = (0, terminal_text_1.splitGraphemes)(state.value);
     const cursor = clampCursor(state.cursor, characters.length);
     if (cursor === characters.length) {
         return state;
@@ -49,44 +52,48 @@ function deleteAtCursor(state) {
     return editBuffer(state, characters.join(""), cursor);
 }
 function moveCursor(state, offset) {
-    const length = splitGraphemes(state.value).length;
+    const length = (0, terminal_text_1.splitGraphemes)(state.value).length;
     return {
         ...state,
         cursor: clampCursor(state.cursor + offset, length),
     };
 }
-function moveCursorVertical(state, direction) {
-    const characters = splitGraphemes(state.value);
+function moveCursorVertical(state, direction, columns = Number.MAX_SAFE_INTEGER) {
+    const characters = (0, terminal_text_1.splitGraphemes)(state.value);
     const cursor = clampCursor(state.cursor, characters.length);
-    const lineStart = previousLineBreak(characters, cursor - 1) + 1;
-    const column = cursor - lineStart;
-    if (direction < 0) {
-        const previousEnd = lineStart - 1;
-        if (previousEnd < 0) {
-            return state;
-        }
-        const previousStart = previousLineBreak(characters, previousEnd - 1) + 1;
-        return {
-            ...state,
-            cursor: Math.min(previousStart + column, previousEnd),
-        };
-    }
-    const currentEnd = nextLineBreak(characters, cursor);
-    if (currentEnd === characters.length) {
+    const positions = visualCursorPositions(characters, columns);
+    const current = positions[cursor];
+    const targetRow = current.row + direction;
+    if (targetRow < 0 || targetRow >= positions.at(-1).row + 1) {
         return state;
     }
-    const nextStart = currentEnd + 1;
-    const nextEnd = nextLineBreak(characters, nextStart);
+    let targetCursor = cursor;
+    let targetDistance = Number.MAX_SAFE_INTEGER;
+    positions.forEach((position, index) => {
+        if (position.row !== targetRow) {
+            return;
+        }
+        const distance = Math.abs(position.column - current.column);
+        if (distance < targetDistance) {
+            targetCursor = index;
+            targetDistance = distance;
+        }
+    });
     return {
         ...state,
-        cursor: Math.min(nextStart + column, nextEnd),
+        cursor: targetCursor,
     };
+}
+function editorVisualLineCount(value, columns) {
+    const positions = visualCursorPositions((0, terminal_text_1.splitGraphemes)(value), columns);
+    const finalPosition = positions.at(-1);
+    return finalPosition.row + 1;
 }
 function moveCursorToStart(state) {
     return { ...state, cursor: 0 };
 }
 function moveCursorToEnd(state) {
-    return { ...state, cursor: splitGraphemes(state.value).length };
+    return { ...state, cursor: (0, terminal_text_1.splitGraphemes)(state.value).length };
 }
 function submitInput(state) {
     const value = state.value.trim();
@@ -117,20 +124,17 @@ function navigateHistory(state, offset) {
     return {
         ...state,
         value: state.draft,
-        cursor: splitGraphemes(state.draft).length,
+        cursor: (0, terminal_text_1.splitGraphemes)(state.draft).length,
         historyIndex: null,
         draft: "",
     };
-}
-function splitGraphemes(value) {
-    return Array.from(GRAPHEME_SEGMENTER.segment(value), ({ segment }) => segment);
 }
 function historyState(state, historyIndex, draft) {
     const value = state.history[historyIndex];
     return {
         ...state,
         value,
-        cursor: splitGraphemes(value).length,
+        cursor: (0, terminal_text_1.splitGraphemes)(value).length,
         historyIndex,
         draft,
     };
@@ -149,21 +153,31 @@ function isEditorState(state) {
 function clampCursor(cursor, length) {
     return Math.min(Math.max(cursor, 0), length);
 }
-function previousLineBreak(characters, start) {
-    for (let index = start; index >= 0; index -= 1) {
-        if (characters[index] === "\n") {
-            return index;
+function visualCursorPositions(characters, columns) {
+    const safeColumns = Math.max(1, Math.trunc(columns));
+    const positions = [{ row: 0, column: 0 }];
+    let row = 0;
+    let column = 0;
+    characters.forEach((character) => {
+        if (character === "\n") {
+            row += 1;
+            column = 0;
         }
-    }
-    return -1;
-}
-function nextLineBreak(characters, start) {
-    for (let index = start; index < characters.length; index += 1) {
-        if (characters[index] === "\n") {
-            return index;
+        else {
+            const width = (0, terminal_text_1.terminalGraphemeWidth)(character);
+            if (column > 0 && column + width > safeColumns) {
+                row += 1;
+                column = 0;
+            }
+            column += width;
+            if (column >= safeColumns) {
+                row += 1;
+                column = 0;
+            }
         }
-    }
-    return characters.length;
+        positions.push({ row, column });
+    });
+    return positions;
 }
 function isPrintableGrapheme(character) {
     if (character === "\n") {

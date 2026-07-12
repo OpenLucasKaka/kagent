@@ -1,10 +1,12 @@
 import type ReactNamespace from "react";
 
+import type { ApprovalChoice } from "./approval-choice";
 import type { CommandMenuState } from "./commands";
 import { splitGraphemes } from "./editor";
 import { maskSecret, selectedProvider, type ProviderSetupState } from "./provider-setup";
 import type { ApprovalRequiredEvent, ProviderSnapshot } from "./protocol";
 import type { TranscriptEntry } from "./transcript";
+import { terminalSafeText } from "./terminal-text";
 import { estimateTextRows } from "./terminal-width";
 
 export type AgentStatus =
@@ -19,6 +21,7 @@ export type TerminalLayout = {
   columns: number;
   rows: number;
   compact: boolean;
+  tooNarrow: boolean;
   horizontalPadding: number;
   commandLimit: number;
   promptColumns: number;
@@ -35,44 +38,85 @@ export type PromptViewport = {
   suffixClipped: boolean;
 };
 
+type ApprovalLayout = Pick<
+  ApprovalRequiredEvent,
+  "title" | "target" | "reason" | "details"
+> & { showDetails?: boolean };
+
 export const TERMINAL_SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
 export function createTerminalLayout(
   columns: number,
   rows: number,
-  overlays: { approval: boolean; commandMenu: boolean; prompt?: string },
+  overlays: {
+    approval: boolean | ApprovalLayout;
+    commandMenu: boolean | CommandMenuState;
+    prompt?: string;
+    promptCursor?: number;
+  },
 ): TerminalLayout {
-  const safeColumns = Math.max(20, columns || 80);
+  const safeColumns = Math.max(1, columns || 80);
   const safeRows = Math.max(10, rows || 24);
+  const tooNarrow = safeColumns < 20;
   const compact = safeColumns < 56;
   const horizontalPadding = compact ? 0 : 1;
   const defaultCommandLimit = compact ? 4 : 6;
-  const approvalRows = overlays.approval ? (compact ? 6 : 7) : 0;
+  const headerRows = compact ? 2 : 3;
+  const promptChromeRows = 1;
+  const fixedBaseRows = headerRows + promptChromeRows;
+  const approvalColumns = Math.max(
+    4,
+    safeColumns - horizontalPadding * 2 - (compact ? 0 : 2),
+  );
+  const approvalRows = estimateApprovalRows(overlays.approval, approvalColumns);
+  const commandColumns = Math.max(
+    4,
+    safeColumns - horizontalPadding * 2 - (compact ? 0 : 2),
+  );
+  const commandExtraRows = estimateCommandExtraRows(
+    overlays.commandMenu,
+    compact,
+    commandColumns,
+  );
   const commandCapacity = Math.max(
     1,
-    safeRows - 1 - 4 - 1 - 2 - approvalRows,
+    safeRows - 1 - fixedBaseRows - 1 - commandExtraRows - approvalRows,
   );
   const commandLimit = overlays.commandMenu
     ? Math.min(defaultCommandLimit, commandCapacity)
     : defaultCommandLimit;
   const promptColumns = Math.max(4, safeColumns - horizontalPadding * 2 - 2);
-  const commandRows = overlays.commandMenu ? commandLimit + 2 : 0;
+  const visibleCommandRows =
+    overlays.commandMenu && overlays.commandMenu !== true
+      ? Math.min(commandLimit, overlays.commandMenu.options.length)
+      : commandLimit;
+  const commandRows = overlays.commandMenu
+    ? visibleCommandRows + commandExtraRows
+    : 0;
   const promptRowLimit = Math.max(
     1,
     Math.min(
       compact ? 4 : 6,
-      safeRows - 1 - 4 - approvalRows - commandRows,
+      safeRows - 1 - fixedBaseRows - approvalRows - commandRows,
     ),
   );
-  const promptRows = Math.min(
-    promptRowLimit,
-    overlays.prompt ? estimateTextRows(overlays.prompt, promptColumns) : 1,
-  );
-  const baseRows = 4 + promptRows;
+  const promptRows = overlays.prompt === undefined
+    ? 1
+    : estimateTextRows(
+        createPromptViewport(
+          overlays.prompt,
+          overlays.promptCursor ?? splitGraphemes(overlays.prompt).length,
+          promptColumns,
+          promptRowLimit,
+        ).rendered,
+        promptColumns,
+      );
+  const baseRows = fixedBaseRows + promptRows;
   return {
     columns: safeColumns,
     rows: safeRows,
     compact,
+    tooNarrow,
     horizontalPadding,
     commandLimit,
     promptColumns,
@@ -82,6 +126,72 @@ export function createTerminalLayout(
       baseRows + approvalRows + commandRows,
     ),
   };
+}
+
+export function NarrowTerminal({
+  React,
+  Box,
+  Text,
+}: RenderProps): ReactNamespace.ReactElement {
+  return React.createElement(
+    Box,
+    { flexDirection: "column" },
+    React.createElement(Text, { bold: true, color: "cyan" }, "kagent"),
+    React.createElement(Text, { color: "gray", wrap: "wrap" }, "widen terminal"),
+  );
+}
+
+function estimateApprovalRows(
+  approval: boolean | ApprovalLayout,
+  columns: number,
+): number {
+  if (!approval) {
+    return 0;
+  }
+  if (approval === true) {
+    return 8;
+  }
+  const rows = (value: string): number =>
+    value ? estimateTextRows(value, columns) : 0;
+  const detailRows = approval.showDetails
+    ? (approval.details ?? []).reduce(
+        (total, detail) => total + rows(`  ${detail}`),
+        0,
+      )
+    : 0;
+  const detailMarginRows = approval.showDetails && approval.details?.length ? 1 : 0;
+  const reasonRows = approval.showDetails ? rows(approval.reason) : 0;
+  return (
+    5 +
+    rows(approval.title) +
+    rows(approval.target) +
+    rows("←→ select · enter confirm · d details") +
+    detailMarginRows +
+    detailRows +
+    reasonRows
+  );
+}
+
+function estimateCommandExtraRows(
+  menu: boolean | CommandMenuState,
+  compact: boolean,
+  columns: number,
+): number {
+  if (!menu) {
+    return 0;
+  }
+  if (menu === true) {
+    return compact ? 3 : 2;
+  }
+  const helpRows = estimateTextRows(
+    "↑↓ choose · tab complete · enter run",
+    columns,
+  );
+  const selected = menu.options[menu.selectedIndex];
+  const descriptionRows = compact && selected
+    ? estimateTextRows(`  ${selected.description}`, columns)
+    : 0;
+  return 1 + helpRows + descriptionRows;
 }
 
 export function createPromptViewport(
@@ -190,30 +300,47 @@ export function Header({
   compact,
   provider,
   setup,
+  workspace,
 }: RenderProps & {
   compact: boolean;
   provider: ProviderSnapshot | null;
   setup: boolean;
+  workspace: string;
 }): ReactNamespace.ReactElement {
   const providerLabel = provider?.configured
-    ? `${provider.display_name}${provider.model ? ` · ${provider.model}` : ""}`
+    ? `${terminalSafeText(provider.display_name)}${
+        provider.model ? ` · ${terminalSafeText(provider.model)}` : ""
+      }`
     : "";
+  const safeWorkspace = terminalSafeText(workspace);
+  if (compact) {
+    const compactContext = setup ? "  setup" : ` · ${providerLabel || "local"}`;
+    return React.createElement(
+      Box,
+      { flexDirection: "row", marginBottom: 1, flexShrink: 1 },
+      React.createElement(Text, { bold: true, color: "cyan" }, "◆ kagent"),
+      React.createElement(
+        Text,
+        { color: "gray", wrap: "truncate" },
+        compactContext,
+      ),
+    );
+  }
+  const sessionLabel = [safeWorkspace, providerLabel].filter(Boolean).join(" · ") || "local session";
   return React.createElement(
     Box,
-    { flexDirection: compact ? "row" : "column", marginBottom: 1 },
+    { flexDirection: "column", marginBottom: 1 },
     React.createElement(
       Box,
       { flexDirection: "row", flexShrink: 0 },
       React.createElement(Text, { bold: true, color: "cyan" }, "◆ kagent"),
       React.createElement(Text, { color: "gray" }, setup ? "  setup" : ""),
     ),
-    providerLabel
-      ? React.createElement(
-          Text,
-          { color: "gray", wrap: "truncate" },
-          compact ? ` · ${providerLabel}` : providerLabel,
-        )
-      : null,
+    React.createElement(
+      Text,
+      { color: "gray", wrap: "truncate" },
+      sessionLabel,
+    ),
   );
 }
 
@@ -340,10 +467,12 @@ export function ApprovalPanel({
   Box,
   Text,
   approval,
+  choice,
   compact,
   showDetails,
 }: RenderProps & {
   approval: ApprovalRequiredEvent;
+  choice: ApprovalChoice;
   compact: boolean;
   showDetails: boolean;
 }) {
@@ -369,7 +498,24 @@ export function ApprovalPanel({
     showDetails && approval.reason
       ? React.createElement(Text, { color: "gray", wrap: "wrap" }, approval.reason)
       : null,
-    React.createElement(Text, { color: "gray" }, "y allow · n deny · d details"),
+    React.createElement(
+      Box,
+      { flexDirection: "row", marginTop: 1 },
+      React.createElement(
+        Text,
+        { bold: choice === "allow", color: choice === "allow" ? "cyan" : "gray" },
+        `${choice === "allow" ? "›" : " "} Allow once`,
+      ),
+      React.createElement(
+        Text,
+        {
+          bold: choice === "deny",
+          color: choice === "deny" ? "yellow" : "gray",
+        },
+        `${compact ? "  " : "    "}${choice === "deny" ? "›" : " "} Deny`,
+      ),
+    ),
+    React.createElement(Text, { color: "gray" }, "←→ select · enter confirm · d details"),
   );
 }
 
@@ -396,7 +542,11 @@ export function CommandPalette({
         { key: option.command, flexDirection: compact ? "column" : "row" },
         React.createElement(
           Text,
-          { bold: selected, color: selected ? "cyan" : "gray" },
+          {
+            bold: selected,
+            color: selected ? "cyan" : "gray",
+            wrap: "truncate",
+          },
           `${selected ? "›" : " "} ${option.command}`,
         ),
         compact
@@ -414,10 +564,12 @@ export function StatusLine({
   React,
   Text,
   frame,
+  elapsedSeconds,
   status,
   statusText,
 }: StatusRenderProps & {
   frame: number;
+  elapsedSeconds: number;
   status: AgentStatus;
   statusText: string;
 }): ReactNamespace.ReactElement | null {
@@ -425,7 +577,12 @@ export function StatusLine({
     return null;
   }
   const label = status === "starting" ? "Starting runtime" : statusText;
-  return React.createElement(Text, { color: "cyan" }, `${TERMINAL_SPINNER_FRAMES[frame]} ${label}`);
+  const elapsed = elapsedSeconds > 0 ? ` · ${elapsedSeconds}s` : "";
+  return React.createElement(
+    Text,
+    { color: "cyan" },
+    `${TERMINAL_SPINNER_FRAMES[frame]} ${label}${elapsed}`,
+  );
 }
 
 export function PromptLine({

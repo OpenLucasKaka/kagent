@@ -203,13 +203,19 @@ function failureState(state, message) {
 function progressLabel(event) {
     const type = String(event.type || "");
     if (type === "steering_applied") {
-        return "Applying instruction";
+        return "Updating direction";
     }
     if (type === "planner_started") {
         return "Thinking";
     }
-    if (type === "plan_ready" || type === "tool_started" || type === "tool_completed") {
+    if (type === "plan_ready") {
+        return "Planning next steps";
+    }
+    if (type === "tool_started") {
         return "Working";
+    }
+    if (type === "tool_completed") {
+        return "Reviewing result";
     }
     return type.endsWith("failed") ? "Retrying" : "Working";
 }

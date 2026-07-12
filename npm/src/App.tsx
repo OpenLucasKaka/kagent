@@ -1,6 +1,10 @@
 import type ReactNamespace from "react";
 
 import {
+  resolveApprovalInput,
+  type ApprovalChoice,
+} from "./approval-choice";
+import {
   appRuntimeReducer,
   createAppRuntimeState,
   type AppRuntimeAction,
@@ -14,6 +18,7 @@ import {
   createEditorState,
   deleteAtCursor,
   deleteBeforeCursor,
+  editorVisualLineCount,
   insertInput,
   moveCursor,
   moveCursorToEnd,
@@ -48,6 +53,7 @@ import {
   CommandPalette,
   Header,
   MessageList,
+  NarrowTerminal,
   PromptLine,
   ProviderSetupPanel,
   StatusLine,
@@ -91,10 +97,13 @@ export function KagentInkApp({
   const [showApprovalDetails, setShowApprovalDetails] = React.useState(false);
   const [selectedCommand, setSelectedCommand] = React.useState<string | null>(null);
   const [terminalSize, setTerminalSize] = React.useState(() => currentTerminalSize());
+  const [activitySeconds, setActivitySeconds] = React.useState(0);
+  const [approvalChoice, setApprovalChoice] = React.useState<ApprovalChoice>("deny");
   const { transcript, status, statusText, approval, provider, setup, commandCatalog } =
     runtimeState;
   const commandMenu = updateCommandMenu(commandCatalog, editor.value, selectedCommand);
   const terminalInputHandler = React.useRef<TerminalInputHandler>(() => undefined);
+  const activityStartedAt = React.useRef(Date.now());
   terminalInputHandler.current = handleTerminalInput;
 
   function dispatchRuntime(action: AppRuntimeAction): void {
@@ -143,6 +152,11 @@ export function KagentInkApp({
   }, [React, runtime, setup]);
 
   React.useEffect(() => {
+    setApprovalChoice("deny");
+    setShowApprovalDetails(false);
+  }, [React, approval?.action_id]);
+
+  React.useEffect(() => {
     if (
       status !== "thinking" &&
       status !== "cancelling" &&
@@ -154,6 +168,26 @@ export function KagentInkApp({
     const timer = setInterval(() => {
       setFrame((current) => (current + 1) % TERMINAL_SPINNER_FRAMES.length);
     }, 90);
+    return () => clearInterval(timer);
+  }, [React, setup?.stage, status]);
+
+  React.useEffect(() => {
+    if (
+      status !== "thinking" &&
+      status !== "cancelling" &&
+      status !== "starting" &&
+      setup?.stage !== "saving"
+    ) {
+      setActivitySeconds(0);
+      return undefined;
+    }
+    activityStartedAt.current = Date.now();
+    setActivitySeconds(0);
+    const timer = setInterval(() => {
+      setActivitySeconds(
+        Math.floor((Date.now() - activityStartedAt.current) / 1000),
+      );
+    }, 250);
     return () => clearInterval(timer);
   }, [React, setup?.stage, status]);
 
@@ -202,8 +236,9 @@ export function KagentInkApp({
         terminalSize.rows,
         {
           approval: approval !== null,
-          commandMenu: commandMenu !== null && status === "idle",
+          commandMenu: status === "idle" && commandMenu ? commandMenu : false,
           prompt: editor.value,
+          promptCursor: editor.cursor,
         },
       );
       setTranscriptOffset((current) =>
@@ -221,7 +256,7 @@ export function KagentInkApp({
       return;
     }
     if (status === "approval") {
-      handleApprovalInput(value);
+      handleApprovalInput(value, key);
       return;
     }
     if (status === "cancelling") {
@@ -299,11 +334,7 @@ export function KagentInkApp({
         setSelectedCommand(moveCommandSelection(commandMenu, -1).selectedCommand);
         return;
       }
-      if (editor.value.includes("\n")) {
-        setEditor((current) => moveCursorVertical(current, -1));
-        return;
-      }
-      setEditor((current) => navigateHistory(current, -1));
+      moveEditorVerticalOrHistory(-1);
       return;
     }
     if (key.name === "down") {
@@ -311,16 +342,32 @@ export function KagentInkApp({
         setSelectedCommand(moveCommandSelection(commandMenu, 1).selectedCommand);
         return;
       }
-      if (editor.value.includes("\n")) {
-        setEditor((current) => moveCursorVertical(current, 1));
-        return;
-      }
-      setEditor((current) => navigateHistory(current, 1));
+      moveEditorVerticalOrHistory(1);
       return;
     }
     if (value && !key.ctrl && !key.meta) {
       setEditor((current) => insertInput(current, value));
     }
+  }
+
+  function moveEditorVerticalOrHistory(direction: -1 | 1): void {
+    const promptLayout = createTerminalLayout(
+      terminalSize.columns,
+      terminalSize.rows,
+      {
+        approval: approval !== null,
+        commandMenu: false,
+        prompt: editor.value,
+        promptCursor: editor.cursor,
+      },
+    );
+    if (editorVisualLineCount(editor.value, promptLayout.promptColumns) > 1) {
+      setEditor((current) =>
+        moveCursorVertical(current, direction, promptLayout.promptColumns),
+      );
+      return;
+    }
+    setEditor((current) => navigateHistory(current, direction));
   }
 
   function handleLifecycleEvent(event: RuntimeClientEvent): void {
@@ -453,22 +500,26 @@ export function KagentInkApp({
     dispatchRuntime({ type: "runtime_event", channel: "command", event });
   }
 
-  function handleApprovalInput(value: string): void {
+  function handleApprovalInput(value: string, key: TerminalKey): void {
     if (!approval) {
       return;
     }
-    const answer = value.toLowerCase();
-    if (answer === "d") {
+    const intent = resolveApprovalInput(approvalChoice, value, key.name);
+    if (!intent) {
+      return;
+    }
+    if (intent.type === "toggle_details") {
       setShowApprovalDetails((current) => !current);
       return;
     }
-    if (answer !== "y" && answer !== "n") {
+    if (intent.type === "select") {
+      setApprovalChoice(intent.choice);
       return;
     }
     setShowApprovalDetails(false);
-    dispatchRuntime({ type: "approval_response", approved: answer === "y" });
+    dispatchRuntime({ type: "approval_response", approved: intent.approved });
     try {
-      runtime.respondToApproval(approval.action_id, answer === "y");
+      runtime.respondToApproval(approval.action_id, intent.approved);
     } catch (error) {
       showError(errorMessage(error));
     }
@@ -487,6 +538,9 @@ export function KagentInkApp({
       approval: false,
       commandMenu: false,
     });
+    if (layout.tooNarrow) {
+      return React.createElement(NarrowTerminal, { React, Box, Text });
+    }
     return React.createElement(
       Box,
       { flexDirection: "column", paddingX: layout.horizontalPadding },
@@ -497,6 +551,7 @@ export function KagentInkApp({
         compact: layout.compact,
         provider: null,
         setup: true,
+        workspace: process.cwd(),
       }),
       React.createElement(ProviderSetupPanel, {
         React,
@@ -509,10 +564,16 @@ export function KagentInkApp({
   }
 
   const layout = createTerminalLayout(terminalSize.columns, terminalSize.rows, {
-    approval: approval !== null,
-    commandMenu: commandMenu !== null && status === "idle",
+    approval: approval
+      ? { ...approval, showDetails: showApprovalDetails }
+      : false,
+    commandMenu: status === "idle" && commandMenu ? commandMenu : false,
     prompt: editor.value,
+    promptCursor: editor.cursor,
   });
+  if (layout.tooNarrow) {
+    return React.createElement(NarrowTerminal, { React, Box, Text });
+  }
   const visibleTranscript = selectTranscriptViewport(
     transcript.entries,
     {
@@ -533,6 +594,7 @@ export function KagentInkApp({
       compact: layout.compact,
       provider,
       setup: false,
+      workspace: process.cwd(),
     }),
     React.createElement(TranscriptPosition, {
       React,
@@ -546,11 +608,19 @@ export function KagentInkApp({
           Box,
           Text,
           approval,
+          choice: approvalChoice,
           compact: layout.compact,
           showDetails: showApprovalDetails,
         })
       : null,
-    React.createElement(StatusLine, { React, Text, frame, status, statusText }),
+    React.createElement(StatusLine, {
+      React,
+      Text,
+      elapsedSeconds: activitySeconds,
+      frame,
+      status,
+      statusText,
+    }),
     commandMenu && status === "idle"
       ? React.createElement(CommandPalette, {
           React,

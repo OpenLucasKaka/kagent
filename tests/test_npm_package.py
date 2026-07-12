@@ -6,6 +6,24 @@ import sys
 from pathlib import Path
 
 
+def test_npm_pack_excludes_typescript_sources_and_test_modules():
+    npm = shutil.which("npm")
+    if npm is None:
+        return
+
+    completed = subprocess.run(
+        [npm, "pack", "--dry-run", "--json"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    payload = json.loads(completed.stdout)
+    files = [item["path"] for item in payload[0]["files"]]
+
+    assert not any(path.startswith("npm/src/") for path in files)
+    assert not any(".test." in path for path in files)
+
+
 def test_npm_package_declares_daily_use_bins():
     package_json = json.loads(Path("package.json").read_text(encoding="utf-8"))
 
@@ -34,7 +52,8 @@ def test_npm_package_ships_python_runtime_sources():
 
     assert "pyproject.toml" in package_json["files"]
     assert "src" in package_json["files"]
-    assert "npm" in package_json["files"]
+    assert "npm/bin" in package_json["files"]
+    assert "npm/lib" in package_json["files"]
 
 
 def test_npm_package_declares_ink_tui_dependencies():
@@ -98,16 +117,18 @@ assert.deepEqual(createTerminalLayout(40, 24, {approval: true, commandMenu: true
   columns: 40,
   rows: 24,
   compact: true,
+  tooNarrow: false,
   horizontalPadding: 0,
   commandLimit: 4,
   promptColumns: 38,
   promptRowLimit: 4,
-  reservedRows: 17,
+  reservedRows: 19,
 });
 assert.deepEqual(createTerminalLayout(100, 30, {approval: false, commandMenu: true}), {
   columns: 100,
   rows: 30,
   compact: false,
+  tooNarrow: false,
   horizontalPadding: 1,
   commandLimit: 6,
   promptColumns: 96,
@@ -120,9 +141,57 @@ assert.equal(
     commandMenu: true,
     prompt: "第一行\n第二行",
   }).reservedRows,
-  18,
+  20,
+);
+assert.equal(
+  createTerminalLayout(40, 24, {
+    approval: {
+      title: "Open a website",
+      target: "https://github.com/OpenLucasKaka/Kagent/issues/very-long-target",
+    },
+    commandMenu: true,
+  }).reservedRows,
+  20,
+);
+assert.equal(
+  createTerminalLayout(40, 24, {
+    approval: false,
+    commandMenu: false,
+    prompt: "a".repeat(38),
+    promptCursor: 38,
+  }).reservedRows,
+  5,
+);
+assert.equal(
+  createTerminalLayout(20, 20, {
+    approval: false,
+    commandMenu: {
+      query: "/",
+      selectedIndex: 0,
+      selectedCommand: "/status",
+      options: [
+        {
+          command: "/status",
+          description: "Show provider, workspace, and session status",
+          aliases: [],
+        },
+        {command: "/memory", description: "Inspect recent conversation memory", aliases: []},
+        {command: "/tools", description: "List available capabilities", aliases: []},
+        {command: "/clear", description: "Clear visible conversation", aliases: []},
+      ],
+    },
+    prompt: "",
+    promptCursor: 0,
+  }).reservedRows,
+  14,
 );
 assert.equal(estimateTextRows("中文abcd", 6), 2);
+const tooNarrow = createTerminalLayout(10, 20, {
+  approval: false,
+  commandMenu: false,
+});
+assert.equal(tooNarrow.columns, 10);
+assert.equal(tooNarrow.tooNarrow, true);
 const small = createTerminalLayout(40, 10, {
   approval: true,
   commandMenu: false,
@@ -213,6 +282,7 @@ async function renderAt(columns) {
         api_key_configured: true,
       },
       setup: false,
+      workspace: "safe\u001b]52;c;SGVsbG8=\u0007tail",
     }),
     React.createElement(ui.MessageList, {
       React,
@@ -294,6 +364,7 @@ async function main() {
     const frameChunks = chunks.filter((chunk) => chunk.includes("kagent"));
     assert.ok(frameChunks.length > 0, JSON.stringify(chunks));
     const plain = stripAnsi(frameChunks.at(-1));
+    assert.doesNotMatch(frameChunks.at(-1), /\u001b\]52;/);
     assert.match(plain, /kagent/);
     assert.match(plain, /History · 3 newer/);
     assert.match(plain, /Permission required/);
@@ -302,6 +373,13 @@ async function main() {
     assert.match(plain, /Updated files docs\/plan.md/);
     assert.match(plain, /\+ new line/);
     assert.doesNotMatch(plain, /apply_patch|workspace_diff/);
+    if (columns === 40) {
+      const lines = plain.split("\n");
+      const headerLine = lines.find((line) => line.includes("kagent"));
+      assert.match(headerLine, /Qwen/);
+      const approvalChoiceLine = lines.find((line) => line.includes("Allow once"));
+      assert.match(approvalChoiceLine, /Deny/);
+    }
     const overflow = plain
       .split("\n")
       .map((line) => ({line, width: stringWidth(line)}))
