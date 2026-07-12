@@ -475,27 +475,64 @@ export function createRuntimeSessionClient(): RuntimeSessionClient {
 }
 
 function cleanupExpiredPendingApprovals(directory: string): void {
-  let entries: fs.Dirent[];
-  try {
-    entries = fs.readdirSync(directory, { withFileTypes: true });
-  } catch {
+  const directoryFlag = fs.constants.O_DIRECTORY;
+  const noFollowFlag = fs.constants.O_NOFOLLOW;
+  if (
+    typeof directoryFlag !== "number" ||
+    typeof noFollowFlag !== "number"
+  ) {
     return;
   }
-  const cutoff = Date.now() - PENDING_APPROVAL_MAX_AGE_MS;
-  for (const entry of entries) {
-    if (!entry.isFile() || !PENDING_APPROVAL_FILE_PATTERN.test(entry.name)) {
-      continue;
+  let directoryFd: number | null = null;
+  try {
+    directoryFd = fs.openSync(
+      directory,
+      fs.constants.O_RDONLY | directoryFlag | noFollowFlag,
+    );
+    if (!fs.fstatSync(directoryFd).isDirectory()) {
+      return;
     }
-    const candidate = path.join(directory, entry.name);
-    try {
-      const stats = fs.lstatSync(candidate);
-      if (stats.isFile() && stats.mtimeMs < cutoff) {
-        fs.unlinkSync(candidate);
+    const anchoredDirectory = openedDirectoryPath(directoryFd);
+    if (!anchoredDirectory) {
+      return;
+    }
+    const entries = fs.readdirSync(anchoredDirectory, { withFileTypes: true });
+    const cutoff = Date.now() - PENDING_APPROVAL_MAX_AGE_MS;
+    for (const entry of entries) {
+      if (!PENDING_APPROVAL_FILE_PATTERN.test(entry.name)) {
+        continue;
       }
-    } catch {
-      // A concurrent runtime may have replaced or removed the snapshot.
+      const candidate = path.join(anchoredDirectory, entry.name);
+      try {
+        const stats = fs.lstatSync(candidate);
+        if (stats.isFile() && stats.mtimeMs < cutoff) {
+          fs.unlinkSync(candidate);
+        }
+      } catch {
+        // A concurrent runtime may have replaced or removed the snapshot.
+      }
+    }
+  } catch {
+    // Refuse to clean when the directory cannot be opened without following links.
+  } finally {
+    if (directoryFd !== null) {
+      try {
+        fs.closeSync(directoryFd);
+      } catch {
+        // The descriptor is no longer usable; cleanup remains best-effort.
+      }
     }
   }
+}
+
+function openedDirectoryPath(directoryFd: number): string | null {
+  if (process.platform === "darwin") {
+    return path.join("/dev/fd", String(directoryFd));
+  }
+  if (process.platform === "linux") {
+    return path.join("/proc/self/fd", String(directoryFd));
+  }
+  return null;
 }
 
 function errorMessage(error: unknown): string {

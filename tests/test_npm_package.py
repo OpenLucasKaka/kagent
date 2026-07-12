@@ -2320,7 +2320,7 @@ main().catch((error) => {
     assert completed.returncode == 0, completed.stderr
 
 
-def test_npm_runtime_client_removes_expired_orphan_approval_snapshots():
+def test_npm_runtime_client_safely_cleans_expired_orphan_approval_snapshots():
     node = shutil.which("node")
     if node is None:
         return
@@ -2348,6 +2348,28 @@ const staleTime = new Date(Date.now() - (25 * 60 * 60 * 1000));
 fs.utimesSync(stalePath, staleTime, staleTime);
 fs.utimesSync(unrelatedPath, staleTime, staleTime);
 
+function supportsAnchoredDirectoryCleanup(directory) {
+  if (process.platform !== "darwin" && process.platform !== "linux") {
+    return false;
+  }
+  const fd = fs.openSync(
+    directory,
+    fs.constants.O_RDONLY | fs.constants.O_DIRECTORY | fs.constants.O_NOFOLLOW,
+  );
+  const anchor = process.platform === "darwin"
+    ? path.join("/dev/fd", String(fd))
+    : path.join("/proc/self/fd", String(fd));
+  try {
+    fs.readdirSync(anchor);
+    return true;
+  } catch (_error) {
+    return false;
+  } finally {
+    fs.closeSync(fd);
+  }
+}
+const cleanupAvailable = supportsAnchoredDirectoryCleanup(pendingDirectory);
+
 const runnerPath = require.resolve("./npm/lib/python-runner");
 require.cache[runnerPath] = {
   id: runnerPath,
@@ -2370,11 +2392,76 @@ require.cache[runnerPath] = {
 
 const {createRuntimeSessionClient} = require("./npm/lib/runtime-client");
 const client = createRuntimeSessionClient();
-assert.equal(fs.existsSync(stalePath), false);
+assert.equal(fs.existsSync(stalePath), !cleanupAvailable);
 assert.equal(fs.existsSync(freshPath), true);
 assert.equal(fs.existsSync(unrelatedPath), true);
 client.close();
 fs.rmSync(root, {recursive: true, force: true});
+"""
+
+    completed = subprocess.run(
+        [node, "-e", script],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+
+
+def test_npm_runtime_client_does_not_clean_through_symlinked_approval_directory():
+    node = shutil.which("node")
+    if node is None or sys.platform == "win32":
+        return
+
+    script = r"""
+const assert = require("node:assert/strict");
+const {EventEmitter} = require("node:events");
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
+const {PassThrough} = require("node:stream");
+
+const root = fs.mkdtempSync(path.join(os.tmpdir(), "kagent-pending-root-"));
+const outside = fs.mkdtempSync(path.join(os.tmpdir(), "kagent-pending-outside-"));
+process.env.KAGENT_HOME = root;
+delete process.env.KAGENT_PENDING_APPROVAL_PATH;
+const stateDirectory = path.join(root, "state");
+const pendingDirectory = path.join(stateDirectory, "pending-approvals");
+fs.mkdirSync(stateDirectory, {recursive: true});
+fs.symlinkSync(outside, pendingDirectory, "dir");
+const stalePath = path.join(outside, "123e4567-e89b-42d3-a456-426614174000.json");
+fs.writeFileSync(stalePath, "outside");
+const staleTime = new Date(Date.now() - (25 * 60 * 60 * 1000));
+fs.utimesSync(stalePath, staleTime, staleTime);
+
+const runnerPath = require.resolve("./npm/lib/python-runner");
+require.cache[runnerPath] = {
+  id: runnerPath,
+  filename: runnerPath,
+  loaded: true,
+  exports: {
+    spawnPythonModule() {
+      const child = new EventEmitter();
+      child.stdout = new PassThrough();
+      child.stderr = new PassThrough();
+      child.stdin = new PassThrough();
+      child.killed = false;
+      child.exitCode = null;
+      child.signalCode = null;
+      child.kill = () => { child.killed = true; };
+      return child;
+    },
+  },
+};
+
+const {createRuntimeSessionClient} = require("./npm/lib/runtime-client");
+const client = createRuntimeSessionClient();
+assert.equal(fs.existsSync(stalePath), true);
+client.close();
+fs.rmSync(root, {recursive: true, force: true});
+fs.rmSync(outside, {recursive: true, force: true});
 """
 
     completed = subprocess.run(

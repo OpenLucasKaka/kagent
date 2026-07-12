@@ -410,29 +410,62 @@ function createRuntimeSessionClient() {
     }
 }
 function cleanupExpiredPendingApprovals(directory) {
-    let entries;
-    try {
-        entries = node_fs_1.default.readdirSync(directory, { withFileTypes: true });
-    }
-    catch {
+    const directoryFlag = node_fs_1.default.constants.O_DIRECTORY;
+    const noFollowFlag = node_fs_1.default.constants.O_NOFOLLOW;
+    if (typeof directoryFlag !== "number" ||
+        typeof noFollowFlag !== "number") {
         return;
     }
-    const cutoff = Date.now() - PENDING_APPROVAL_MAX_AGE_MS;
-    for (const entry of entries) {
-        if (!entry.isFile() || !PENDING_APPROVAL_FILE_PATTERN.test(entry.name)) {
-            continue;
+    let directoryFd = null;
+    try {
+        directoryFd = node_fs_1.default.openSync(directory, node_fs_1.default.constants.O_RDONLY | directoryFlag | noFollowFlag);
+        if (!node_fs_1.default.fstatSync(directoryFd).isDirectory()) {
+            return;
         }
-        const candidate = node_path_1.default.join(directory, entry.name);
-        try {
-            const stats = node_fs_1.default.lstatSync(candidate);
-            if (stats.isFile() && stats.mtimeMs < cutoff) {
-                node_fs_1.default.unlinkSync(candidate);
+        const anchoredDirectory = openedDirectoryPath(directoryFd);
+        if (!anchoredDirectory) {
+            return;
+        }
+        const entries = node_fs_1.default.readdirSync(anchoredDirectory, { withFileTypes: true });
+        const cutoff = Date.now() - PENDING_APPROVAL_MAX_AGE_MS;
+        for (const entry of entries) {
+            if (!PENDING_APPROVAL_FILE_PATTERN.test(entry.name)) {
+                continue;
+            }
+            const candidate = node_path_1.default.join(anchoredDirectory, entry.name);
+            try {
+                const stats = node_fs_1.default.lstatSync(candidate);
+                if (stats.isFile() && stats.mtimeMs < cutoff) {
+                    node_fs_1.default.unlinkSync(candidate);
+                }
+            }
+            catch {
+                // A concurrent runtime may have replaced or removed the snapshot.
             }
         }
-        catch {
-            // A concurrent runtime may have replaced or removed the snapshot.
+    }
+    catch {
+        // Refuse to clean when the directory cannot be opened without following links.
+    }
+    finally {
+        if (directoryFd !== null) {
+            try {
+                node_fs_1.default.closeSync(directoryFd);
+            }
+            catch {
+                // The descriptor is no longer usable; cleanup remains best-effort.
+            }
         }
     }
+}
+function openedDirectoryPath(directoryFd) {
+    if (process.platform === "darwin") {
+        return node_path_1.default.join("/dev/fd", String(directoryFd));
+    }
+    if (process.platform === "linux") {
+        return node_path_1.default.join("/proc/self/fd", String(directoryFd));
+    }
+    return null;
 }
 function errorMessage(error) {
     return error instanceof Error ? error.message : String(error);
