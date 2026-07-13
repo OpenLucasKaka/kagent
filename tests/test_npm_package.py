@@ -2719,7 +2719,9 @@ def test_npm_runner_uses_cache_venv_and_env_forwarding():
 
     assert "KAGENT_NODE_VENV" in runner
     assert "KAGENT_PYTHON" in runner
-    assert '"pip", "install", "--disable-pip-version-check", "--quiet", root' in runner
+    assert 'const installArgs = ["-m", "pip", "install"]' in runner
+    assert 'installArgs.push("--no-deps")' in runner
+    assert 'installArgs.push("--disable-pip-version-check", "--quiet", root)' in runner
     assert '{ cwd: root, stdio: "pipe" }' in runner
     assert '"-e", root' not in runner
     assert "env: process.env" in runner
@@ -3032,14 +3034,139 @@ assert.equal(
     assert completed.returncode == 0, completed.stderr
 
 
-def test_npm_runner_reinstalls_cached_python_runtime_when_sources_change():
-    runner = Path("npm/lib/python-runner.js").read_text(encoding="utf-8")
+def test_npm_runner_reinstalls_cached_python_runtime_when_sources_change(tmp_path):
+    node = shutil.which("node")
+    if node is None:
+        return
 
-    assert "sourceHash" in runner
-    assert 'crypto.createHash("sha256")' in runner
-    assert '"src"' in runner
-    assert "sourceFingerprintPaths(root)" in runner
-    assert "actual.sourceHash === expected.sourceHash" in runner
+    script = r"""
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
+const { _internals } = require("./npm/lib/python-runner");
+
+const testRoot = process.argv[1];
+const packageRoot = path.join(testRoot, "package");
+const cacheRoot = path.join(testRoot, "cache");
+fs.mkdirSync(path.join(packageRoot, "src", "kagent"), {recursive: true});
+
+function writePackage(version, dependency, source) {
+  fs.writeFileSync(path.join(packageRoot, "package.json"), JSON.stringify({version}));
+  fs.writeFileSync(path.join(packageRoot, "pyproject.toml"), `
+[project]
+name = "kagent"
+version = "${version}"
+requires-python = ">=3.9"
+dependencies = [
+  "${dependency}",
+  "prompt_toolkit>=3.0,<4",
+]
+`);
+  fs.writeFileSync(path.join(packageRoot, "src", "kagent", "runtime.py"), source);
+}
+
+writePackage("0.1.0", "langgraph>=0.6,<0.7", "SOURCE = 1\n");
+const initialDependencyHash = _internals.dependencyHash(packageRoot);
+const initialSourceHash = _internals.sourceHash(packageRoot);
+writePackage("0.2.0", "langgraph>=0.6,<0.7", "SOURCE = 2\n");
+assert.equal(_internals.dependencyHash(packageRoot), initialDependencyHash);
+assert.notEqual(_internals.sourceHash(packageRoot), initialSourceHash);
+writePackage("0.2.0", "langgraph>=0.7,<0.8", "SOURCE = 2\n");
+assert.notEqual(_internals.dependencyHash(packageRoot), initialDependencyHash);
+
+const calls = [];
+const options = {
+  cacheRoot,
+  python: "/fake/python",
+  pythonIdentity: {implementation: "cpython", major: 3, minor: 12},
+  platform: "darwin",
+  arch: "arm64",
+  ensurePrivateDirectory(directory) {
+    fs.mkdirSync(directory, {recursive: true});
+    return directory;
+  },
+  runChecked(command, args) {
+    calls.push({command, args});
+    if (args[0] === "-m" && args[1] === "venv") {
+      const venvDir = args.at(-1);
+      fs.mkdirSync(path.join(venvDir, "bin"), {recursive: true});
+      fs.writeFileSync(path.join(venvDir, "bin", "python"), "");
+    }
+  },
+  writeMarker(venvDir, marker) {
+    fs.writeFileSync(
+      path.join(venvDir, ".kagent-node-install.json"),
+      `${JSON.stringify(marker)}\n`,
+    );
+  },
+};
+
+writePackage("0.1.0", "langgraph>=0.6,<0.7", "SOURCE = 1\n");
+const firstVenv = _internals.ensureVenv(packageRoot, "0.1.0", options);
+assert.match(firstVenv, /cpython-3\.12[/\\]darwin-arm64[/\\][a-f0-9]{64}$/);
+assert.deepEqual(calls.map((call) => call.args), [
+  ["-m", "venv", firstVenv],
+  ["-m", "pip", "install", "--disable-pip-version-check", "--quiet", packageRoot],
+]);
+let marker = JSON.parse(fs.readFileSync(
+  path.join(firstVenv, ".kagent-node-install.json"),
+  "utf8",
+));
+assert.equal(marker.dependencyHash, initialDependencyHash);
+assert.equal(marker.sourceHash, initialSourceHash);
+
+writePackage("0.2.0", "langgraph>=0.6,<0.7", "SOURCE = 2\n");
+const reusedVenv = _internals.ensureVenv(packageRoot, "0.2.0", options);
+assert.equal(reusedVenv, firstVenv);
+assert.deepEqual(calls.at(-1).args, [
+  "-m", "pip", "install", "--no-deps", "--disable-pip-version-check", "--quiet", packageRoot,
+]);
+const callCountAfterSourceInstall = calls.length;
+assert.equal(_internals.ensureVenv(packageRoot, "0.2.0", options), firstVenv);
+assert.equal(calls.length, callCountAfterSourceInstall);
+fs.unlinkSync(path.join(firstVenv, "bin", "python"));
+_internals.ensureVenv(packageRoot, "0.2.0", options);
+assert.deepEqual(calls.slice(-2).map((call) => call.args), [
+  ["-m", "venv", "--clear", firstVenv],
+  ["-m", "pip", "install", "--disable-pip-version-check", "--quiet", packageRoot],
+]);
+
+writePackage("0.2.0", "langgraph>=0.7,<0.8", "SOURCE = 2\n");
+const dependencyVenv = _internals.ensureVenv(packageRoot, "0.2.0", options);
+assert.notEqual(dependencyVenv, firstVenv);
+assert.deepEqual(calls.slice(-2).map((call) => call.args), [
+  ["-m", "venv", dependencyVenv],
+  ["-m", "pip", "install", "--disable-pip-version-check", "--quiet", packageRoot],
+]);
+const otherPlatformVenv = _internals.ensureVenv(packageRoot, "0.2.0", {
+  ...options,
+  platform: "linux",
+});
+assert.notEqual(otherPlatformVenv, dependencyVenv);
+
+writePackage("0.2.0", "langgraph>=0.8,<0.9", "SOURCE = 2\n");
+let failedVenv;
+assert.throws(() => _internals.ensureVenv(packageRoot, "0.2.0", {
+  ...options,
+  runChecked(command, args) {
+    options.runChecked(command, args);
+    if (args[1] === "pip") {
+      failedVenv = path.dirname(path.dirname(command));
+      throw new Error("pip failed");
+    }
+  },
+}), /pip failed/);
+assert.equal(fs.existsSync(path.join(failedVenv, ".kagent-node-install.json")), false);
+"""
+
+    completed = subprocess.run(
+        [node, "-e", script, str(tmp_path)],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert completed.returncode == 0, completed.stderr
 
 
 def test_npm_runner_checks_github_for_interactive_self_update():

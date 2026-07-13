@@ -538,12 +538,98 @@ function markerPath(venvDir) {
   return path.join(venvDir, ".kagent-node-install.json");
 }
 
-function installMarker(root, version) {
+function installMarker(root, version, dependencyFingerprint) {
   return {
     packageRoot: root,
     version,
+    dependencyHash: dependencyFingerprint,
     sourceHash: sourceHash(root)
   };
+}
+
+function sha256(value) {
+  return crypto.createHash("sha256").update(value).digest("hex");
+}
+
+function projectTable(pyproject) {
+  const match = pyproject.match(/^\s*\[project\]\s*(?:#.*)?$/m);
+  if (!match) {
+    throw new Error("pyproject.toml does not declare [project]");
+  }
+  const bodyStart = match.index + match[0].length;
+  const remaining = pyproject.slice(bodyStart);
+  const nextTable = remaining.search(/^\s*\[/m);
+  return nextTable === -1 ? remaining : remaining.slice(0, nextTable);
+}
+
+function tomlString(value) {
+  if (value.startsWith('"')) {
+    return JSON.parse(value);
+  }
+  return value.slice(1, -1);
+}
+
+function projectString(project, key) {
+  const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = project.match(
+    new RegExp(`^\\s*${escapedKey}\\s*=\\s*("(?:\\\\.|[^"\\\\])*"|'[^']*')\\s*(?:#.*)?$`, "m")
+  );
+  if (!match) {
+    throw new Error(`pyproject.toml [project] does not declare ${key}`);
+  }
+  return tomlString(match[1]);
+}
+
+function projectStringArray(project, key) {
+  const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const assignment = new RegExp(`^\\s*${escapedKey}\\s*=\\s*\\[`, "m").exec(project);
+  if (!assignment) {
+    throw new Error(`pyproject.toml [project] does not declare ${key}`);
+  }
+  const values = [];
+  let index = assignment.index + assignment[0].length;
+  while (index < project.length) {
+    const character = project[index];
+    if (character === "]") {
+      return values;
+    }
+    if (character === "#") {
+      while (index < project.length && project[index] !== "\n") index += 1;
+      continue;
+    }
+    if (character === '"' || character === "'") {
+      const quote = character;
+      const start = index;
+      index += 1;
+      while (index < project.length) {
+        if (quote === '"' && project[index] === "\\") {
+          index += 2;
+          continue;
+        }
+        if (project[index] === quote) {
+          index += 1;
+          values.push(tomlString(project.slice(start, index)));
+          break;
+        }
+        index += 1;
+      }
+      if (project[index - 1] !== quote) {
+        throw new Error(`unterminated string in [project].${key}`);
+      }
+      continue;
+    }
+    index += 1;
+  }
+  throw new Error(`unterminated array in [project].${key}`);
+}
+
+function dependencyHash(root) {
+  const pyproject = fs.readFileSync(path.join(root, "pyproject.toml"), "utf8");
+  const project = projectTable(pyproject);
+  return sha256(JSON.stringify({
+    requiresPython: projectString(project, "requires-python"),
+    dependencies: projectStringArray(project, "dependencies")
+  }));
 }
 
 function sourceHash(root) {
@@ -581,49 +667,99 @@ function collectRelativeFiles(directory, relativeDirectory, output) {
   }
 }
 
-function markerMatches(venvDir, expected) {
+function readMarker(venvDir) {
   const pathToMarker = markerPath(venvDir);
   if (!privateFileStat(pathToMarker)) {
-    return false;
+    return null;
   }
   try {
-    const actual = JSON.parse(fs.readFileSync(pathToMarker, "utf8"));
-    return (
-      actual.packageRoot === expected.packageRoot &&
-      actual.version === expected.version &&
-      actual.sourceHash === expected.sourceHash
-    );
+    return JSON.parse(fs.readFileSync(pathToMarker, "utf8"));
   } catch (_error) {
-    return false;
+    return null;
   }
+}
+
+function markerMatches(actual, expected) {
+  return Boolean(actual) &&
+    actual.packageRoot === expected.packageRoot &&
+    actual.version === expected.version &&
+    actual.dependencyHash === expected.dependencyHash &&
+    actual.sourceHash === expected.sourceHash;
 }
 
 function writeMarker(venvDir, marker) {
   writePrivateFile(markerPath(venvDir), `${JSON.stringify(marker, null, 2)}\n`);
 }
 
-function ensureVenv(root, version) {
-  const venvDir = path.join(ensureCacheRoot(), version);
-  ensurePrivateDirectory(venvDir);
-  const expectedMarker = installMarker(root, version);
+function pythonRuntimeIdentity(python) {
+  const result = childProcess.spawnSync(
+    python,
+    ["-c", "import json, sys; print(json.dumps({'implementation': sys.implementation.name, 'major': sys.version_info[0], 'minor': sys.version_info[1]}))"],
+    { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }
+  );
+  if (result.error) {
+    throw result.error;
+  }
+  if (result.status !== 0) {
+    throw new Error(`failed to identify Python runtime: ${String(result.stderr || "").trim()}`);
+  }
+  const identity = JSON.parse(result.stdout);
+  if (!/^[A-Za-z0-9_-]+$/.test(identity.implementation) ||
+      !Number.isInteger(identity.major) || !Number.isInteger(identity.minor)) {
+    throw new Error("Python runtime returned an invalid identity");
+  }
+  return identity;
+}
+
+function runtimeCacheDirectory(cache, identity, platform, arch, dependencyFingerprint) {
+  const abi = `${identity.implementation}-${identity.major}.${identity.minor}`;
+  return path.join(cache, abi, `${platform}-${arch}`, dependencyFingerprint);
+}
+
+function ensureVenv(root, version, options = {}) {
+  const python = options.python || findPython();
+  const identity = options.pythonIdentity || pythonRuntimeIdentity(python);
+  const dependencyFingerprint = dependencyHash(root);
+  const cache = options.cacheRoot || ensureCacheRoot();
+  const platform = options.platform || process.platform;
+  const arch = options.arch || process.arch;
+  const venvDir = runtimeCacheDirectory(cache, identity, platform, arch, dependencyFingerprint);
+  const ensureDirectory = options.ensurePrivateDirectory || ensurePrivateDirectory;
+  const checkedRun = options.runChecked || runChecked;
+  const markerWriter = options.writeMarker || writeMarker;
+  ensureDirectory(venvDir);
+  const expectedMarker = installMarker(root, version, dependencyFingerprint);
   const pythonPath = venvPythonPath(venvDir);
-  if (fs.existsSync(pythonPath) && markerMatches(venvDir, expectedMarker)) {
+  const actualMarker = readMarker(venvDir);
+  const hadPython = fs.existsSync(pythonPath);
+  if (hadPython && markerMatches(actualMarker, expectedMarker)) {
     return venvDir;
   }
 
-  if (!fs.existsSync(pythonPath)) {
-    const python = findPython();
+  if (!hadPython) {
     process.stderr.write(`kagent: preparing Python runtime in ${venvDir}\n`);
-    runChecked(python, ["-m", "venv", venvDir], { cwd: root });
+    const venvArgs = ["-m", "venv"];
+    if (actualMarker) {
+      venvArgs.push("--clear");
+    }
+    venvArgs.push(venvDir);
+    checkedRun(python, venvArgs, { cwd: root });
   }
 
   process.stderr.write("kagent: preparing Python runtime\n");
-  runChecked(
+  const sourceOnlyInstall = hadPython && actualMarker &&
+    actualMarker.dependencyHash === dependencyFingerprint;
+  const installArgs = ["-m", "pip", "install"];
+  if (sourceOnlyInstall) {
+    installArgs.push("--no-deps");
+  }
+  installArgs.push("--disable-pip-version-check", "--quiet", root);
+  checkedRun(
     pythonPath,
-    ["-m", "pip", "install", "--disable-pip-version-check", "--quiet", root],
+    installArgs,
     { cwd: root, stdio: "pipe" }
   );
-  writeMarker(venvDir, expectedMarker);
+  markerWriter(venvDir, expectedMarker);
   return venvDir;
 }
 
@@ -691,14 +827,17 @@ module.exports = {
   spawnPythonModule,
   _internals: {
     cacheRoot,
+    dependencyHash,
     ensureCacheRoot,
     ensurePrivateDirectory,
+    ensureVenv,
     hasSelfUpdate,
     isNewerVersion,
     metadataCacheRoot,
     maybePrintNodeHandledOutput,
     readSelfUpdateState,
     shouldCheckSelfUpdate,
+    sourceHash,
     writeSelfUpdateState
   }
 };
