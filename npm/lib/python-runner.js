@@ -163,17 +163,39 @@ def create_temp_directory(final_target):
 
 
 def remove_directory_contents(directory_fd):
-    for name in os.listdir(directory_fd):
-        value = os.stat(name, dir_fd=directory_fd, follow_symlinks=False)
+    try:
+        names = os.listdir(directory_fd)
+    except FileNotFoundError:
+        return
+    for name in names:
+        try:
+            value = os.stat(name, dir_fd=directory_fd, follow_symlinks=False)
+        except FileNotFoundError:
+            continue
         if stat.S_ISDIR(value.st_mode):
-            child_fd = os.open(name, DIRECTORY_FLAGS, dir_fd=directory_fd)
+            try:
+                child_fd = os.open(name, DIRECTORY_FLAGS, dir_fd=directory_fd)
+            except FileNotFoundError:
+                continue
+            except OSError as error:
+                if error.errno in (errno.ELOOP, errno.ENOTDIR):
+                    fail(f"temporary runtime directory changed type: {name}")
+                raise
             try:
                 remove_directory_contents(child_fd)
             finally:
                 os.close(child_fd)
-            os.rmdir(name, dir_fd=directory_fd)
+            try:
+                os.rmdir(name, dir_fd=directory_fd)
+            except FileNotFoundError:
+                continue
         else:
-            os.unlink(name, dir_fd=directory_fd)
+            try:
+                os.unlink(name, dir_fd=directory_fd)
+            except FileNotFoundError:
+                continue
+            except IsADirectoryError:
+                fail(f"temporary runtime entry changed type: {name}")
 
 
 def remove_tree_entry(parent_fd, name, target):
@@ -189,7 +211,10 @@ def remove_tree_entry(parent_fd, name, target):
         remove_directory_contents(directory_fd)
     finally:
         os.close(directory_fd)
-    os.rmdir(name, dir_fd=parent_fd)
+    try:
+        os.rmdir(name, dir_fd=parent_fd)
+    except FileNotFoundError:
+        return
 
 
 def remove_tree(target):

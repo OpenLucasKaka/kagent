@@ -1,3 +1,4 @@
+import hashlib
 import json
 import os
 import shutil
@@ -3322,6 +3323,31 @@ def test_npm_runner_concurrent_builds_publish_one_immutable_runtime(tmp_path):
     )
     source.write_text("SOURCE = 1\n", encoding="utf-8")
 
+    identity = {
+        "implementation": "cpython",
+        "major": 3,
+        "minor": 12,
+        "cacheTag": "cpython-312",
+        "soabi": "abi",
+        "machine": "arm64",
+        "executable": "/python",
+        "prefix": "/p",
+        "basePrefix": "/p",
+        "execPrefix": "/p",
+        "baseExecPrefix": "/p",
+    }
+    identity_hash = hashlib.sha256(
+        json.dumps(identity, separators=(",", ":")).encode()
+    ).hexdigest()
+    runtime_parent = cache_root / f"cpython-3.12-{identity_hash}" / "darwin-arm64"
+    stale_temp = runtime_parent / ("t" + ("d" * 63))
+    nested = stale_temp / "nested"
+    nested.mkdir(parents=True)
+    for index in range(1000):
+        (nested / f"partial-{index}").write_text("old", encoding="utf-8")
+    old_time = (stale_temp.stat().st_mtime - (25 * 60 * 60))
+    os.utime(stale_temp, (old_time, old_time))
+
     worker = r"""
 const fs = require("node:fs");
 const path = require("node:path");
@@ -3374,6 +3400,7 @@ process.stdout.write(runtime);
     assert sum(args[1] == "pip" for args in calls) == 2
     final_runtime = Path(results[0][0])
     assert final_runtime.is_dir()
+    assert not stale_temp.exists()
     assert [item.name for item in final_runtime.parent.iterdir()] == [final_runtime.name]
 
 
