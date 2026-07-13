@@ -182,10 +182,11 @@ authority fields. Runtime result redaction also removes secret-like plain-text
 values such as API keys and bearer tokens from plans, observations, progress
 events, shell command output, CLI output, HTTP responses, and persisted traces.
 `open_app` opens installed macOS applications by application name only, using
-`open -a` without shell expansion or path inputs. `open_url` is intentionally
-separate from `http_request`: it opens `http://` and `https://` URLs through
-Google Chrome automation first, with macOS `open` fallbacks, and does not fetch
-page content into the runtime trace.
+AppleScript activation to foreground already-running apps before falling back
+to `open -a`, without shell expansion or path inputs. `open_url` is
+intentionally separate from `http_request`: it opens `http://` and `https://`
+URLs through Google Chrome automation first, with macOS `open` fallbacks, and
+does not fetch page content into the runtime trace.
 Workspace file tools keep the same local boundary: `read_file` and
 `apply_patch` resolve paths inside the current workspace and reject symlink
 paths, while `list_files` skips symlink entries so external file metadata

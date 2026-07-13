@@ -128,6 +128,10 @@ _EMBEDDING_RETRY_BACKOFF_ENV_VAR = "KAGENT_EMBEDDING_RETRY_BACKOFF_SECONDS"
 _EXTERNAL_BACKEND_TIMEOUT_ENV_VAR = "KAGENT_EXTERNAL_BACKEND_TIMEOUT_SECONDS"
 _APP_NAME_MAX_LENGTH = 120
 _APP_NAME_ALLOWED_PATTERN = re.compile(r"^[\w .+()#&-]+$", re.UNICODE)
+_APP_NAME_ALIASES = {
+    "飞书": "Feishu",
+    "feishu": "Feishu",
+}
 _OPEN_COMMAND_TIMEOUT_SECONDS = 10.0
 
 
@@ -3005,24 +3009,47 @@ def _open_app(input_payload: Dict[str, Any]) -> Dict[str, Any]:
     if not isinstance(application, str) or not application.strip():
         raise ValueError("application must be a non-empty string")
     normalized_application = " ".join(application.strip().split())
+    normalized_application = _APP_NAME_ALIASES.get(
+        normalized_application.casefold(),
+        normalized_application,
+    )
     _validate_open_app_name(normalized_application)
-    try:
-        subprocess.run(
-            ["open", "-a", normalized_application],
-            check=True,
-            capture_output=True,
-            text=True,
-            timeout=_OPEN_COMMAND_TIMEOUT_SECONDS,
-        )
-    except subprocess.TimeoutExpired as exc:
-        raise TimeoutError("open app command timed out") from exc
-    except (OSError, subprocess.CalledProcessError) as exc:
-        raise ValueError("open app failed") from exc
-    return {
-        "application": normalized_application,
-        "opened": True,
-        "command": "open -a",
-    }
+    attempts = [
+        (
+            ["osascript", "-e", _app_frontmost_script(normalized_application)],
+            "osascript frontmost",
+        ),
+        (["open", "-a", normalized_application], "open -a"),
+    ]
+    last_error: BaseException | None = None
+    for command_args, command_label in attempts:
+        try:
+            subprocess.run(
+                command_args,
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=_OPEN_COMMAND_TIMEOUT_SECONDS,
+            )
+            return {
+                "application": normalized_application,
+                "opened": True,
+                "command": command_label,
+            }
+        except subprocess.TimeoutExpired as exc:
+            raise TimeoutError("open app command timed out") from exc
+        except (OSError, subprocess.CalledProcessError) as exc:
+            last_error = exc
+            continue
+    raise ValueError("open app failed") from last_error
+
+
+def _app_frontmost_script(application: str) -> str:
+    escaped = application.replace("\\", "\\\\").replace('"', '\\"')
+    return (
+        'tell application "System Events" to set frontmost of '
+        f'first application process whose name is "{escaped}" to true'
+    )
 
 
 def _validate_open_app_name(application: str) -> None:

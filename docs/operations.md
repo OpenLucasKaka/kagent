@@ -775,10 +775,12 @@ In the terminal agent, approval prompts accept `d` to print the pending action
 JSON before the operator answers `y` to approve or `n` to skip.
 `http_request` performs approved HTTP GET fetches with bounded response bytes
 and returns response metadata plus text. `open_app` opens local macOS
-applications by app name and rejects paths or shell-like input. `open_url` is
-the separate local browser-opening tool for `http://` and `https://` URLs. It
-uses Google Chrome automation first, falls back to macOS `open`, and does not
-fetch page content into the runtime trace. `shell_command` executes only after
+applications by app name, foregrounds already-running apps with AppleScript
+activation, normalizes the common `飞书` app name to `Feishu`, and rejects
+paths or shell-like input. `open_url` is the separate
+local browser-opening tool for `http://` and `https://` URLs. It uses Google
+Chrome automation first, falls back to macOS `open`, and does not fetch page
+content into the runtime trace. `shell_command` executes only after
 policy approval, uses workspace-confined cwd, strips host secrets by replacing
 the inherited environment with a minimal sandbox environment, rejects
 network-capable shell clients and common inline interpreter network APIs, and

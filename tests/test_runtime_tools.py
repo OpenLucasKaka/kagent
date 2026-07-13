@@ -17,6 +17,11 @@ from kagent.runtime.tools import (
     registered_runtime_tool_metadata,
 )
 
+_FRONTMOST_PREFIX = (
+    'tell application "System Events" to set frontmost of '
+    "first application process whose name is "
+)
+
 
 @pytest.fixture(autouse=True)
 def isolate_patch_checkpoint_state(tmp_path, monkeypatch):
@@ -1585,16 +1590,92 @@ def test_open_app_tool_opens_local_app_by_name(monkeypatch):
     assert observation.output == {
         "application": "Google Chrome",
         "opened": True,
-        "command": "open -a",
+        "command": "osascript frontmost",
     }
     assert calls == [
         {
-            "args": ["open", "-a", "Google Chrome"],
+            "args": [
+                "osascript",
+                "-e",
+                f'{_FRONTMOST_PREFIX}"Google Chrome" to true',
+            ],
             "check": True,
             "capture_output": True,
             "text": True,
             "timeout": 10.0,
         }
+    ]
+
+
+def test_open_app_tool_falls_back_to_open_when_activation_fails(monkeypatch):
+    calls = []
+
+    class FakeCalledProcessError(Exception):
+        pass
+
+    class FakeSubprocess:
+        CalledProcessError = FakeCalledProcessError
+        TimeoutExpired = TimeoutError
+
+        @staticmethod
+        def run(args, *, check, capture_output, text, timeout):
+            calls.append(args)
+            if args[0] == "osascript":
+                raise FakeCalledProcessError()
+
+    monkeypatch.setattr(runtime_tools, "subprocess", FakeSubprocess, raising=False)
+
+    observation = execute_runtime_tool(
+        default_runtime_tools(),
+        "open_app",
+        {"application": "Feishu"},
+        action_id="step-1",
+    )
+
+    assert observation.status == "ok"
+    assert observation.output == {
+        "application": "Feishu",
+        "opened": True,
+        "command": "open -a",
+    }
+    assert calls == [
+        [
+            "osascript",
+            "-e",
+            f'{_FRONTMOST_PREFIX}"Feishu" to true',
+        ],
+        ["open", "-a", "Feishu"],
+    ]
+
+
+def test_open_app_tool_normalizes_feishu_alias(monkeypatch):
+    calls = []
+
+    class FakeSubprocess:
+        CalledProcessError = RuntimeError
+        TimeoutExpired = TimeoutError
+
+        @staticmethod
+        def run(args, *, check, capture_output, text, timeout):
+            calls.append(args)
+
+    monkeypatch.setattr(runtime_tools, "subprocess", FakeSubprocess, raising=False)
+
+    observation = execute_runtime_tool(
+        default_runtime_tools(),
+        "open_app",
+        {"application": "飞书"},
+        action_id="step-1",
+    )
+
+    assert observation.status == "ok"
+    assert observation.output["application"] == "Feishu"
+    assert calls == [
+        [
+            "osascript",
+            "-e",
+            f'{_FRONTMOST_PREFIX}"Feishu" to true',
+        ]
     ]
 
 

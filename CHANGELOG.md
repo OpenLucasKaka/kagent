@@ -7,6 +7,10 @@
 - Kept the real terminal cursor aligned with the Ink prompt input cell so IME
   preedit text appears on the `kagent` prompt line instead of the terminal's
   lower-left corner.
+- Brought already-running macOS apps to the foreground for `open_app` by using
+  AppleScript activation before falling back to `open -a`.
+- Normalized the common `飞书` app name to the macOS `Feishu` process name for
+  `open_app`.
 
 ## 0.1.7 - 2026-07-13
 
