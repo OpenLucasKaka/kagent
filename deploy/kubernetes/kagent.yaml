@@ -99,7 +99,7 @@ spec:
           type: RuntimeDefault
       initContainers:
         - name: production-doctor
-          image: kagent:0.1.6
+          image: kagent:0.1.7
           imagePullPolicy: IfNotPresent
           command:
             - kagent-doctor
@@ -133,7 +133,7 @@ spec:
                 - ALL
       containers:
         - name: service
-          image: kagent:0.1.6
+          image: kagent:0.1.7
           imagePullPolicy: IfNotPresent
           ports:
             - name: http
@@ -287,7 +287,7 @@ spec:
               type: RuntimeDefault
           containers:
             - name: trace-prune
-              image: kagent:0.1.6
+              image: kagent:0.1.7
               imagePullPolicy: IfNotPresent
               command:
                 - kagent-trace-prune

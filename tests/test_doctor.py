@@ -3,6 +3,7 @@ import os
 import subprocess
 import sys
 
+from kagent import __version__
 from kagent.ops.doctor import doctor_payload
 from kagent.providers.llm import LLMProviderConfig
 from kagent.service.runtime import ServiceConfig
@@ -15,7 +16,7 @@ def test_doctor_payload_reports_readiness_config_version_and_tool_count(tmp_path
     assert payload["readiness"]["status"] == "ready"
     assert payload["readiness"]["checks"]["trace_persistence"] == "ok"
     assert payload["config"]["trace_persistence"] == "enabled"
-    assert payload["version"] == "0.1.6"
+    assert payload["version"] == __version__
     assert int(payload["tool_count"]) > 0
     assert payload["runtime_policy"]["trace_type"] == "codex_runtime"
     assert payload["runtime_policy"]["effective_policy_source"] == "default"

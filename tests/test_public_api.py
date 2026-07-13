@@ -1,3 +1,6 @@
+import json
+from pathlib import Path
+
 from kagent import (
     FakeLLMProvider,
     LLMProviderConfig,
@@ -15,7 +18,9 @@ from kagent import (
 
 
 def test_public_api_exports_package_version():
-    assert __version__ == "0.1.6"
+    package_version = json.loads(Path("package.json").read_text())["version"]
+
+    assert __version__ == package_version
 
 
 def test_public_api_exports_agent_topology():

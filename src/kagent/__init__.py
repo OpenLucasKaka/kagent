@@ -22,7 +22,7 @@ def _source_tree_version() -> str:
 try:
     __version__ = _source_tree_version() or version("kagent")
 except PackageNotFoundError:
-    __version__ = "0.1.6"
+    __version__ = "0.1.7"
 
 __all__ = [
     "AgentConfig",

@@ -1,5 +1,7 @@
 from pathlib import Path
 
+from kagent import __version__
+
 
 def test_makefile_exposes_standard_developer_targets():
     makefile = Path("Makefile").read_text()
@@ -26,4 +28,4 @@ def test_makefile_wheel_target_matches_release_gate():
     makefile = Path("Makefile").read_text()
 
     assert "--no-build-isolation" in makefile
-    assert "kagent-0.1.6-*.whl" in makefile
+    assert f"kagent-{__version__}-*.whl" in makefile

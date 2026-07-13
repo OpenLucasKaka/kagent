@@ -2,6 +2,7 @@ import hashlib
 import json
 import subprocess
 
+from kagent import __version__
 from kagent.ops.release_manifest import (
     build_release_manifest,
     verify_release_manifest,
@@ -15,7 +16,7 @@ def test_build_release_manifest_records_artifact_hashes_and_sizes(tmp_path):
     manifest = build_release_manifest([artifact])
 
     assert manifest["package"] == "kagent"
-    assert manifest["version"] == "0.1.6"
+    assert manifest["version"] == __version__
     assert manifest["artifact_count"] == "1"
     assert manifest["artifacts"] == [
         {
@@ -145,7 +146,7 @@ def test_verify_release_manifest_reports_invalid_artifacts_schema(tmp_path):
         json.dumps(
             {
                 "package": "kagent",
-                "version": "0.1.6",
+                "version": __version__,
                 "artifact_count": "1",
                 "artifacts": "not-a-list",
             }
@@ -173,7 +174,7 @@ def test_verify_release_manifest_reports_invalid_artifact_entry_schema(tmp_path)
         json.dumps(
             {
                 "package": "kagent",
-                "version": "0.1.6",
+                "version": __version__,
                 "artifact_count": "1",
                 "artifacts": ["not-an-object"],
             }
@@ -201,7 +202,7 @@ def test_verify_release_manifest_reports_missing_artifact_path(tmp_path):
         json.dumps(
             {
                 "package": "kagent",
-                "version": "0.1.6",
+                "version": __version__,
                 "artifact_count": "1",
                 "artifacts": [{"sha256": "abc", "size_bytes": "123"}],
             }
@@ -231,7 +232,7 @@ def test_verify_release_manifest_reports_directory_artifact_path(tmp_path):
         json.dumps(
             {
                 "package": "kagent",
-                "version": "0.1.6",
+                "version": __version__,
                 "artifact_count": "1",
                 "artifacts": [
                     {
@@ -265,7 +266,7 @@ def test_verify_release_manifest_reports_invalid_artifact_path(tmp_path):
         json.dumps(
             {
                 "package": "kagent",
-                "version": "0.1.6",
+                "version": __version__,
                 "artifact_count": "1",
                 "artifacts": [
                     {

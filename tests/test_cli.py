@@ -8,6 +8,8 @@ import time
 from argparse import Namespace
 from pathlib import Path
 
+from kagent import __version__
+
 
 def test_cli_entrypoint_is_delegated_to_cli_main_module():
     from kagent import cli
@@ -495,7 +497,7 @@ def test_cli_can_print_package_version_without_goal():
     payload = json.loads(completed.stdout)
 
     assert completed.stderr == ""
-    assert payload == {"version": "0.1.6"}
+    assert payload == {"version": __version__}
 
 
 def test_cli_output_file_also_applies_to_introspection_commands(tmp_path):
