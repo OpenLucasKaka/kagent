@@ -67,13 +67,14 @@ async function checkForUpdate(options) {
     const channel = resolveCheckChannel(options.channel, options.env);
     const now = deps.now?.() ?? new Date();
     const checkedAt = now.toISOString();
+    let cacheWarning;
     if (!options.force && deps.readState) {
         let cached;
         try {
             cached = await deps.readState();
         }
         catch (error) {
-            return skippedCheck(options.currentVersion, channel, checkedAt, "state-read-error", error);
+            cacheWarning = `Unable to read update cache: ${errorMessage(error)}`;
         }
         if (isFreshState(cached, channel, now)) {
             return {
@@ -111,7 +112,8 @@ async function checkForUpdate(options) {
         if (options.force) {
             throw error;
         }
-        return skippedCheck(options.currentVersion, channel, checkedAt, "state-write-error", error);
+        const warning = `Unable to write update cache: ${errorMessage(error)}`;
+        cacheWarning = cacheWarning ? `${cacheWarning}; ${warning}` : warning;
     }
     return {
         current: options.currentVersion,
@@ -119,6 +121,7 @@ async function checkForUpdate(options) {
         channel,
         updateAvailable: compareSemVer(latest, options.currentVersion) > 0,
         checkedAt,
+        ...(cacheWarning ? { cacheWarning } : {}),
     };
 }
 function resolveCheckChannel(channel, env) {

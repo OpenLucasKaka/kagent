@@ -246,17 +246,29 @@ test("releases non-2xx response bodies and aborts the request", async () => {
   assert.equal(requestSignals.every((signal) => signal.aborted), true);
 });
 
-test("makes injected state failures best-effort unless forced", async () => {
+test("treats cache failures as automatic warnings but keeps forced writes strict", async () => {
   const now = () => new Date("2026-07-13T00:00:00.000Z");
+  let fetches = 0;
   const readFailure = await checkForUpdate({
     currentVersion: "1.0.0",
     deps: {
       now,
       readState: async () => { throw new Error("EACCES"); },
-      fetch: async () => { throw new Error("must not fetch"); },
+      fetch: async () => {
+        fetches += 1;
+        return registryResponse("2.0.0");
+      },
     },
   });
-  assertErrorSkip(readFailure, "state-read-error", /EACCES/);
+  assert.equal(fetches, 1);
+  assert.deepEqual(readFailure, {
+    current: "1.0.0",
+    latest: "2.0.0",
+    channel: "latest",
+    updateAvailable: true,
+    checkedAt: "2026-07-13T00:00:00.000Z",
+    cacheWarning: "Unable to read update cache: EACCES",
+  });
 
   const writeDeps: UpdateManagerDeps = {
     now,
@@ -267,7 +279,14 @@ test("makes injected state failures best-effort unless forced", async () => {
     currentVersion: "1.0.0",
     deps: writeDeps,
   });
-  assertErrorSkip(writeFailure, "state-write-error", /ENOSPC/);
+  assert.deepEqual(writeFailure, {
+    current: "1.0.0",
+    latest: "2.0.0",
+    channel: "latest",
+    updateAvailable: true,
+    checkedAt: "2026-07-13T00:00:00.000Z",
+    cacheWarning: "Unable to write update cache: ENOSPC",
+  });
   await assert.rejects(
     checkForUpdate({ currentVersion: "1.0.0", force: true, deps: writeDeps }),
     /ENOSPC/,

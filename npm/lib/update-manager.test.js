@@ -202,17 +202,29 @@ function assertErrorSkip(result, reason, error) {
     strict_1.default.equal(requestSignals.length, 2);
     strict_1.default.equal(requestSignals.every((signal) => signal.aborted), true);
 });
-(0, node_test_1.default)("makes injected state failures best-effort unless forced", async () => {
+(0, node_test_1.default)("treats cache failures as automatic warnings but keeps forced writes strict", async () => {
     const now = () => new Date("2026-07-13T00:00:00.000Z");
+    let fetches = 0;
     const readFailure = await (0, update_manager_1.checkForUpdate)({
         currentVersion: "1.0.0",
         deps: {
             now,
             readState: async () => { throw new Error("EACCES"); },
-            fetch: async () => { throw new Error("must not fetch"); },
+            fetch: async () => {
+                fetches += 1;
+                return registryResponse("2.0.0");
+            },
         },
     });
-    assertErrorSkip(readFailure, "state-read-error", /EACCES/);
+    strict_1.default.equal(fetches, 1);
+    strict_1.default.deepEqual(readFailure, {
+        current: "1.0.0",
+        latest: "2.0.0",
+        channel: "latest",
+        updateAvailable: true,
+        checkedAt: "2026-07-13T00:00:00.000Z",
+        cacheWarning: "Unable to read update cache: EACCES",
+    });
     const writeDeps = {
         now,
         fetch: async () => registryResponse("2.0.0"),
@@ -222,7 +234,14 @@ function assertErrorSkip(result, reason, error) {
         currentVersion: "1.0.0",
         deps: writeDeps,
     });
-    assertErrorSkip(writeFailure, "state-write-error", /ENOSPC/);
+    strict_1.default.deepEqual(writeFailure, {
+        current: "1.0.0",
+        latest: "2.0.0",
+        channel: "latest",
+        updateAvailable: true,
+        checkedAt: "2026-07-13T00:00:00.000Z",
+        cacheWarning: "Unable to write update cache: ENOSPC",
+    });
     await strict_1.default.rejects((0, update_manager_1.checkForUpdate)({ currentVersion: "1.0.0", force: true, deps: writeDeps }), /ENOSPC/);
 });
 (0, node_test_1.default)("treats metadata body network failures as skippable", async () => {

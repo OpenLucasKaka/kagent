@@ -38,6 +38,7 @@ export interface UpdateInfo {
   checkedAt: string;
   skipped?: true;
   reason?: "ttl";
+  cacheWarning?: string;
 }
 
 export interface SkippedUpdateInfo {
@@ -49,9 +50,7 @@ export interface SkippedUpdateInfo {
   skipped: true;
   reason:
     | "network-error"
-    | "metadata-error"
-    | "state-read-error"
-    | "state-write-error";
+    | "metadata-error";
   error: string;
 }
 
@@ -164,19 +163,14 @@ export async function checkForUpdate(
   const channel = resolveCheckChannel(options.channel, options.env);
   const now = deps.now?.() ?? new Date();
   const checkedAt = now.toISOString();
+  let cacheWarning: string | undefined;
 
   if (!options.force && deps.readState) {
     let cached: UpdateCheckState | null | undefined;
     try {
       cached = await deps.readState();
     } catch (error) {
-      return skippedCheck(
-        options.currentVersion,
-        channel,
-        checkedAt,
-        "state-read-error",
-        error,
-      );
+      cacheWarning = `Unable to read update cache: ${errorMessage(error)}`;
     }
     if (isFreshState(cached, channel, now)) {
       return {
@@ -220,13 +214,8 @@ export async function checkForUpdate(
     if (options.force) {
       throw error;
     }
-    return skippedCheck(
-      options.currentVersion,
-      channel,
-      checkedAt,
-      "state-write-error",
-      error,
-    );
+    const warning = `Unable to write update cache: ${errorMessage(error)}`;
+    cacheWarning = cacheWarning ? `${cacheWarning}; ${warning}` : warning;
   }
   return {
     current: options.currentVersion,
@@ -234,6 +223,7 @@ export async function checkForUpdate(
     channel,
     updateAvailable: compareSemVer(latest, options.currentVersion) > 0,
     checkedAt,
+    ...(cacheWarning ? { cacheWarning } : {}),
   };
 }
 
