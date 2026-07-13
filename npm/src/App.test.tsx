@@ -6,6 +6,7 @@ import {
   KagentInkApp,
   scheduleTerminalCursorSync,
   shouldRenderInteractivePrompt,
+  shouldRenderSessionHeader,
 } from "./App";
 import type ReactNamespace from "react";
 
@@ -73,6 +74,28 @@ test("hides only the empty interactive prompt while the runtime is busy", () => 
   assert.equal(shouldRenderInteractivePrompt("starting"), false);
 });
 
+test("does not render the session header during the startup frame", () => {
+  assert.equal(shouldRenderSessionHeader("starting", 0), false);
+  assert.equal(shouldRenderSessionHeader("idle", 0), true);
+  assert.equal(shouldRenderSessionHeader("thinking", 0), true);
+  assert.equal(shouldRenderSessionHeader("idle", 1), false);
+});
+
+test("omits the session header from the startup render tree", () => {
+  const harness = createHarness();
+  const tree = harness.render({
+    subscribe() {
+      return () => undefined;
+    },
+    close() {},
+    cancel() {},
+  });
+  const text = renderTreeText(tree);
+
+  assert.doesNotMatch(text, /◆ kagent/);
+  assert.match(text, /Starting runtime/);
+});
+
 test("defers terminal cursor positioning until after the Ink render flush", () => {
   const writes: string[] = [];
   const scheduled: Array<() => void> = [];
@@ -117,6 +140,12 @@ function createHarness(): {
 
   const React = {
     createElement(type: unknown, props: unknown, ...children: unknown[]) {
+      if (typeof type === "function") {
+        return (type as (componentProps: unknown) => unknown)({
+          ...(props && typeof props === "object" ? props : {}),
+          children,
+        });
+      }
       return { type, props, children };
     },
     useEffect(effect: () => (() => void) | undefined) {
@@ -179,4 +208,18 @@ function createHarness(): {
     },
     states,
   };
+}
+
+function renderTreeText(value: unknown): string {
+  if (typeof value === "string" || typeof value === "number") {
+    return String(value);
+  }
+  if (!value || typeof value !== "object") {
+    return "";
+  }
+  if (Array.isArray(value)) {
+    return value.map(renderTreeText).join("");
+  }
+  const node = value as { children?: unknown[] };
+  return renderTreeText(node.children || []);
 }

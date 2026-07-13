@@ -91,6 +91,13 @@ export function shouldRenderInteractivePrompt(
   return status === "idle" || status === "approval" || status === "error" || input !== "";
 }
 
+export function shouldRenderSessionHeader(
+  status: AgentStatus,
+  transcriptEntryCount: number,
+): boolean {
+  return status !== "starting" && transcriptEntryCount === 0;
+}
+
 export type TerminalCursorScheduler<Token = NodeJS.Immediate> = {
   write: (value: string) => void;
   defer: (callback: () => void) => Token;
@@ -608,12 +615,16 @@ export function KagentInkApp({
     );
   }
 
+  const sessionHeaderVisible = shouldRenderSessionHeader(
+    status,
+    transcript.entries.length,
+  );
   const layout = createTerminalLayout(terminalSize.columns, terminalSize.rows, {
     approval: approval
       ? { ...approval, showDetails: showApprovalDetails }
       : false,
     commandMenu: status === "idle" && commandMenu ? commandMenu : false,
-    introVisible: transcript.entries.length === 0,
+    introVisible: sessionHeaderVisible,
     prompt: editor.value,
     promptCursor: editor.cursor,
   });
@@ -642,7 +653,7 @@ export function KagentInkApp({
   return React.createElement(
     Box,
     { flexDirection: "column", paddingX: layout.horizontalPadding },
-    transcript.entries.length === 0
+    sessionHeaderVisible
       ? React.createElement(Header, {
           React,
           Box,

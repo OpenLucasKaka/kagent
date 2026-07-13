@@ -61,6 +61,25 @@ const App_1 = require("./App");
     strict_1.default.equal((0, App_1.shouldRenderInteractivePrompt)("cancelling"), false);
     strict_1.default.equal((0, App_1.shouldRenderInteractivePrompt)("starting"), false);
 });
+(0, node_test_1.default)("does not render the session header during the startup frame", () => {
+    strict_1.default.equal((0, App_1.shouldRenderSessionHeader)("starting", 0), false);
+    strict_1.default.equal((0, App_1.shouldRenderSessionHeader)("idle", 0), true);
+    strict_1.default.equal((0, App_1.shouldRenderSessionHeader)("thinking", 0), true);
+    strict_1.default.equal((0, App_1.shouldRenderSessionHeader)("idle", 1), false);
+});
+(0, node_test_1.default)("omits the session header from the startup render tree", () => {
+    const harness = createHarness();
+    const tree = harness.render({
+        subscribe() {
+            return () => undefined;
+        },
+        close() { },
+        cancel() { },
+    });
+    const text = renderTreeText(tree);
+    strict_1.default.doesNotMatch(text, /◆ kagent/);
+    strict_1.default.match(text, /Starting runtime/);
+});
 (0, node_test_1.default)("defers terminal cursor positioning until after the Ink render flush", () => {
     const writes = [];
     const scheduled = [];
@@ -94,6 +113,12 @@ function createHarness() {
     let refCursor = 0;
     const React = {
         createElement(type, props, ...children) {
+            if (typeof type === "function") {
+                return type({
+                    ...(props && typeof props === "object" ? props : {}),
+                    children,
+                });
+            }
             return { type, props, children };
         },
         useEffect(effect) {
@@ -155,4 +180,17 @@ function createHarness() {
         },
         states,
     };
+}
+function renderTreeText(value) {
+    if (typeof value === "string" || typeof value === "number") {
+        return String(value);
+    }
+    if (!value || typeof value !== "object") {
+        return "";
+    }
+    if (Array.isArray(value)) {
+        return value.map(renderTreeText).join("");
+    }
+    const node = value;
+    return renderTreeText(node.children || []);
 }

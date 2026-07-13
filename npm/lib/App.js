@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.shouldRenderInteractivePrompt = shouldRenderInteractivePrompt;
+exports.shouldRenderSessionHeader = shouldRenderSessionHeader;
 exports.scheduleTerminalCursorSync = scheduleTerminalCursorSync;
 exports.KagentInkApp = KagentInkApp;
 exports.isSessionCommandInput = isSessionCommandInput;
@@ -15,6 +16,9 @@ const transcript_1 = require("./transcript");
 const ui_components_1 = require("./ui-components");
 function shouldRenderInteractivePrompt(status, input = "") {
     return status === "idle" || status === "approval" || status === "error" || input !== "";
+}
+function shouldRenderSessionHeader(status, transcriptEntryCount) {
+    return status !== "starting" && transcriptEntryCount === 0;
 }
 function scheduleTerminalCursorSync(control, scheduler) {
     const token = scheduler.defer(() => scheduler.write(control.position));
@@ -472,12 +476,13 @@ function KagentInkApp({ React, Ink, runtimeSessionFactory = runtime_client_1.cre
             setup,
         }));
     }
+    const sessionHeaderVisible = shouldRenderSessionHeader(status, transcript.entries.length);
     const layout = (0, ui_components_1.createTerminalLayout)(terminalSize.columns, terminalSize.rows, {
         approval: approval
             ? { ...approval, showDetails: showApprovalDetails }
             : false,
         commandMenu: status === "idle" && commandMenu ? commandMenu : false,
-        introVisible: transcript.entries.length === 0,
+        introVisible: sessionHeaderVisible,
         prompt: editor.value,
         promptCursor: editor.cursor,
     });
@@ -498,7 +503,7 @@ function KagentInkApp({ React, Ink, runtimeSessionFactory = runtime_client_1.cre
         maxRows: layout.promptRowLimit,
         horizontalPadding: layout.horizontalPadding,
     });
-    return React.createElement(Box, { flexDirection: "column", paddingX: layout.horizontalPadding }, transcript.entries.length === 0
+    return React.createElement(Box, { flexDirection: "column", paddingX: layout.horizontalPadding }, sessionHeaderVisible
         ? React.createElement(ui_components_1.Header, {
             React,
             Box,

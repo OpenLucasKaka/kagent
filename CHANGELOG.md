@@ -12,6 +12,8 @@
   answer is taller than the live transcript viewport.
 - Removed the Ink-rendered fake prompt cursor when terminal cursor sync is
   active, and deferred cursor positioning until after Ink flushes the frame.
+- Delayed the session header until runtime startup completes so the first
+  ready frame cannot leave a duplicate `◆ kagent` header behind.
 
 ## 0.1.9 - 2026-07-13
 
