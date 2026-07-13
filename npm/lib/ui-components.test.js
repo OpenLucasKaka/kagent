@@ -79,3 +79,17 @@ const ui_components_1 = require("./ui-components");
         imeSafe: false,
     }), true);
 });
+(0, node_test_1.default)("does not render the Ink prompt cursor when IME-safe terminal cursor sync is active", () => {
+    strict_1.default.equal((0, ui_components_1.shouldRenderInkPromptCursor)({
+        input: "测试",
+        disabled: false,
+        imeSafe: true,
+    }), false);
+});
+(0, node_test_1.default)("keeps the Ink prompt cursor for normal prompts", () => {
+    strict_1.default.equal((0, ui_components_1.shouldRenderInkPromptCursor)({
+        input: "test",
+        disabled: false,
+        imeSafe: false,
+    }), true);
+});

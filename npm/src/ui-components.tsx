@@ -55,6 +55,18 @@ export function shouldRenderPromptPlaceholder({
   return !input && !disabled && !imeSafe;
 }
 
+export function shouldRenderInkPromptCursor({
+  input,
+  disabled,
+  imeSafe,
+}: {
+  input: string;
+  disabled: boolean;
+  imeSafe: boolean;
+}): boolean {
+  return Boolean(input) && !disabled && !imeSafe;
+}
+
 type ApprovalLayout = Pick<
   ApprovalRequiredEvent,
   "title" | "target" | "reason" | "details"
@@ -692,6 +704,18 @@ export function PromptLine({
     disabled,
     imeSafe,
   });
+  const renderInkCursor = shouldRenderInkPromptCursor({
+    input,
+    disabled,
+    imeSafe,
+  });
+  const promptContent = renderInkCursor
+    ? [
+        viewport.before,
+        React.createElement(Text, { inverse: true, key: "cursor" }, viewport.active),
+        viewport.after,
+      ]
+    : viewport.rendered;
   return React.createElement(
     Box,
     { flexDirection: "row", marginTop: compact ? 0 : 1, alignItems: "flex-start" },
@@ -700,9 +724,7 @@ export function PromptLine({
       ? React.createElement(
           Text,
           { wrap: "wrap" },
-          viewport.before,
-          React.createElement(Text, { inverse: !disabled }, viewport.active),
-          viewport.after,
+          promptContent,
         )
       : React.createElement(Text, { color: "gray" }, renderPlaceholder ? placeholder : ""),
   );

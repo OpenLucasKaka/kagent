@@ -91,6 +91,28 @@ export function shouldRenderInteractivePrompt(
   return status === "idle" || status === "approval" || status === "error" || input !== "";
 }
 
+export type TerminalCursorScheduler<Token = NodeJS.Immediate> = {
+  write: (value: string) => void;
+  defer: (callback: () => void) => Token;
+  cancel: (token: Token) => void;
+};
+
+export function scheduleTerminalCursorSync<Token>(
+  control: PromptTerminalCursorControl,
+  scheduler: TerminalCursorScheduler<Token>,
+): () => void {
+  const token = scheduler.defer(() => scheduler.write(control.position));
+  let active = true;
+  return () => {
+    if (!active) {
+      return;
+    }
+    active = false;
+    scheduler.cancel(token);
+    scheduler.write(control.restore);
+  };
+}
+
 export function KagentInkApp({
   React,
   Ink,
@@ -697,14 +719,15 @@ function TerminalCursorSync({
   React: typeof ReactNamespace;
   control: PromptTerminalCursorControl | null;
 }): null {
-  React.useLayoutEffect(() => {
+  React.useEffect(() => {
     if (!control || !process.stdout.isTTY) {
       return undefined;
     }
-    process.stdout.write(control.position);
-    return () => {
-      process.stdout.write(control.restore);
-    };
+    return scheduleTerminalCursorSync(control, {
+      write: (value) => process.stdout.write(value),
+      defer: (callback) => setImmediate(callback),
+      cancel: (token) => clearImmediate(token),
+    });
   });
   return null;
 }

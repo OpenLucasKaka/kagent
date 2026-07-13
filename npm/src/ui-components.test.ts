@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  shouldRenderInkPromptCursor,
   shouldRenderPromptPlaceholder,
   createPromptTerminalCursorControl,
   createTerminalLayout,
@@ -98,6 +99,28 @@ test("keeps the empty prompt placeholder for normal prompts", () => {
   assert.equal(
     shouldRenderPromptPlaceholder({
       input: "",
+      disabled: false,
+      imeSafe: false,
+    }),
+    true,
+  );
+});
+
+test("does not render the Ink prompt cursor when IME-safe terminal cursor sync is active", () => {
+  assert.equal(
+    shouldRenderInkPromptCursor({
+      input: "测试",
+      disabled: false,
+      imeSafe: true,
+    }),
+    false,
+  );
+});
+
+test("keeps the Ink prompt cursor for normal prompts", () => {
+  assert.equal(
+    shouldRenderInkPromptCursor({
+      input: "test",
       disabled: false,
       imeSafe: false,
     }),

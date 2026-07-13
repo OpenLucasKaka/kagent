@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.TERMINAL_SPINNER_FRAMES = void 0;
 exports.shouldRenderPromptPlaceholder = shouldRenderPromptPlaceholder;
+exports.shouldRenderInkPromptCursor = shouldRenderInkPromptCursor;
 exports.createTerminalLayout = createTerminalLayout;
 exports.NarrowTerminal = NarrowTerminal;
 exports.createPromptViewport = createPromptViewport;
@@ -20,6 +21,9 @@ const terminal_text_1 = require("./terminal-text");
 const terminal_width_1 = require("./terminal-width");
 function shouldRenderPromptPlaceholder({ input, disabled, imeSafe, }) {
     return !input && !disabled && !imeSafe;
+}
+function shouldRenderInkPromptCursor({ input, disabled, imeSafe, }) {
+    return Boolean(input) && !disabled && !imeSafe;
 }
 exports.TERMINAL_SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 function createTerminalLayout(columns, rows, overlays) {
@@ -282,8 +286,20 @@ function PromptLine({ React, Box, Text, cursor, disabled, input, placeholder = "
         disabled,
         imeSafe,
     });
+    const renderInkCursor = shouldRenderInkPromptCursor({
+        input,
+        disabled,
+        imeSafe,
+    });
+    const promptContent = renderInkCursor
+        ? [
+            viewport.before,
+            React.createElement(Text, { inverse: true, key: "cursor" }, viewport.active),
+            viewport.after,
+        ]
+        : viewport.rendered;
     return React.createElement(Box, { flexDirection: "row", marginTop: compact ? 0 : 1, alignItems: "flex-start" }, React.createElement(Text, { color: disabled ? "gray" : "cyan" }, "› "), input
-        ? React.createElement(Text, { wrap: "wrap" }, viewport.before, React.createElement(Text, { inverse: !disabled }, viewport.active), viewport.after)
+        ? React.createElement(Text, { wrap: "wrap" }, promptContent)
         : React.createElement(Text, { color: "gray" }, renderPlaceholder ? placeholder : ""));
 }
 function setupField(setup) {

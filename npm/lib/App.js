@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.shouldRenderInteractivePrompt = shouldRenderInteractivePrompt;
+exports.scheduleTerminalCursorSync = scheduleTerminalCursorSync;
 exports.KagentInkApp = KagentInkApp;
 exports.isSessionCommandInput = isSessionCommandInput;
 const approval_choice_1 = require("./approval-choice");
@@ -14,6 +15,18 @@ const transcript_1 = require("./transcript");
 const ui_components_1 = require("./ui-components");
 function shouldRenderInteractivePrompt(status, input = "") {
     return status === "idle" || status === "approval" || status === "error" || input !== "";
+}
+function scheduleTerminalCursorSync(control, scheduler) {
+    const token = scheduler.defer(() => scheduler.write(control.position));
+    let active = true;
+    return () => {
+        if (!active) {
+            return;
+        }
+        active = false;
+        scheduler.cancel(token);
+        scheduler.write(control.restore);
+    };
 }
 function KagentInkApp({ React, Ink, runtimeSessionFactory = runtime_client_1.createRuntimeSessionClient, }) {
     const { Box, Text } = Ink;
@@ -543,14 +556,15 @@ function KagentInkApp({ React, Ink, runtimeSessionFactory = runtime_client_1.cre
         })));
 }
 function TerminalCursorSync({ React, control, }) {
-    React.useLayoutEffect(() => {
+    React.useEffect(() => {
         if (!control || !process.stdout.isTTY) {
             return undefined;
         }
-        process.stdout.write(control.position);
-        return () => {
-            process.stdout.write(control.restore);
-        };
+        return scheduleTerminalCursorSync(control, {
+            write: (value) => process.stdout.write(value),
+            defer: (callback) => setImmediate(callback),
+            cancel: (token) => clearImmediate(token),
+        });
     });
     return null;
 }

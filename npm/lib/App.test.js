@@ -61,6 +61,30 @@ const App_1 = require("./App");
     strict_1.default.equal((0, App_1.shouldRenderInteractivePrompt)("cancelling"), false);
     strict_1.default.equal((0, App_1.shouldRenderInteractivePrompt)("starting"), false);
 });
+(0, node_test_1.default)("defers terminal cursor positioning until after the Ink render flush", () => {
+    const writes = [];
+    const scheduled = [];
+    const cleanup = (0, App_1.scheduleTerminalCursorSync)({ position: "position", restore: "restore" }, {
+        write(value) {
+            writes.push(value);
+        },
+        defer(callback) {
+            scheduled.push(callback);
+            return callback;
+        },
+        cancel(token) {
+            const index = scheduled.indexOf(token);
+            if (index >= 0) {
+                scheduled.splice(index, 1);
+            }
+        },
+    });
+    strict_1.default.deepEqual(writes, []);
+    scheduled.shift()?.();
+    strict_1.default.deepEqual(writes, ["position"]);
+    cleanup();
+    strict_1.default.deepEqual(writes, ["position", "restore"]);
+});
 function createHarness() {
     const states = [];
     const refs = [];

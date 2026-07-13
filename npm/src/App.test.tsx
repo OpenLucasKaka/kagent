@@ -2,7 +2,11 @@ import { EventEmitter } from "node:events";
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { KagentInkApp, shouldRenderInteractivePrompt } from "./App";
+import {
+  KagentInkApp,
+  scheduleTerminalCursorSync,
+  shouldRenderInteractivePrompt,
+} from "./App";
 import type ReactNamespace from "react";
 
 test("does not submit the same prompt twice before React renders the busy state", () => {
@@ -67,6 +71,35 @@ test("hides only the empty interactive prompt while the runtime is busy", () => 
   assert.equal(shouldRenderInteractivePrompt("thinking", "steer"), true);
   assert.equal(shouldRenderInteractivePrompt("cancelling"), false);
   assert.equal(shouldRenderInteractivePrompt("starting"), false);
+});
+
+test("defers terminal cursor positioning until after the Ink render flush", () => {
+  const writes: string[] = [];
+  const scheduled: Array<() => void> = [];
+  const cleanup = scheduleTerminalCursorSync(
+    { position: "position", restore: "restore" },
+    {
+      write(value: string) {
+        writes.push(value);
+      },
+      defer(callback: () => void) {
+        scheduled.push(callback);
+        return callback;
+      },
+      cancel(token: () => void) {
+        const index = scheduled.indexOf(token);
+        if (index >= 0) {
+          scheduled.splice(index, 1);
+        }
+      },
+    },
+  );
+
+  assert.deepEqual(writes, []);
+  scheduled.shift()?.();
+  assert.deepEqual(writes, ["position"]);
+  cleanup();
+  assert.deepEqual(writes, ["position", "restore"]);
 });
 
 function createHarness(): {

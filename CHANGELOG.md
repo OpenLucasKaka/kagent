@@ -10,6 +10,8 @@
   duplicate Enter events submitting the same prompt twice before React rerenders.
 - Kept the latest user prompt visible with its assistant answer even when the
   answer is taller than the live transcript viewport.
+- Removed the Ink-rendered fake prompt cursor when terminal cursor sync is
+  active, and deferred cursor positioning until after Ink flushes the frame.
 
 ## 0.1.9 - 2026-07-13
 
