@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.TERMINAL_SPINNER_FRAMES = void 0;
+exports.shouldRenderPromptPlaceholder = shouldRenderPromptPlaceholder;
 exports.createTerminalLayout = createTerminalLayout;
 exports.NarrowTerminal = NarrowTerminal;
 exports.createPromptViewport = createPromptViewport;
@@ -17,6 +18,9 @@ const editor_1 = require("./editor");
 const provider_setup_1 = require("./provider-setup");
 const terminal_text_1 = require("./terminal-text");
 const terminal_width_1 = require("./terminal-width");
+function shouldRenderPromptPlaceholder({ input, disabled, imeSafe, }) {
+    return !input && !disabled && !imeSafe;
+}
 exports.TERMINAL_SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 function createTerminalLayout(columns, rows, overlays) {
     const safeColumns = Math.max(1, columns || 80);
@@ -271,11 +275,16 @@ function StatusLine({ React, Text, frame, elapsedSeconds, status, statusText, })
     const elapsed = elapsedSeconds > 0 ? ` · ${elapsedSeconds}s` : "";
     return React.createElement(Text, { color: "cyan" }, `${exports.TERMINAL_SPINNER_FRAMES[frame]} ${label}${elapsed}`);
 }
-function PromptLine({ React, Box, Text, cursor, disabled, input, placeholder = "Ask kagent", compact = false, columns = 80, maxRows = 6, }) {
+function PromptLine({ React, Box, Text, cursor, disabled, input, placeholder = "Ask kagent", compact = false, columns = 80, maxRows = 6, imeSafe = false, }) {
     const viewport = createPromptViewport(input, cursor, columns, maxRows);
+    const renderPlaceholder = shouldRenderPromptPlaceholder({
+        input,
+        disabled,
+        imeSafe,
+    });
     return React.createElement(Box, { flexDirection: "row", marginTop: compact ? 0 : 1, alignItems: "flex-start" }, React.createElement(Text, { color: disabled ? "gray" : "cyan" }, "› "), input
         ? React.createElement(Text, { wrap: "wrap" }, viewport.before, React.createElement(Text, { inverse: !disabled }, viewport.active), viewport.after)
-        : React.createElement(Text, { color: "gray" }, disabled ? "" : placeholder));
+        : React.createElement(Text, { color: "gray" }, renderPlaceholder ? placeholder : ""));
 }
 function setupField(setup) {
     if (setup.stage === "base_url") {

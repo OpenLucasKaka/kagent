@@ -65,3 +65,17 @@ const ui_components_1 = require("./ui-components");
         restore: "\r\u001b[2B",
     });
 });
+(0, node_test_1.default)("hides the empty prompt placeholder when IME-safe rendering is enabled", () => {
+    strict_1.default.equal((0, ui_components_1.shouldRenderPromptPlaceholder)({
+        input: "",
+        disabled: false,
+        imeSafe: true,
+    }), false);
+});
+(0, node_test_1.default)("keeps the empty prompt placeholder for normal prompts", () => {
+    strict_1.default.equal((0, ui_components_1.shouldRenderPromptPlaceholder)({
+        input: "",
+        disabled: false,
+        imeSafe: false,
+    }), true);
+});

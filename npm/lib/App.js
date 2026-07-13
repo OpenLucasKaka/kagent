@@ -521,6 +521,7 @@ function KagentInkApp({ React, Ink, runtimeSessionFactory = runtime_client_1.cre
             disabled: promptDisabled,
             columns: layout.promptColumns,
             maxRows: layout.promptRowLimit,
+            imeSafe: true,
         }), React.createElement(TerminalCursorSync, {
             React,
             control: promptDisabled ? null : promptCursorControl,

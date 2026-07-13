@@ -29,7 +29,7 @@ production-approval-bundle:
 wheel:
 	rm -rf /tmp/kagent-wheelhouse
 	PYTHONWARNINGS=ignore .venv/bin/python -m pip wheel --no-deps --no-build-isolation . -w /tmp/kagent-wheelhouse
-	ls /tmp/kagent-wheelhouse/kagent-0.1.9-*.whl >/dev/null
+	ls /tmp/kagent-wheelhouse/kagent-0.1.10-*.whl >/dev/null
 
 docker-build:
 	docker build -t kagent:local .

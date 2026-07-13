@@ -43,6 +43,18 @@ export type PromptTerminalCursorControl = {
   restore: string;
 };
 
+export function shouldRenderPromptPlaceholder({
+  input,
+  disabled,
+  imeSafe,
+}: {
+  input: string;
+  disabled: boolean;
+  imeSafe: boolean;
+}): boolean {
+  return !input && !disabled && !imeSafe;
+}
+
 type ApprovalLayout = Pick<
   ApprovalRequiredEvent,
   "title" | "target" | "reason" | "details"
@@ -663,6 +675,7 @@ export function PromptLine({
   compact = false,
   columns = 80,
   maxRows = 6,
+  imeSafe = false,
 }: RenderProps & {
   cursor: number;
   disabled: boolean;
@@ -671,8 +684,14 @@ export function PromptLine({
   compact?: boolean;
   columns?: number;
   maxRows?: number;
+  imeSafe?: boolean;
 }) {
   const viewport = createPromptViewport(input, cursor, columns, maxRows);
+  const renderPlaceholder = shouldRenderPromptPlaceholder({
+    input,
+    disabled,
+    imeSafe,
+  });
   return React.createElement(
     Box,
     { flexDirection: "row", marginTop: compact ? 0 : 1, alignItems: "flex-start" },
@@ -685,7 +704,7 @@ export function PromptLine({
           React.createElement(Text, { inverse: !disabled }, viewport.active),
           viewport.after,
         )
-      : React.createElement(Text, { color: "gray" }, disabled ? "" : placeholder),
+      : React.createElement(Text, { color: "gray" }, renderPlaceholder ? placeholder : ""),
   );
 }
 

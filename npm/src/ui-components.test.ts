@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  shouldRenderPromptPlaceholder,
   createPromptTerminalCursorControl,
   createTerminalLayout,
 } from "./ui-components";
@@ -79,5 +80,27 @@ test("restores from an upper prompt cursor row before the next Ink render", () =
       position: "\u001b[?25h\u001b[2A\u001b[4C",
       restore: "\r\u001b[2B",
     },
+  );
+});
+
+test("hides the empty prompt placeholder when IME-safe rendering is enabled", () => {
+  assert.equal(
+    shouldRenderPromptPlaceholder({
+      input: "",
+      disabled: false,
+      imeSafe: true,
+    }),
+    false,
+  );
+});
+
+test("keeps the empty prompt placeholder for normal prompts", () => {
+  assert.equal(
+    shouldRenderPromptPlaceholder({
+      input: "",
+      disabled: false,
+      imeSafe: false,
+    }),
+    true,
   );
 });

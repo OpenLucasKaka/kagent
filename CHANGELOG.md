@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.10 - 2026-07-13
+
+### Fixed
+
+- Hid the main prompt placeholder while IME-safe cursor rendering is active so
+  macOS Chinese preedit text no longer overlaps `Ask kagent`.
+
 ## 0.1.9 - 2026-07-13
 
 ### Fixed

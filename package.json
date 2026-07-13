@@ -1,6 +1,6 @@
 {
   "name": "@openlucaskaka/kagent",
-  "version": "0.1.9",
+  "version": "0.1.10",
   "description": "Codex-style LangGraph agent runtime for internal non-coding workflows.",
   "license": "UNLICENSED",
   "bin": {
