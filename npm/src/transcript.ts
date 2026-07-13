@@ -197,6 +197,14 @@ export function selectTranscriptViewport(
     usedRows += rows;
     start = index;
   }
+  start = avoidOrphanedLeadingAssistant(
+    entries,
+    start,
+    end,
+    usedRows,
+    availableRows,
+    viewport.columns,
+  );
   return entries.slice(start, end);
 }
 
@@ -299,6 +307,32 @@ function retain(state: TranscriptState): TranscriptState {
     ? state.activeAssistantId
     : null;
   return { ...state, entries, activeAssistantId };
+}
+
+function avoidOrphanedLeadingAssistant(
+  entries: TranscriptEntry[],
+  start: number,
+  end: number,
+  usedRows: number,
+  availableRows: number,
+  columns: number,
+): number {
+  let nextStart = start;
+  let nextUsedRows = usedRows;
+  while (
+    nextStart > 0 &&
+    nextStart < end - 1 &&
+    entries[nextStart].role === "assistant" &&
+    entries[nextStart - 1].role === "user"
+  ) {
+    const userRows = estimateEntryRows(entries[nextStart - 1], columns);
+    if (nextUsedRows + userRows <= availableRows) {
+      return nextStart - 1;
+    }
+    nextUsedRows -= estimateEntryRows(entries[nextStart], columns);
+    nextStart += 1;
+  }
+  return nextStart;
 }
 
 function estimateEntryRows(entry: TranscriptEntry, columns: number): number {

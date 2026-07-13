@@ -144,6 +144,7 @@ function KagentInkApp({ React, Ink, runtimeSessionFactory = runtime_client_1.cre
             const pagingLayout = (0, ui_components_1.createTerminalLayout)(terminalSize.columns, terminalSize.rows, {
                 approval: approval !== null,
                 commandMenu: status === "idle" && commandMenu ? commandMenu : false,
+                introVisible: transcript.entries.length === 0,
                 prompt: editor.value,
                 promptCursor: editor.cursor,
             });
@@ -255,6 +256,7 @@ function KagentInkApp({ React, Ink, runtimeSessionFactory = runtime_client_1.cre
         const promptLayout = (0, ui_components_1.createTerminalLayout)(terminalSize.columns, terminalSize.rows, {
             approval: approval !== null,
             commandMenu: false,
+            introVisible: transcript.entries.length === 0,
             prompt: editor.value,
             promptCursor: editor.cursor,
         });
@@ -448,6 +450,7 @@ function KagentInkApp({ React, Ink, runtimeSessionFactory = runtime_client_1.cre
             ? { ...approval, showDetails: showApprovalDetails }
             : false,
         commandMenu: status === "idle" && commandMenu ? commandMenu : false,
+        introVisible: transcript.entries.length === 0,
         prompt: editor.value,
         promptCursor: editor.cursor,
     });
@@ -459,15 +462,17 @@ function KagentInkApp({ React, Ink, runtimeSessionFactory = runtime_client_1.cre
         rows: layout.rows,
         reservedRows: layout.reservedRows + (transcriptOffset > 0 ? 1 : 0),
     }, transcriptOffset);
-    return React.createElement(Box, { flexDirection: "column", paddingX: layout.horizontalPadding }, React.createElement(ui_components_1.Header, {
-        React,
-        Box,
-        Text,
-        compact: layout.compact,
-        provider,
-        setup: false,
-        workspace: process.cwd(),
-    }), React.createElement(ui_components_1.TranscriptPosition, {
+    return React.createElement(Box, { flexDirection: "column", paddingX: layout.horizontalPadding }, transcript.entries.length === 0
+        ? React.createElement(ui_components_1.Header, {
+            React,
+            Box,
+            Text,
+            compact: layout.compact,
+            provider,
+            setup: false,
+            workspace: process.cwd(),
+        })
+        : null, React.createElement(ui_components_1.TranscriptPosition, {
         React,
         Text,
         newerCount: transcriptOffset,

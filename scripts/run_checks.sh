@@ -568,9 +568,9 @@ if "secret progress metadata should not replay" in summary_text:
 PY
 rm -rf /tmp/kagent-wheelhouse
 PYTHONWARNINGS=ignore .venv/bin/python -m pip wheel --no-deps --no-build-isolation . -w /tmp/kagent-wheelhouse >/tmp/kagent-wheel-build.log
-ls /tmp/kagent-wheelhouse/kagent-0.1.7-*.whl >/dev/null
+ls /tmp/kagent-wheelhouse/kagent-0.1.8-*.whl >/dev/null
 PYTHONWARNINGS=ignore .venv/bin/kagent-release-manifest \
-    /tmp/kagent-wheelhouse/kagent-0.1.7-*.whl \
+    /tmp/kagent-wheelhouse/kagent-0.1.8-*.whl \
     --output /tmp/kagent-release-manifest.json \
     >/tmp/kagent-release-manifest.stdout.json
 PYTHONWARNINGS=ignore .venv/bin/kagent-release-manifest \
@@ -591,7 +591,7 @@ manifest = json.load(open("/tmp/kagent-release-manifest.json", encoding="utf-8")
 evidence = json.load(open("/tmp/kagent-release-evidence.json", encoding="utf-8"))
 if manifest["package"] != "kagent":
     raise SystemExit("release manifest package mismatch")
-if manifest["version"] != "0.1.7":
+if manifest["version"] != "0.1.8":
     raise SystemExit("release manifest version mismatch")
 if manifest["artifact_count"] != "1":
     raise SystemExit("release manifest artifact count mismatch")
@@ -623,7 +623,7 @@ if grep "Traceback" /tmp/kagent-release-manifest-invalid.stderr >/dev/null; then
     echo "release manifest unexpectedly emitted traceback for invalid JSON" >&2
     exit 1
 fi
-printf '{"package":"kagent","version":"0.1.7","artifact_count":"1","artifacts":[{"sha256":"abc","size_bytes":"123"}]}\n' >/tmp/kagent-release-manifest-missing-path.json
+printf '{"package":"kagent","version":"0.1.8","artifact_count":"1","artifacts":[{"sha256":"abc","size_bytes":"123"}]}\n' >/tmp/kagent-release-manifest-missing-path.json
 if PYTHONWARNINGS=ignore .venv/bin/kagent-release-manifest \
     --verify /tmp/kagent-release-manifest-missing-path.json \
     >/tmp/kagent-release-manifest-missing-path.stdout \
@@ -642,7 +642,7 @@ import json
 
 manifest = {
     "package": "kagent",
-    "version": "0.1.7",
+    "version": "0.1.8",
     "artifact_count": "1",
     "artifacts": [
         {
@@ -671,7 +671,7 @@ if grep "Traceback" /tmp/kagent-release-manifest-invalid-path.stderr >/dev/null;
 fi
 rm -rf /tmp/kagent-release-manifest-artifact-dir
 mkdir -p /tmp/kagent-release-manifest-artifact-dir
-printf '{"package":"kagent","version":"0.1.7","artifact_count":"1","artifacts":[{"path":"/tmp/kagent-release-manifest-artifact-dir","sha256":"abc","size_bytes":"123"}]}\n' >/tmp/kagent-release-manifest-directory-path.json
+printf '{"package":"kagent","version":"0.1.8","artifact_count":"1","artifacts":[{"path":"/tmp/kagent-release-manifest-artifact-dir","sha256":"abc","size_bytes":"123"}]}\n' >/tmp/kagent-release-manifest-directory-path.json
 if PYTHONWARNINGS=ignore .venv/bin/kagent-release-manifest \
     --verify /tmp/kagent-release-manifest-directory-path.json \
     >/tmp/kagent-release-manifest-directory-path.stdout \
@@ -690,10 +690,10 @@ if ! PYTHONWARNINGS=ignore .venv/bin/python -m pip wheel --no-deps . -w /tmp/kag
     echo "isolated wheel build failed; retrying without build isolation" >&2
     PYTHONWARNINGS=ignore .venv/bin/python -m pip wheel --no-deps --no-build-isolation . -w /tmp/kagent-isolated-wheelhouse >/tmp/kagent-isolated-wheel-build-fallback.log
 fi
-ls /tmp/kagent-isolated-wheelhouse/kagent-0.1.7-*.whl >/dev/null
+ls /tmp/kagent-isolated-wheelhouse/kagent-0.1.8-*.whl >/dev/null
 rm -rf /tmp/kagent-wheel-install-venv
 PYTHONWARNINGS=ignore .venv/bin/python -m venv /tmp/kagent-wheel-install-venv
-PYTHONWARNINGS=ignore /tmp/kagent-wheel-install-venv/bin/python -m pip install --no-deps /tmp/kagent-wheelhouse/kagent-0.1.7-*.whl >/tmp/kagent-wheel-install.log
+PYTHONWARNINGS=ignore /tmp/kagent-wheel-install-venv/bin/python -m pip install --no-deps /tmp/kagent-wheelhouse/kagent-0.1.8-*.whl >/tmp/kagent-wheel-install.log
 PYTHONWARNINGS=ignore /tmp/kagent-wheel-install-venv/bin/python - <<'PY' >/tmp/kagent-wheel-install-smoke.json
 import importlib.metadata
 import json
@@ -719,7 +719,7 @@ expected_scripts = [
     "kagent-trace-replay",
 ]
 missing_scripts = sorted(set(expected_scripts) - set(console_scripts))
-if package.__version__ != "0.1.7":
+if package.__version__ != "0.1.8":
     raise SystemExit(f"unexpected package version: {package.__version__}")
 if missing_scripts:
     raise SystemExit(f"missing console scripts: {missing_scripts}")

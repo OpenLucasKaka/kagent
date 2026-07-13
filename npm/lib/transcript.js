@@ -144,6 +144,7 @@ function selectTranscriptViewport(entries, viewport, offset = 0) {
         usedRows += rows;
         start = index;
     }
+    start = avoidOrphanedLeadingAssistant(entries, start, end, usedRows, availableRows, viewport.columns);
     return entries.slice(start, end);
 }
 function moveTranscriptViewport(entries, viewport, offset, direction) {
@@ -215,6 +216,22 @@ function retain(state) {
         ? state.activeAssistantId
         : null;
     return { ...state, entries, activeAssistantId };
+}
+function avoidOrphanedLeadingAssistant(entries, start, end, usedRows, availableRows, columns) {
+    let nextStart = start;
+    let nextUsedRows = usedRows;
+    while (nextStart > 0 &&
+        nextStart < end - 1 &&
+        entries[nextStart].role === "assistant" &&
+        entries[nextStart - 1].role === "user") {
+        const userRows = estimateEntryRows(entries[nextStart - 1], columns);
+        if (nextUsedRows + userRows <= availableRows) {
+            return nextStart - 1;
+        }
+        nextUsedRows -= estimateEntryRows(entries[nextStart], columns);
+        nextStart += 1;
+    }
+    return nextStart;
 }
 function estimateEntryRows(entry, columns) {
     const contentColumns = Math.max(4, columns - 4);

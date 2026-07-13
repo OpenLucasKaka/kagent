@@ -237,6 +237,7 @@ export function KagentInkApp({
         {
           approval: approval !== null,
           commandMenu: status === "idle" && commandMenu ? commandMenu : false,
+          introVisible: transcript.entries.length === 0,
           prompt: editor.value,
           promptCursor: editor.cursor,
         },
@@ -357,6 +358,7 @@ export function KagentInkApp({
       {
         approval: approval !== null,
         commandMenu: false,
+        introVisible: transcript.entries.length === 0,
         prompt: editor.value,
         promptCursor: editor.cursor,
       },
@@ -568,6 +570,7 @@ export function KagentInkApp({
       ? { ...approval, showDetails: showApprovalDetails }
       : false,
     commandMenu: status === "idle" && commandMenu ? commandMenu : false,
+    introVisible: transcript.entries.length === 0,
     prompt: editor.value,
     promptCursor: editor.cursor,
   });
@@ -587,15 +590,17 @@ export function KagentInkApp({
   return React.createElement(
     Box,
     { flexDirection: "column", paddingX: layout.horizontalPadding },
-    React.createElement(Header, {
-      React,
-      Box,
-      Text,
-      compact: layout.compact,
-      provider,
-      setup: false,
-      workspace: process.cwd(),
-    }),
+    transcript.entries.length === 0
+      ? React.createElement(Header, {
+          React,
+          Box,
+          Text,
+          compact: layout.compact,
+          provider,
+          setup: false,
+          workspace: process.cwd(),
+        })
+      : null,
     React.createElement(TranscriptPosition, {
       React,
       Text,

@@ -51,6 +51,7 @@ export function createTerminalLayout(
   overlays: {
     approval: boolean | ApprovalLayout;
     commandMenu: boolean | CommandMenuState;
+    introVisible?: boolean;
     prompt?: string;
     promptCursor?: number;
   },
@@ -61,7 +62,7 @@ export function createTerminalLayout(
   const compact = safeColumns < 56;
   const horizontalPadding = compact ? 0 : 1;
   const defaultCommandLimit = compact ? 4 : 6;
-  const headerRows = compact ? 2 : 3;
+  const headerRows = overlays.introVisible === false ? 0 : compact ? 2 : 3;
   const promptChromeRows = 1;
   const fixedBaseRows = headerRows + promptChromeRows;
   const approvalColumns = Math.max(
