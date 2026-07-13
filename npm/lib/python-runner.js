@@ -13,6 +13,9 @@ const GITHUB_PACKAGE_JSON_URL = "https://raw.githubusercontent.com/OpenLucasKaka
 const GITHUB_HEAD_URL = "https://api.github.com/repos/OpenLucasKaka/Kagent/commits/main";
 const GITHUB_INSTALL_SPEC = "github:OpenLucasKaka/Kagent";
 const SELF_UPDATE_TIMEOUT_MS = 3000;
+const RUNTIME_LOCK_WAIT_MS = 120000;
+const RUNTIME_LOCK_STALE_MS = 15 * 60 * 1000;
+const RUNTIME_LOCK_POLL_MS = 50;
 const SECURE_FILESYSTEM_HELPER = String.raw`
 import errno
 import os
@@ -106,12 +109,88 @@ def write_file(target):
         os.close(parent_fd)
 
 
+def lock_parent(target):
+    parent, name = os.path.split(os.path.normpath(target))
+    if not name or name in (".", ".."):
+        fail(f"managed path is not a lock: {target}")
+    return open_directory(parent, False), name
+
+
+def lock_stat(parent_fd, name, target):
+    try:
+        value = os.stat(name, dir_fd=parent_fd, follow_symlinks=False)
+    except FileNotFoundError:
+        return None
+    if stat.S_ISLNK(value.st_mode):
+        fail(f"refusing symbolic link in managed path: {target}")
+    if not stat.S_ISDIR(value.st_mode):
+        fail(f"managed lock is not a directory: {target}")
+    return value
+
+
+def create_lock(parent_fd, name):
+    os.mkdir(name, 0o700, dir_fd=parent_fd)
+    lock_fd = os.open(name, DIRECTORY_FLAGS, dir_fd=parent_fd)
+    try:
+        os.fchmod(lock_fd, 0o700)
+        value = os.fstat(lock_fd)
+        return value.st_dev, value.st_ino
+    finally:
+        os.close(lock_fd)
+
+
+def try_lock(target, stale_before_ms):
+    parent_fd, name = lock_parent(target)
+    try:
+        try:
+            device, inode = create_lock(parent_fd, name)
+            return f"acquired:{device}:{inode}"
+        except FileExistsError:
+            value = lock_stat(parent_fd, name, target)
+            if value is None:
+                return "wait"
+            if value.st_mtime * 1000 >= stale_before_ms:
+                return "wait"
+            try:
+                os.rmdir(name, dir_fd=parent_fd)
+            except FileNotFoundError:
+                return "wait"
+            except OSError as error:
+                if error.errno in (errno.ENOTEMPTY, errno.EEXIST):
+                    fail(f"managed lock is not empty: {target}")
+                raise
+            try:
+                device, inode = create_lock(parent_fd, name)
+                return f"acquired:{device}:{inode}"
+            except FileExistsError:
+                return "wait"
+    finally:
+        os.close(parent_fd)
+
+
+def release_lock(target, expected_device, expected_inode):
+    parent_fd, name = lock_parent(target)
+    try:
+        value = lock_stat(parent_fd, name, target)
+        if value is None:
+            return
+        if value.st_dev != expected_device or value.st_ino != expected_inode:
+            return
+        os.rmdir(name, dir_fd=parent_fd)
+    finally:
+        os.close(parent_fd)
+
+
 try:
     operation, target = sys.argv[1:3]
     if operation == "ensure-directory":
         ensure_directory(target)
     elif operation == "write-file":
         write_file(target)
+    elif operation == "try-lock":
+        sys.stdout.write(try_lock(target, int(sys.argv[3])))
+    elif operation == "release-lock":
+        release_lock(target, int(sys.argv[3]), int(sys.argv[4]))
     else:
         fail(f"unsupported secure filesystem operation: {operation}")
 except BaseException as error:
@@ -220,11 +299,11 @@ function writePrivateFile(filePath, body) {
   runSecureFilesystemOperation("write-file", path.resolve(filePath), body);
 }
 
-function runSecureFilesystemOperation(operation, targetPath, body = "") {
+function runSecureFilesystemOperation(operation, targetPath, body = "", extraArgs = []) {
   const python = findPython();
   const result = childProcess.spawnSync(
     python,
-    ["-c", SECURE_FILESYSTEM_HELPER, operation, targetPath],
+    ["-c", SECURE_FILESYSTEM_HELPER, operation, targetPath].concat(extraArgs),
     {
       encoding: "utf8",
       env: process.env,
@@ -242,6 +321,7 @@ function runSecureFilesystemOperation(operation, targetPath, body = "") {
       `secure filesystem ${operation} failed for ${targetPath}${suffix}`
     );
   }
+  return String(result.stdout || "").trim();
 }
 
 function privateFileStat(filePath) {
@@ -261,6 +341,46 @@ function privateFileStat(filePath) {
     throw new Error(`managed path is not a file: ${filePath}`);
   }
   return stat;
+}
+
+function sleepSync(milliseconds) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, milliseconds);
+}
+
+function acquireRuntimeLock(venvDir, options) {
+  const lockPath = `${venvDir}.lock`;
+  const waitMs = options.lockWaitMs === undefined ? RUNTIME_LOCK_WAIT_MS : options.lockWaitMs;
+  const staleMs = options.lockStaleMs === undefined ? RUNTIME_LOCK_STALE_MS : options.lockStaleMs;
+  const pollMs = options.lockPollMs === undefined ? RUNTIME_LOCK_POLL_MS : options.lockPollMs;
+  const deadline = Date.now() + waitMs;
+  while (true) {
+    const result = runSecureFilesystemOperation(
+      "try-lock",
+      lockPath,
+      "",
+      [String(Date.now() - staleMs)]
+    );
+    if (result.startsWith("acquired:")) {
+      const [, device, inode] = result.split(":");
+      return { lockPath, device, inode };
+    }
+    if (result !== "wait") {
+      throw new Error(`secure filesystem try-lock returned invalid result for ${lockPath}`);
+    }
+    if (Date.now() >= deadline) {
+      throw new Error(`timed out waiting for Python runtime lock: ${lockPath}`);
+    }
+    sleepSync(Math.min(pollMs, Math.max(1, deadline - Date.now())));
+  }
+}
+
+function releaseRuntimeLock(lock) {
+  runSecureFilesystemOperation(
+    "release-lock",
+    lock.lockPath,
+    "",
+    [lock.device, lock.inode]
+  );
 }
 
 function candidatePythons() {
@@ -694,7 +814,7 @@ function writeMarker(venvDir, marker) {
 function pythonRuntimeIdentity(python) {
   const result = childProcess.spawnSync(
     python,
-    ["-c", "import json, sys; print(json.dumps({'implementation': sys.implementation.name, 'major': sys.version_info[0], 'minor': sys.version_info[1]}))"],
+    ["-c", "import json, os, platform, sys, sysconfig; print(json.dumps({'implementation': sys.implementation.name, 'major': sys.version_info[0], 'minor': sys.version_info[1], 'cacheTag': sys.implementation.cache_tag, 'soabi': sysconfig.get_config_var('SOABI'), 'machine': platform.machine(), 'executable': os.path.realpath(sys.executable), 'prefix': os.path.realpath(sys.prefix), 'basePrefix': os.path.realpath(sys.base_prefix), 'execPrefix': os.path.realpath(sys.exec_prefix), 'baseExecPrefix': os.path.realpath(sys.base_exec_prefix)}))"],
     { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }
   );
   if (result.error) {
@@ -705,15 +825,29 @@ function pythonRuntimeIdentity(python) {
   }
   const identity = JSON.parse(result.stdout);
   if (!/^[A-Za-z0-9_-]+$/.test(identity.implementation) ||
-      !Number.isInteger(identity.major) || !Number.isInteger(identity.minor)) {
+      identity.implementation.length > 24 ||
+      !Number.isInteger(identity.major) || !Number.isInteger(identity.minor) ||
+      identity.major < 0 || identity.minor < 0) {
     throw new Error("Python runtime returned an invalid identity");
   }
   return identity;
 }
 
+function safeRuntimeComponent(value, label, maxLength) {
+  if (typeof value !== "string" || value.length === 0 || value.length > maxLength ||
+      !/^[A-Za-z0-9_.-]+$/.test(value)) {
+    throw new Error(`invalid ${label} runtime component`);
+  }
+  return value;
+}
+
 function runtimeCacheDirectory(cache, identity, platform, arch, dependencyFingerprint) {
-  const abi = `${identity.implementation}-${identity.major}.${identity.minor}`;
-  return path.join(cache, abi, `${platform}-${arch}`, dependencyFingerprint);
+  const implementation = safeRuntimeComponent(identity.implementation, "implementation", 24);
+  const hostPlatform = safeRuntimeComponent(platform, "platform", 24);
+  const hostArch = safeRuntimeComponent(arch, "architecture", 32);
+  const identityFingerprint = sha256(JSON.stringify(identity)).slice(0, 24);
+  const abi = `${implementation}-${identity.major}.${identity.minor}-${identityFingerprint}`;
+  return path.join(cache, abi, `${hostPlatform}-${hostArch}`, dependencyFingerprint);
 }
 
 function ensureVenv(root, version, options = {}) {
@@ -728,39 +862,44 @@ function ensureVenv(root, version, options = {}) {
   const checkedRun = options.runChecked || runChecked;
   const markerWriter = options.writeMarker || writeMarker;
   ensureDirectory(venvDir);
-  const expectedMarker = installMarker(root, version, dependencyFingerprint);
-  const pythonPath = venvPythonPath(venvDir);
-  const actualMarker = readMarker(venvDir);
-  const hadPython = fs.existsSync(pythonPath);
-  if (hadPython && markerMatches(actualMarker, expectedMarker)) {
-    return venvDir;
-  }
-
-  if (!hadPython) {
-    process.stderr.write(`kagent: preparing Python runtime in ${venvDir}\n`);
-    const venvArgs = ["-m", "venv"];
-    if (actualMarker) {
-      venvArgs.push("--clear");
+  const runtimeLock = acquireRuntimeLock(venvDir, options);
+  try {
+    const expectedMarker = installMarker(root, version, dependencyFingerprint);
+    const pythonPath = venvPythonPath(venvDir);
+    const actualMarker = readMarker(venvDir);
+    const hadPython = fs.existsSync(pythonPath);
+    if (hadPython && markerMatches(actualMarker, expectedMarker)) {
+      return venvDir;
     }
-    venvArgs.push(venvDir);
-    checkedRun(python, venvArgs, { cwd: root });
-  }
 
-  process.stderr.write("kagent: preparing Python runtime\n");
-  const sourceOnlyInstall = hadPython && actualMarker &&
-    actualMarker.dependencyHash === dependencyFingerprint;
-  const installArgs = ["-m", "pip", "install"];
-  if (sourceOnlyInstall) {
-    installArgs.push("--no-deps");
+    if (!hadPython) {
+      process.stderr.write(`kagent: preparing Python runtime in ${venvDir}\n`);
+      const venvArgs = ["-m", "venv"];
+      if (actualMarker) {
+        venvArgs.push("--clear");
+      }
+      venvArgs.push(venvDir);
+      checkedRun(python, venvArgs, { cwd: root });
+    }
+
+    process.stderr.write("kagent: preparing Python runtime\n");
+    const sourceOnlyInstall = hadPython && actualMarker &&
+      actualMarker.dependencyHash === dependencyFingerprint;
+    const installArgs = ["-m", "pip", "install"];
+    if (sourceOnlyInstall) {
+      installArgs.push("--no-deps");
+    }
+    installArgs.push("--disable-pip-version-check", "--quiet", root);
+    checkedRun(
+      pythonPath,
+      installArgs,
+      { cwd: root, stdio: "pipe" }
+    );
+    markerWriter(venvDir, expectedMarker);
+    return venvDir;
+  } finally {
+    releaseRuntimeLock(runtimeLock);
   }
-  installArgs.push("--disable-pip-version-check", "--quiet", root);
-  checkedRun(
-    pythonPath,
-    installArgs,
-    { cwd: root, stdio: "pipe" }
-  );
-  markerWriter(venvDir, expectedMarker);
-  return venvDir;
 }
 
 function spawnEntrypoint(venvDir, commandName, args) {
@@ -835,6 +974,7 @@ module.exports = {
     isNewerVersion,
     metadataCacheRoot,
     maybePrintNodeHandledOutput,
+    pythonRuntimeIdentity,
     readSelfUpdateState,
     shouldCheckSelfUpdate,
     sourceHash,
