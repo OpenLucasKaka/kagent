@@ -101,7 +101,8 @@ Use only tools that are available to you.
     "policy-gated and may require explicit approval before execution.\n"
     "If the latest previous observation failed, do not return final_answer with "
     "empty actions; either plan recovery actions or leave the run failed.\n"
-    'If the goal is complete, return {"actions":[]}.'
+    'If the goal is complete, return {"actions":[],"final_answer":"..."} '
+    "with a direct user-facing answer."
 )
 
 RUNTIME_TRACE_TYPE = "codex_runtime"
@@ -495,6 +496,7 @@ def _runtime_planner_graph_node(
             ),
         )
         plan = parse_agent_plan(plan_text)
+        _require_final_answer_for_empty_actions(plan)
     except Exception as exc:
         error_code = _planner_failure_error_code(exc)
         timing = _timing_fields(planner_started_at, planner_timer)
@@ -1038,7 +1040,28 @@ def _run_runtime_agent_loop(
             plan_payload = initial_planner.get("plan")
             if not isinstance(plan_payload, dict):
                 raise RuntimeError("planner checkpoint is missing plan state")
-            plan = parse_agent_plan(json.dumps(plan_payload, ensure_ascii=False))
+            try:
+                plan = parse_agent_plan(json.dumps(plan_payload, ensure_ascii=False))
+                _require_final_answer_for_empty_actions(plan)
+            except Exception as exc:
+                planner_error_code = _planner_failure_error_code(exc)
+                observations.append(
+                    AgentObservation(
+                        action_id="",
+                        tool="planner",
+                        status="failed",
+                        output={},
+                        error_code=planner_error_code,
+                        error=str(exc),
+                        started_at=planner_started_at,
+                        completed_at=timing["completed_at"],
+                        duration_seconds=timing["duration_seconds"],
+                    )
+                )
+                if iteration < iteration_limit:
+                    continue
+                status = "failed"
+                break
         else:
             user_prompt = _runtime_user_prompt(
                 goal,
@@ -1080,6 +1103,7 @@ def _run_runtime_agent_loop(
                     break
                 answer_streamed = answer_streamed or streamed_this_plan
                 plan = parse_agent_plan(plan_text)
+                _require_final_answer_for_empty_actions(plan)
             except Exception as exc:
                 if mark_cancelled():
                     break
@@ -1141,7 +1165,7 @@ def _run_runtime_agent_loop(
                 steering_iteration_budget_added += 1
             continue
         if not plan.actions:
-            if _latest_observation_failed(observations):
+            if _latest_observation_blocks_empty_final_answer(observations):
                 status = "failed"
                 final_answer_guardrail = _final_answer_guardrail(
                     "unresolved_failure_boundary"
@@ -2029,6 +2053,15 @@ def _latest_observation_failed(observations: List[AgentObservation]) -> bool:
     return bool(observations and observations[-1].status == "failed")
 
 
+def _latest_observation_blocks_empty_final_answer(
+    observations: List[AgentObservation],
+) -> bool:
+    if not _latest_observation_failed(observations):
+        return False
+    latest = observations[-1]
+    return not (latest.tool == "planner" and latest.error_code == "invalid_plan")
+
+
 def _planner_failure_error_code(exc: BaseException) -> str:
     if isinstance(exc, TimeoutError):
         return "llm_provider_error"
@@ -2038,6 +2071,11 @@ def _planner_failure_error_code(exc: BaseException) -> str:
     if "llm provider request failed" in message:
         return "llm_provider_error"
     return "invalid_plan"
+
+
+def _require_final_answer_for_empty_actions(plan: Any) -> None:
+    if not plan.actions and not plan.final_answer:
+        raise ValueError("final_answer is required when actions is empty")
 
 
 def _llm_provider_request_diagnostics(provider: Any) -> Dict[str, str]:

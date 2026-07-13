@@ -227,6 +227,12 @@ function reduceRunEvent(
     return { ...state, approval: event, status: "approval", statusText: "" };
   }
   if (event.type === "run_completed") {
+    if (event.status !== "done" && event.status !== "cancelled") {
+      return failureState(
+        { ...state, approval: null },
+        runCompletionFailureMessage(event.payload),
+      );
+    }
     const fallback = event.status === "cancelled" ? "Action cancelled." : "Done.";
     return {
       ...state,
@@ -251,6 +257,18 @@ function reduceRunEvent(
     return failureState({ ...state, approval: null }, event.message);
   }
   return state;
+}
+
+function runCompletionFailureMessage(payload: Record<string, unknown>): string {
+  const error = payload.error;
+  if (typeof error === "string" && error.trim()) {
+    return error;
+  }
+  const errorCode = payload.error_code;
+  if (typeof errorCode === "string" && errorCode.trim()) {
+    return errorCode;
+  }
+  return "Run failed.";
 }
 
 function failureState(state: AppRuntimeState, message: string): AppRuntimeState {

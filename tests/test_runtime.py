@@ -1688,6 +1688,8 @@ def test_runtime_agent_system_prompt_includes_plan_limits():
     assert f"final_answer at most {MAX_PLAN_FINAL_ANSWER_CHARS}" in system_prompt
     assert "depends_on" in system_prompt
     assert "prior action IDs" in system_prompt
+    assert 'return {"actions":[]}' not in system_prompt
+    assert 'return {"actions":[],"final_answer":"..."}' in system_prompt
 
 
 def test_runtime_agent_system_prompt_distinguishes_open_url_from_http_request():
@@ -1969,6 +1971,26 @@ def test_runtime_agent_can_replan_after_invalid_planner_output():
     assert result["answer"] == "recovered"
 
 
+def test_runtime_agent_can_replan_after_empty_terminal_plan_without_final_answer():
+    provider = SequentialLLMProvider(
+        [
+            '{"actions":[]}',
+            '{"actions":[],"final_answer":"今天是星期一。"}',
+        ]
+    )
+
+    result = run_runtime_agent("今天周几", provider=provider, max_iterations=2)
+
+    assert result["status"] == "done"
+    assert len(provider.calls) == 2
+    assert "final_answer" in provider.calls[1]["user"]
+    assert result["observations"][0]["tool"] == "planner"
+    assert result["observations"][0]["status"] == "failed"
+    assert result["observations"][0]["error_code"] == "invalid_plan"
+    assert "final_answer" in result["observations"][0]["error"]
+    assert result["answer"] == "今天是星期一。"
+
+
 def test_runtime_agent_reports_failed_when_tool_failure_exhausts_iteration_budget():
     provider = SequentialLLMProvider(
         [
@@ -2027,7 +2049,7 @@ def test_runtime_agent_does_not_report_final_answer_when_action_failed():
     assert "answer" not in result
 
 
-def test_runtime_agent_stops_replanning_when_provider_returns_no_actions():
+def test_runtime_agent_replans_when_provider_returns_no_actions_without_final_answer():
     provider = SequentialLLMProvider(
         [
             (
@@ -2035,15 +2057,19 @@ def test_runtime_agent_stops_replanning_when_provider_returns_no_actions():
                 '"input":{"text":"hello"},"reason":"capture"}]}'
             ),
             '{"actions":[]}',
+            '{"actions":[],"final_answer":"captured hello"}',
         ]
     )
 
     result = run_runtime_agent("capture hello", provider=provider, max_iterations=3)
 
     assert result["status"] == "done"
-    assert len(provider.calls) == 2
+    assert result["answer"] == "captured hello"
+    assert len(provider.calls) == 3
     assert len(result["plans"]) == 2
-    assert len(result["observations"]) == 1
+    assert result["observations"][0]["status"] == "ok"
+    assert result["observations"][1]["tool"] == "planner"
+    assert result["observations"][1]["error_code"] == "invalid_plan"
 
 
 def test_runtime_agent_returns_final_answer_from_converged_plan():
