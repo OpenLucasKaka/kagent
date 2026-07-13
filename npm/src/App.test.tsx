@@ -125,6 +125,34 @@ test("defers terminal cursor positioning until after the Ink render flush", () =
   assert.deepEqual(writes, ["position", "restore"]);
 });
 
+test("does not restore terminal cursor when deferred positioning was cancelled", () => {
+  const writes: string[] = [];
+  const scheduled: Array<() => void> = [];
+  const cleanup = scheduleTerminalCursorSync(
+    { position: "position", restore: "restore" },
+    {
+      write(value: string) {
+        writes.push(value);
+      },
+      defer(callback: () => void) {
+        scheduled.push(callback);
+        return callback;
+      },
+      cancel(token: () => void) {
+        const index = scheduled.indexOf(token);
+        if (index >= 0) {
+          scheduled.splice(index, 1);
+        }
+      },
+    },
+  );
+
+  cleanup();
+
+  assert.deepEqual(writes, []);
+  assert.equal(scheduled.length, 0);
+});
+
 function createHarness(): {
   effects: Array<() => (() => void) | undefined>;
   inputEvents: EventEmitter;

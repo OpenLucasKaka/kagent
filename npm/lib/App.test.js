@@ -104,6 +104,28 @@ const App_1 = require("./App");
     cleanup();
     strict_1.default.deepEqual(writes, ["position", "restore"]);
 });
+(0, node_test_1.default)("does not restore terminal cursor when deferred positioning was cancelled", () => {
+    const writes = [];
+    const scheduled = [];
+    const cleanup = (0, App_1.scheduleTerminalCursorSync)({ position: "position", restore: "restore" }, {
+        write(value) {
+            writes.push(value);
+        },
+        defer(callback) {
+            scheduled.push(callback);
+            return callback;
+        },
+        cancel(token) {
+            const index = scheduled.indexOf(token);
+            if (index >= 0) {
+                scheduled.splice(index, 1);
+            }
+        },
+    });
+    cleanup();
+    strict_1.default.deepEqual(writes, []);
+    strict_1.default.equal(scheduled.length, 0);
+});
 function createHarness() {
     const states = [];
     const refs = [];

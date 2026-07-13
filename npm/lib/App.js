@@ -21,7 +21,11 @@ function shouldRenderSessionHeader(status, transcriptEntryCount) {
     return status !== "starting" && transcriptEntryCount === 0;
 }
 function scheduleTerminalCursorSync(control, scheduler) {
-    const token = scheduler.defer(() => scheduler.write(control.position));
+    let positioned = false;
+    const token = scheduler.defer(() => {
+        positioned = true;
+        scheduler.write(control.position);
+    });
     let active = true;
     return () => {
         if (!active) {
@@ -29,7 +33,9 @@ function scheduleTerminalCursorSync(control, scheduler) {
         }
         active = false;
         scheduler.cancel(token);
-        scheduler.write(control.restore);
+        if (positioned) {
+            scheduler.write(control.restore);
+        }
     };
 }
 function KagentInkApp({ React, Ink, runtimeSessionFactory = runtime_client_1.createRuntimeSessionClient, }) {

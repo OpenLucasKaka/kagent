@@ -108,7 +108,11 @@ export function scheduleTerminalCursorSync<Token>(
   control: PromptTerminalCursorControl,
   scheduler: TerminalCursorScheduler<Token>,
 ): () => void {
-  const token = scheduler.defer(() => scheduler.write(control.position));
+  let positioned = false;
+  const token = scheduler.defer(() => {
+    positioned = true;
+    scheduler.write(control.position);
+  });
   let active = true;
   return () => {
     if (!active) {
@@ -116,7 +120,9 @@ export function scheduleTerminalCursorSync<Token>(
     }
     active = false;
     scheduler.cancel(token);
-    scheduler.write(control.restore);
+    if (positioned) {
+      scheduler.write(control.restore);
+    }
   };
 }
 
