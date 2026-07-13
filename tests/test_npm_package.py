@@ -2719,12 +2719,11 @@ def test_npm_runner_uses_cache_venv_and_env_forwarding():
 
     assert "KAGENT_NODE_VENV" in runner
     assert "KAGENT_PYTHON" in runner
-    assert 'const installArgs = ["-m", "pip", "install"]' in runner
-    assert 'installArgs.push("--no-deps")' in runner
-    assert 'installArgs.push("--disable-pip-version-check", "--quiet", root)' in runner
+    assert '["-m", "pip", "install", "--disable-pip-version-check", "--quiet", root]' in runner
+    assert "--no-deps" not in runner
     assert '{ cwd: root, stdio: "pipe" }' in runner
     assert '"-e", root' not in runner
-    assert "env: process.env" in runner
+    assert "pythonEnvironment(root" in runner
 
 
 def test_npm_runner_uses_unified_kagent_cache_paths():
@@ -3034,13 +3033,14 @@ assert.equal(
     assert completed.returncode == 0, completed.stderr
 
 
-def test_npm_runner_reinstalls_cached_python_runtime_when_sources_change(tmp_path):
+def test_npm_runner_publishes_immutable_python_runtimes(tmp_path):
     node = shutil.which("node")
     if node is None:
         return
 
     script = r"""
 const assert = require("node:assert/strict");
+const crypto = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
 const { _internals } = require("./npm/lib/python-runner");
@@ -3048,304 +3048,55 @@ const { _internals } = require("./npm/lib/python-runner");
 const testRoot = process.argv[1];
 const packageRoot = path.join(testRoot, "package");
 const cacheRoot = path.join(testRoot, "cache");
-fs.mkdirSync(path.join(packageRoot, "src", "kagent"), {recursive: true});
-const detectedIdentity = _internals.pythonRuntimeIdentity(process.argv[2]);
-assert.equal(detectedIdentity.cacheTag.length > 0, true);
-assert.equal(detectedIdentity.soabi.length > 0, true);
-assert.equal(detectedIdentity.machine.length > 0, true);
-assert.equal(detectedIdentity.executable, fs.realpathSync(process.argv[2]));
-assert.equal(detectedIdentity.basePrefix.length > 0, true);
+const identity = {
+  implementation: "cpython", major: 3, minor: 12,
+  cacheTag: "cpython-312", soabi: "cpython-312-darwin", machine: "arm64",
+  executable: "/opt/python/3.12/bin/python3", prefix: "/opt/python/3.12",
+  basePrefix: "/opt/python/3.12", execPrefix: "/opt/python/3.12",
+  baseExecPrefix: "/opt/python/3.12",
+};
+const calls = [];
 
-function writePackage(version, dependency, source) {
-  fs.writeFileSync(path.join(packageRoot, "package.json"), JSON.stringify({version}));
-  fs.writeFileSync(path.join(packageRoot, "pyproject.toml"), `
+function writePackage(root, version, dependency, source) {
+  fs.mkdirSync(path.join(root, "src", "kagent"), {recursive: true});
+  fs.writeFileSync(path.join(root, "package.json"), JSON.stringify({version}));
+  fs.writeFileSync(path.join(root, "pyproject.toml"), `
 [project]
 name = "kagent"
 version = "${version}"
 requires-python = ">=3.9"
-dependencies = [
-  "${dependency}",
-  "prompt_toolkit>=3.0,<4",
-]
+dependencies = ["${dependency}"]
 `);
-  fs.writeFileSync(path.join(packageRoot, "src", "kagent", "runtime.py"), source);
+  fs.writeFileSync(path.join(root, "src", "kagent", "runtime.py"), source);
 }
 
-writePackage("0.1.0", "langgraph>=0.6,<0.7", "SOURCE = 1\n");
-const initialDependencyHash = _internals.dependencyHash(packageRoot);
-const initialSourceHash = _internals.sourceHash(packageRoot);
-writePackage("0.2.0", "langgraph>=0.6,<0.7", "SOURCE = 2\n");
-assert.equal(_internals.dependencyHash(packageRoot), initialDependencyHash);
-assert.notEqual(_internals.sourceHash(packageRoot), initialSourceHash);
-writePackage("0.2.0", "langgraph>=0.7,<0.8", "SOURCE = 2\n");
-assert.notEqual(_internals.dependencyHash(packageRoot), initialDependencyHash);
+function finalPath(root, runtimeIdentity = identity) {
+  const dependency = _internals.dependencyHash(root);
+  const identityHash = crypto.createHash("sha256")
+    .update(JSON.stringify(runtimeIdentity)).digest("hex");
+  const abi = `cpython-${runtimeIdentity.major}.${runtimeIdentity.minor}-${identityHash}`;
+  return path.join(cacheRoot, abi, "darwin-arm64", dependency);
+}
 
-const calls = [];
-const pythonIdentity = {
-  implementation: "cpython",
-  major: 3,
-  minor: 12,
-  cacheTag: "cpython-312",
-  soabi: "cpython-312-darwin",
-  machine: "arm64",
-  executable: "/opt/python/3.12/bin/python3",
-  prefix: "/opt/python/3.12",
-  basePrefix: "/opt/python/3.12",
-  execPrefix: "/opt/python/3.12",
-  baseExecPrefix: "/opt/python/3.12",
-};
 const options = {
-  cacheRoot,
-  python: "/fake/python",
-  pythonIdentity,
-  platform: "darwin",
-  arch: "arm64",
-  ensurePrivateDirectory(directory) {
-    fs.mkdirSync(directory, {recursive: true});
-    return directory;
-  },
-  runChecked(command, args) {
-    calls.push({command, args});
-    const activeVenv = args[1] === "venv" ? args.at(-1) : path.dirname(path.dirname(command));
-    assert.equal(fs.statSync(`${activeVenv}.lock`).mode & 0o777, 0o700);
-    if (args[0] === "-m" && args[1] === "venv") {
-      const venvDir = args.at(-1);
-      fs.mkdirSync(path.join(venvDir, "bin"), {recursive: true});
-      fs.writeFileSync(path.join(venvDir, "bin", "python"), "");
-    }
-  },
-  writeMarker(venvDir, marker) {
-    fs.writeFileSync(
-      path.join(venvDir, ".kagent-node-install.json"),
-      `${JSON.stringify(marker)}\n`,
-    );
-  },
-};
-
-writePackage("0.1.0", "langgraph>=0.6,<0.7", "SOURCE = 1\n");
-const firstVenv = _internals.ensureVenv(packageRoot, "0.1.0", options);
-assert.match(firstVenv, /cpython-3\.12-[a-f0-9]{24}[/\\]darwin-arm64[/\\][a-f0-9]{64}$/);
-assert.deepEqual(calls.map((call) => call.args), [
-  ["-m", "venv", firstVenv],
-  ["-m", "pip", "install", "--disable-pip-version-check", "--quiet", packageRoot],
-]);
-let marker = JSON.parse(fs.readFileSync(
-  path.join(firstVenv, ".kagent-node-install.json"),
-  "utf8",
-));
-assert.equal(marker.dependencyHash, initialDependencyHash);
-assert.equal(marker.sourceHash, initialSourceHash);
-
-writePackage("0.2.0", "langgraph>=0.6,<0.7", "SOURCE = 2\n");
-const reusedVenv = _internals.ensureVenv(packageRoot, "0.2.0", options);
-assert.equal(reusedVenv, firstVenv);
-assert.deepEqual(calls.at(-1).args, [
-  "-m", "pip", "install", "--no-deps", "--disable-pip-version-check", "--quiet", packageRoot,
-]);
-const callCountAfterSourceInstall = calls.length;
-assert.equal(_internals.ensureVenv(packageRoot, "0.2.0", options), firstVenv);
-assert.equal(calls.length, callCountAfterSourceInstall);
-
-const markerPath = path.join(firstVenv, ".kagent-node-install.json");
-const markerBeforeFailedSourceInstall = fs.readFileSync(markerPath, "utf8");
-writePackage("0.3.0", "langgraph>=0.6,<0.7", "SOURCE = 3\n");
-assert.throws(() => _internals.ensureVenv(packageRoot, "0.3.0", {
-  ...options,
-  runChecked(command, args) {
-    options.runChecked(command, args);
-    if (args.includes("--no-deps")) {
-      throw new Error("source-only install failed");
-    }
-  },
-}), /source-only install failed/);
-assert.equal(fs.existsSync(`${firstVenv}.lock`), false);
-assert.deepEqual(calls.at(-1).args, [
-  "-m", "pip", "install", "--no-deps", "--disable-pip-version-check", "--quiet", packageRoot,
-]);
-assert.equal(fs.readFileSync(markerPath, "utf8"), markerBeforeFailedSourceInstall);
-const callCountBeforeSourceRetry = calls.length;
-assert.equal(_internals.ensureVenv(packageRoot, "0.3.0", options), firstVenv);
-assert.equal(calls.length, callCountBeforeSourceRetry + 1);
-assert.deepEqual(calls.at(-1).args, [
-  "-m", "pip", "install", "--no-deps", "--disable-pip-version-check", "--quiet", packageRoot,
-]);
-
-fs.unlinkSync(path.join(firstVenv, "bin", "python"));
-_internals.ensureVenv(packageRoot, "0.3.0", options);
-assert.deepEqual(calls.slice(-2).map((call) => call.args), [
-  ["-m", "venv", "--clear", firstVenv],
-  ["-m", "pip", "install", "--disable-pip-version-check", "--quiet", packageRoot],
-]);
-
-writePackage("0.2.0", "langgraph>=0.7,<0.8", "SOURCE = 2\n");
-const dependencyVenv = _internals.ensureVenv(packageRoot, "0.2.0", options);
-assert.notEqual(dependencyVenv, firstVenv);
-assert.deepEqual(calls.slice(-2).map((call) => call.args), [
-  ["-m", "venv", dependencyVenv],
-  ["-m", "pip", "install", "--disable-pip-version-check", "--quiet", packageRoot],
-]);
-const otherPlatformVenv = _internals.ensureVenv(packageRoot, "0.2.0", {
-  ...options,
-  platform: "linux",
-});
-assert.notEqual(otherPlatformVenv, dependencyVenv);
-const otherArchVenv = _internals.ensureVenv(packageRoot, "0.2.0", {
-  ...options,
-  arch: "x64",
-});
-assert.notEqual(otherArchVenv, dependencyVenv);
-const otherMinorVenv = _internals.ensureVenv(packageRoot, "0.2.0", {
-  ...options,
-  pythonIdentity: {...pythonIdentity, minor: 11, cacheTag: "cpython-311"},
-});
-assert.notEqual(otherMinorVenv, dependencyVenv);
-const otherMajorVenv = _internals.ensureVenv(packageRoot, "0.2.0", {
-  ...options,
-  pythonIdentity: {...pythonIdentity, major: 4, minor: 0, cacheTag: "cpython-400"},
-});
-assert.notEqual(otherMajorVenv, dependencyVenv);
-const otherCacheTagVenv = _internals.ensureVenv(packageRoot, "0.2.0", {
-  ...options,
-  pythonIdentity: {...pythonIdentity, cacheTag: "cpython-312-special"},
-});
-assert.notEqual(otherCacheTagVenv, dependencyVenv);
-const otherSoabiVenv = _internals.ensureVenv(packageRoot, "0.2.0", {
-  ...options,
-  pythonIdentity: {...pythonIdentity, soabi: "cpython-312-special-darwin"},
-});
-assert.notEqual(otherSoabiVenv, dependencyVenv);
-const otherExecutableVenv = _internals.ensureVenv(packageRoot, "0.2.0", {
-  ...options,
-  pythonIdentity: {...pythonIdentity, executable: "/alternate/python3"},
-});
-assert.notEqual(otherExecutableVenv, dependencyVenv);
-
-writePackage("0.2.0", "langgraph>=0.8,<0.9", "SOURCE = 2\n");
-let failedVenv;
-assert.throws(() => _internals.ensureVenv(packageRoot, "0.2.0", {
-  ...options,
-  runChecked(command, args) {
-    options.runChecked(command, args);
-    if (args[1] === "pip") {
-      failedVenv = path.dirname(path.dirname(command));
-      throw new Error("pip failed");
-    }
-  },
-}), /pip failed/);
-assert.equal(fs.existsSync(path.join(failedVenv, ".kagent-node-install.json")), false);
-assert.equal(fs.existsSync(`${failedVenv}.lock`), false);
-
-writePackage("0.2.0", "langgraph>=0.7,<0.8", "SOURCE = 2\n");
-const alternatePackageRoot = path.join(testRoot, "alternate-package");
-fs.cpSync(packageRoot, alternatePackageRoot, {recursive: true});
-const callsBeforeRootChange = calls.length;
-const rootChangedVenv = _internals.ensureVenv(alternatePackageRoot, "0.2.0", options);
-assert.equal(rootChangedVenv, dependencyVenv);
-assert.equal(calls.length, callsBeforeRootChange + 1);
-assert.deepEqual(calls.at(-1).args, [
-  "-m", "pip", "install", "--no-deps", "--disable-pip-version-check", "--quiet",
-  alternatePackageRoot,
-]);
-assert.equal(_internals.ensureVenv(alternatePackageRoot, "0.2.0", options), dependencyVenv);
-assert.equal(calls.length, callsBeforeRootChange + 1);
-
-const runtimeLock = `${dependencyVenv}.lock`;
-fs.mkdirSync(runtimeLock, {mode: 0o700});
-const staleTime = new Date(Date.now() - 60_000);
-fs.utimesSync(runtimeLock, staleTime, staleTime);
-assert.equal(_internals.ensureVenv(alternatePackageRoot, "0.2.0", {
-  ...options,
-  lockStaleMs: 1_000,
-}), dependencyVenv);
-assert.equal(fs.existsSync(runtimeLock), false);
-
-const lockTarget = path.join(testRoot, "lock-target");
-fs.mkdirSync(lockTarget);
-fs.symlinkSync(lockTarget, runtimeLock, "dir");
-assert.throws(() => _internals.ensureVenv(alternatePackageRoot, "0.2.0", options), /symbolic link/);
-assert.equal(fs.lstatSync(runtimeLock).isSymbolicLink(), true);
-fs.unlinkSync(runtimeLock);
-
-fs.mkdirSync(runtimeLock, {mode: 0o700});
-fs.utimesSync(runtimeLock, staleTime, staleTime);
-const replacedInode = fs.statSync(runtimeLock).ino;
-assert.throws(() => _internals.ensureVenv(alternatePackageRoot, "0.2.0", {
-  ...options,
-  lockStaleMs: 1_000,
-  lockWaitMs: 0,
-  lockTestRace: "replace-before-pin",
-}), /timed out waiting/);
-assert.equal(fs.statSync(runtimeLock).isDirectory(), true);
-assert.notEqual(fs.statSync(runtimeLock).ino, replacedInode);
-fs.rmdirSync(runtimeLock);
-"""
-
-    completed = subprocess.run(
-        [node, "-e", script, str(tmp_path), sys.executable],
-        check=False,
-        capture_output=True,
-        text=True,
-    )
-
-    assert completed.returncode == 0, completed.stderr
-
-
-def test_npm_runner_serializes_runtime_creation_and_source_updates(tmp_path):
-    node = shutil.which("node")
-    if node is None:
-        return
-
-    package_root = tmp_path / "package"
-    cache_root = tmp_path / "cache"
-    log_path = tmp_path / "installs.jsonl"
-    source_path = package_root / "src" / "kagent" / "runtime.py"
-    source_path.parent.mkdir(parents=True)
-
-    def write_package(version: str, source: str) -> None:
-        (package_root / "package.json").write_text(
-            json.dumps({"version": version}), encoding="utf-8"
-        )
-        (package_root / "pyproject.toml").write_text(
-            f'''[project]
-name = "kagent"
-version = "{version}"
-requires-python = ">=3.9"
-dependencies = ["langgraph>=0.6,<0.7"]
-''',
-            encoding="utf-8",
-        )
-        source_path.write_text(source, encoding="utf-8")
-
-    worker = r"""
-const fs = require("node:fs");
-const path = require("node:path");
-const { _internals } = require("./npm/lib/python-runner");
-
-const [packageRoot, cacheRoot, logPath, version] = process.argv.slice(1);
-const identity = {
-  implementation: "cpython", major: 3, minor: 12,
-  cacheTag: "cpython-312", soabi: "cpython-312-darwin", machine: "arm64",
-  executable: "/opt/python/bin/python3", prefix: "/opt/python", basePrefix: "/opt/python",
-  execPrefix: "/opt/python", baseExecPrefix: "/opt/python",
-};
-const venvDir = _internals.ensureVenv(packageRoot, version, {
   cacheRoot,
   python: "/fake/python",
   pythonIdentity: identity,
   platform: "darwin",
   arch: "arm64",
+  runtimePythonWorks() { return true; },
   ensurePrivateDirectory(directory) {
     fs.mkdirSync(directory, {recursive: true, mode: 0o700});
     return directory;
   },
   runChecked(command, args) {
-    fs.appendFileSync(logPath, `${JSON.stringify(args)}\n`);
+    calls.push({command, args});
     if (args[1] === "venv") {
       const target = args.at(-1);
+      assert.match(path.basename(target), /^t[a-f0-9]{63}$/);
+      assert.equal(fs.statSync(target).mode & 0o777, 0o700);
       fs.mkdirSync(path.join(target, "bin"), {recursive: true});
       fs.writeFileSync(path.join(target, "bin", "python"), "");
-    } else if (args[1] === "pip") {
-      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 400);
     }
   },
   writeMarker(directory, marker) {
@@ -3354,42 +3105,168 @@ const venvDir = _internals.ensureVenv(packageRoot, version, {
       `${JSON.stringify(marker)}\n`,
     );
   },
+};
+
+writePackage(packageRoot, "0.1.0", "langgraph>=0.6,<0.7", "SOURCE = 1\n");
+const firstRuntime = _internals.ensureVenv(packageRoot, "0.1.0", options);
+assert.equal(firstRuntime, finalPath(packageRoot));
+assert.deepEqual(calls.map((call) => call.args), [
+  ["-m", "venv", calls[0].args.at(-1)],
+  ["-m", "pip", "install", "--disable-pip-version-check", "--quiet", packageRoot],
+]);
+const marker = JSON.parse(fs.readFileSync(
+  path.join(firstRuntime, ".kagent-node-install.json"), "utf8",
+));
+assert.equal(marker.schema, 1);
+assert.equal(marker.dependencyHash, _internals.dependencyHash(packageRoot));
+assert.equal(marker.createdFromVersion, "0.1.0");
+assert.equal(typeof marker.pythonIdentityHash, "string");
+assert.deepEqual(_internals.pythonEntrypointArgs("kagent", ["--help"]).slice(-4), [
+  "kagent", "kagent.cli", "main", "--help",
+]);
+assert.throws(
+  () => _internals.pythonEntrypointArgs("unknown", []),
+  /unsupported Python entrypoint/,
+);
+
+writePackage(packageRoot, "0.2.0", "langgraph>=0.6,<0.7", "SOURCE = 2\n");
+const callCount = calls.length;
+assert.equal(_internals.ensureVenv(packageRoot, "0.2.0", options), firstRuntime);
+assert.equal(calls.length, callCount);
+const alternateRoot = path.join(testRoot, "alternate");
+fs.cpSync(packageRoot, alternateRoot, {recursive: true});
+assert.equal(_internals.ensureVenv(alternateRoot, "0.2.0", options), firstRuntime);
+assert.equal(calls.length, callCount);
+
+const env = _internals.pythonEnvironment(alternateRoot, {PYTHONPATH: "/existing", KEEP: "yes"});
+assert.equal(env.PYTHONPATH, `${path.join(alternateRoot, "src")}${path.delimiter}/existing`);
+assert.equal(env.KEEP, "yes");
+
+writePackage(packageRoot, "0.3.0", "langgraph>=0.7,<0.8", "SOURCE = 3\n");
+const dependencyRuntime = _internals.ensureVenv(packageRoot, "0.3.0", options);
+assert.notEqual(dependencyRuntime, firstRuntime);
+assert.equal(calls.length, callCount + 2);
+const abiRuntime = _internals.ensureVenv(packageRoot, "0.3.0", {
+  ...options,
+  pythonIdentity: {...identity, soabi: "cpython-312-special-darwin"},
 });
-process.stdout.write(venvDir);
+assert.notEqual(abiRuntime, dependencyRuntime);
+
+writePackage(packageRoot, "0.4.0", "langgraph>=0.8,<0.9", "SOURCE = 4\n");
+const failedFinal = finalPath(packageRoot);
+let failedTemp;
+assert.throws(() => _internals.ensureVenv(packageRoot, "0.4.0", {
+  ...options,
+  runChecked(command, args) {
+    options.runChecked(command, args);
+    failedTemp = args[1] === "venv" ? args.at(-1) : path.dirname(path.dirname(command));
+    if (args[1] === "pip") throw new Error("pip failed");
+  },
+}), /pip failed/);
+assert.equal(fs.existsSync(failedTemp), false);
+assert.equal(fs.existsSync(failedFinal), false);
+assert.equal(fs.existsSync(firstRuntime), true);
+
+writePackage(packageRoot, "0.5.0", "langgraph>=0.9,<1", "SOURCE = 5\n");
+const maliciousFinal = finalPath(packageRoot);
+fs.mkdirSync(maliciousFinal, {recursive: true});
+assert.throws(
+  () => _internals.ensureVenv(packageRoot, "0.5.0", options),
+  /invalid cached Python runtime/,
+);
+assert.equal(fs.existsSync(maliciousFinal), true);
+
+writePackage(packageRoot, "0.6.0", "langgraph>=1,<2", "SOURCE = 6\n");
+const symlinkFinal = finalPath(packageRoot);
+fs.mkdirSync(path.dirname(symlinkFinal), {recursive: true});
+const outside = path.join(testRoot, "outside");
+fs.mkdirSync(outside);
+fs.symlinkSync(outside, symlinkFinal, "dir");
+assert.throws(() => _internals.ensureVenv(packageRoot, "0.6.0", options), /symbolic link/);
+assert.equal(fs.lstatSync(symlinkFinal).isSymbolicLink(), true);
 """
 
-    def run_pair(version: str) -> list[list[str]]:
-        log_path.write_text("", encoding="utf-8")
-        commands = [
-            node,
-            "-e",
-            worker,
-            str(package_root),
-            str(cache_root),
-            str(log_path),
-            version,
-        ]
-        processes = [
-            subprocess.Popen(commands, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-            for _ in range(2)
-        ]
-        results = [process.communicate(timeout=15) for process in processes]
-        for process, (_, stderr) in zip(processes, results):
-            assert process.returncode == 0, stderr
-        assert results[0][0] == results[1][0]
-        return [json.loads(line) for line in log_path.read_text(encoding="utf-8").splitlines()]
+    completed = subprocess.run(
+        [node, "-e", script, str(tmp_path)],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
 
-    write_package("0.1.0", "SOURCE = 1\n")
-    initial_calls = run_pair("0.1.0")
-    assert sum(args[1] == "venv" for args in initial_calls) == 1
-    assert sum(args[1] == "pip" for args in initial_calls) == 1
-    assert "--no-deps" not in next(args for args in initial_calls if args[1] == "pip")
+    assert completed.returncode == 0, completed.stderr
 
-    write_package("0.2.0", "SOURCE = 2\n")
-    update_calls = run_pair("0.2.0")
-    assert sum(args[1] == "venv" for args in update_calls) == 0
-    assert sum(args[1] == "pip" for args in update_calls) == 1
-    assert "--no-deps" in next(args for args in update_calls if args[1] == "pip")
+
+def test_npm_runner_concurrent_builds_publish_one_immutable_runtime(tmp_path):
+    node = shutil.which("node")
+    if node is None:
+        return
+
+    package_root = tmp_path / "package"
+    cache_root = tmp_path / "cache"
+    log_path = tmp_path / "installs.jsonl"
+    source = package_root / "src" / "kagent" / "runtime.py"
+    source.parent.mkdir(parents=True)
+    (package_root / "package.json").write_text('{"version":"0.1.0"}', encoding="utf-8")
+    (package_root / "pyproject.toml").write_text(
+        '[project]\nname="kagent"\nversion="0.1.0"\nrequires-python=">=3.9"\n'
+        'dependencies=["langgraph>=0.6,<0.7"]\n',
+        encoding="utf-8",
+    )
+    source.write_text("SOURCE = 1\n", encoding="utf-8")
+
+    worker = r"""
+const fs = require("node:fs");
+const path = require("node:path");
+const { _internals } = require("./npm/lib/python-runner");
+const [root, cacheRoot, logPath] = process.argv.slice(1);
+const identity = {
+  implementation:"cpython", major:3, minor:12, cacheTag:"cpython-312", soabi:"abi",
+  machine:"arm64", executable:"/python", prefix:"/p", basePrefix:"/p",
+  execPrefix:"/p", baseExecPrefix:"/p",
+};
+const runtime = _internals.ensureVenv(root, "0.1.0", {
+  cacheRoot, python:"/fake/python", pythonIdentity:identity, platform:"darwin", arch:"arm64",
+  runtimePythonWorks() { return true; },
+  ensurePrivateDirectory(directory) {
+    fs.mkdirSync(directory, {recursive:true, mode:0o700}); return directory;
+  },
+  runChecked(command, args) {
+    fs.appendFileSync(logPath, `${JSON.stringify(args)}\n`);
+    if (args[1] === "venv") {
+      const target = args.at(-1); fs.mkdirSync(path.join(target, "bin"), {recursive:true});
+      fs.writeFileSync(path.join(target, "bin", "python"), "");
+    } else {
+      const started = Date.now();
+      while (Date.now() - started < 5000) {
+        const lines = fs.readFileSync(logPath, "utf8").split("\n").filter(Boolean).map(JSON.parse);
+        if (lines.filter((item) => item[1] === "pip").length >= 2) break;
+        Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 10);
+      }
+    }
+  },
+  writeMarker(directory, marker) {
+    fs.writeFileSync(
+      path.join(directory, ".kagent-node-install.json"), JSON.stringify(marker),
+    );
+  },
+});
+process.stdout.write(runtime);
+"""
+    commands = [node, "-e", worker, str(package_root), str(cache_root), str(log_path)]
+    processes = [
+        subprocess.Popen(commands, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        for _ in range(2)
+    ]
+    results = [process.communicate(timeout=15) for process in processes]
+    for process, (_, stderr) in zip(processes, results):
+        assert process.returncode == 0, stderr
+    assert results[0][0] == results[1][0]
+    calls = [json.loads(line) for line in log_path.read_text(encoding="utf-8").splitlines()]
+    assert sum(args[1] == "venv" for args in calls) == 2
+    assert sum(args[1] == "pip" for args in calls) == 2
+    final_runtime = Path(results[0][0])
+    assert final_runtime.is_dir()
+    assert [item.name for item in final_runtime.parent.iterdir()] == [final_runtime.name]
 
 
 def test_npm_runner_checks_github_for_interactive_self_update():

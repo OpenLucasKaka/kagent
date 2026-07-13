@@ -13,15 +13,18 @@ const GITHUB_PACKAGE_JSON_URL = "https://raw.githubusercontent.com/OpenLucasKaka
 const GITHUB_HEAD_URL = "https://api.github.com/repos/OpenLucasKaka/Kagent/commits/main";
 const GITHUB_INSTALL_SPEC = "github:OpenLucasKaka/Kagent";
 const SELF_UPDATE_TIMEOUT_MS = 3000;
-const RUNTIME_LOCK_WAIT_MS = 120000;
-const RUNTIME_LOCK_STALE_MS = 15 * 60 * 1000;
-const RUNTIME_LOCK_POLL_MS = 50;
+const PYTHON_ENTRYPOINTS = Object.freeze({
+  kagent: ["kagent.cli", "main"],
+  "kagent-serve": ["kagent.service", "main"]
+});
+const PYTHON_ENTRYPOINT_CODE = "import importlib, sys; command, module, function, *arguments = sys.argv; sys.argv = [command] + arguments; raise SystemExit(getattr(importlib.import_module(module), function)())";
 const SECURE_FILESYSTEM_HELPER = String.raw`
+import ctypes
 import errno
 import os
+import secrets
 import stat
 import sys
-import time
 
 
 DIRECTORY_FLAGS = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
@@ -110,14 +113,14 @@ def write_file(target):
         os.close(parent_fd)
 
 
-def lock_parent(target):
+def managed_parent(target):
     parent, name = os.path.split(os.path.normpath(target))
     if not name or name in (".", ".."):
-        fail(f"managed path is not a lock: {target}")
+        fail(f"managed path has no valid name: {target}")
     return open_directory(parent, False), name
 
 
-def lock_stat(parent_fd, name, target):
+def directory_stat(parent_fd, name, target):
     try:
         value = os.stat(name, dir_fd=parent_fd, follow_symlinks=False)
     except FileNotFoundError:
@@ -125,101 +128,112 @@ def lock_stat(parent_fd, name, target):
     if stat.S_ISLNK(value.st_mode):
         fail(f"refusing symbolic link in managed path: {target}")
     if not stat.S_ISDIR(value.st_mode):
-        fail(f"managed lock is not a directory: {target}")
+        fail(f"managed path is not a directory: {target}")
     return value
 
 
-def create_lock(parent_fd, name):
-    os.mkdir(name, 0o700, dir_fd=parent_fd)
-    lock_fd = os.open(name, DIRECTORY_FLAGS, dir_fd=parent_fd)
+def validate_directory(target):
+    directory_fd = open_directory(target, False)
     try:
-        os.fchmod(lock_fd, 0o700)
-        value = os.fstat(lock_fd)
-        return value.st_dev, value.st_ino
+        if not stat.S_ISDIR(os.fstat(directory_fd).st_mode):
+            fail(f"managed path is not a directory: {target}")
     finally:
-        os.close(lock_fd)
+        os.close(directory_fd)
 
 
-def reap_stale_lock(parent_fd, name, target, stale_before_ms, test_race):
+def create_temp_directory(final_target):
+    parent_fd, final_name = managed_parent(final_target)
     try:
-        lock_fd = os.open(name, DIRECTORY_FLAGS, dir_fd=parent_fd)
-    except FileNotFoundError:
-        return False
-    marker_name = ".kagent-reap"
-    try:
-        value = os.fstat(lock_fd)
-        if value.st_mtime * 1000 >= stale_before_ms:
-            return False
-        if test_race == "replace-before-pin":
-            os.rmdir(name, dir_fd=parent_fd)
-            os.mkdir(name, 0o700, dir_fd=parent_fd)
-        try:
-            marker_fd = os.open(
-                marker_name,
-                os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
-                0o600,
-                dir_fd=lock_fd,
-            )
-        except FileExistsError:
-            return False
-        except OSError as error:
-            if error.errno == errno.ENOENT:
-                return False
-            raise
-        os.close(marker_fd)
-        current = lock_stat(parent_fd, name, target)
-        if current is None or current.st_dev != value.st_dev or current.st_ino != value.st_ino:
-            os.unlink(marker_name, dir_fd=lock_fd)
-            return False
-        reap_name = f"{name}.reap-{os.getpid()}-{time.time_ns()}"
-        os.rename(name, reap_name, src_dir_fd=parent_fd, dst_dir_fd=parent_fd)
-        reaped = lock_stat(parent_fd, reap_name, target)
-        if reaped.st_dev != value.st_dev or reaped.st_ino != value.st_ino:
-            fail(f"managed lock identity changed during stale reap: {target}")
-        os.unlink(marker_name, dir_fd=lock_fd)
-        os.rmdir(reap_name, dir_fd=parent_fd)
-        return True
-    finally:
-        os.close(lock_fd)
-
-
-def try_lock(target, stale_before_ms, test_race):
-    parent_fd, name = lock_parent(target)
-    try:
-        try:
-            device, inode = create_lock(parent_fd, name)
-            return f"acquired:{device}:{inode}"
-        except FileExistsError:
-            value = lock_stat(parent_fd, name, target)
-            if value is None:
-                return "wait"
-            if value.st_mtime * 1000 >= stale_before_ms:
-                return "wait"
-            if not reap_stale_lock(parent_fd, name, target, stale_before_ms, test_race):
-                return "wait"
+        for _attempt in range(100):
+            name = f"t{secrets.token_hex(31)}{secrets.choice('0123456789abcdef')}"
             try:
-                device, inode = create_lock(parent_fd, name)
-                return f"acquired:{device}:{inode}"
+                os.mkdir(name, 0o700, dir_fd=parent_fd)
             except FileExistsError:
-                return "wait"
+                continue
+            directory_fd = os.open(name, DIRECTORY_FLAGS, dir_fd=parent_fd)
+            try:
+                os.fchmod(directory_fd, 0o700)
+            finally:
+                os.close(directory_fd)
+            return os.path.join(os.path.dirname(os.path.normpath(final_target)), name)
+        fail(f"unable to allocate temporary runtime directory for {final_target}")
     finally:
         os.close(parent_fd)
 
 
-def release_lock(target, expected_device, expected_inode):
-    parent_fd, name = lock_parent(target)
+def remove_directory_contents(directory_fd):
+    for name in os.listdir(directory_fd):
+        value = os.stat(name, dir_fd=directory_fd, follow_symlinks=False)
+        if stat.S_ISDIR(value.st_mode):
+            child_fd = os.open(name, DIRECTORY_FLAGS, dir_fd=directory_fd)
+            try:
+                remove_directory_contents(child_fd)
+            finally:
+                os.close(child_fd)
+            os.rmdir(name, dir_fd=directory_fd)
+        else:
+            os.unlink(name, dir_fd=directory_fd)
+
+
+def remove_tree(target):
+    parent_fd, name = managed_parent(target)
     try:
-        value = lock_stat(parent_fd, name, target)
-        if value is None:
-            return
-        if value.st_dev != expected_device or value.st_ino != expected_inode:
+        try:
+            directory_fd = os.open(name, DIRECTORY_FLAGS, dir_fd=parent_fd)
+        except FileNotFoundError:
             return
         try:
-            os.rmdir(name, dir_fd=parent_fd)
-        except OSError as error:
-            if error.errno in (errno.ENOTEMPTY, errno.EEXIST):
-                return
-            raise
+            remove_directory_contents(directory_fd)
+        finally:
+            os.close(directory_fd)
+        os.rmdir(name, dir_fd=parent_fd)
+    finally:
+        os.close(parent_fd)
+
+
+def rename_no_replace(parent_fd, source_name, target_name):
+    libc = ctypes.CDLL(None, use_errno=True)
+    source = os.fsencode(source_name)
+    target = os.fsencode(target_name)
+    if sys.platform == "darwin":
+        rename = libc.renameatx_np
+        rename.argtypes = [ctypes.c_int, ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p, ctypes.c_uint]
+        rename.restype = ctypes.c_int
+        result = rename(parent_fd, source, parent_fd, target, 0x00000004)
+    elif sys.platform.startswith("linux") and hasattr(libc, "renameat2"):
+        rename = libc.renameat2
+        rename.argtypes = [ctypes.c_int, ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p, ctypes.c_uint]
+        rename.restype = ctypes.c_int
+        result = rename(parent_fd, source, parent_fd, target, 1)
+    else:
+        try:
+            os.stat(target_name, dir_fd=parent_fd, follow_symlinks=False)
+        except FileNotFoundError:
+            os.rename(source_name, target_name, src_dir_fd=parent_fd, dst_dir_fd=parent_fd)
+            return True
+        return False
+    if result == 0:
+        return True
+    error_number = ctypes.get_errno()
+    if error_number in (errno.EEXIST, errno.ENOTEMPTY):
+        return False
+    raise OSError(error_number, os.strerror(error_number))
+
+
+def publish_directory(temp_target, final_target):
+    temp_parent = os.path.dirname(os.path.normpath(temp_target))
+    final_parent = os.path.dirname(os.path.normpath(final_target))
+    if temp_parent != final_parent:
+        fail("temporary and final runtime directories must share a parent")
+    parent_fd = open_directory(final_parent, False)
+    try:
+        temp_name = os.path.basename(temp_target)
+        final_name = os.path.basename(final_target)
+        directory_stat(parent_fd, temp_name, temp_target)
+        if rename_no_replace(parent_fd, temp_name, final_name):
+            return "published"
+        directory_stat(parent_fd, final_name, final_target)
+        return "exists"
     finally:
         os.close(parent_fd)
 
@@ -230,11 +244,14 @@ try:
         ensure_directory(target)
     elif operation == "write-file":
         write_file(target)
-    elif operation == "try-lock":
-        test_race = sys.argv[4] if len(sys.argv) > 4 else ""
-        sys.stdout.write(try_lock(target, int(sys.argv[3]), test_race))
-    elif operation == "release-lock":
-        release_lock(target, int(sys.argv[3]), int(sys.argv[4]))
+    elif operation == "validate-directory":
+        validate_directory(target)
+    elif operation == "create-temp-directory":
+        sys.stdout.write(create_temp_directory(target))
+    elif operation == "remove-tree":
+        remove_tree(target)
+    elif operation == "publish-directory":
+        sys.stdout.write(publish_directory(target, sys.argv[3]))
     else:
         fail(f"unsupported secure filesystem operation: {operation}")
 except BaseException as error:
@@ -387,43 +404,24 @@ function privateFileStat(filePath) {
   return stat;
 }
 
-function sleepSync(milliseconds) {
-  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, milliseconds);
+function validatePrivateDirectory(directory) {
+  runSecureFilesystemOperation("validate-directory", path.resolve(directory));
 }
 
-function acquireRuntimeLock(venvDir, options) {
-  const lockPath = `${venvDir}.lock`;
-  const waitMs = options.lockWaitMs === undefined ? RUNTIME_LOCK_WAIT_MS : options.lockWaitMs;
-  const staleMs = options.lockStaleMs === undefined ? RUNTIME_LOCK_STALE_MS : options.lockStaleMs;
-  const pollMs = options.lockPollMs === undefined ? RUNTIME_LOCK_POLL_MS : options.lockPollMs;
-  const deadline = Date.now() + waitMs;
-  while (true) {
-    const result = runSecureFilesystemOperation(
-      "try-lock",
-      lockPath,
-      "",
-      [String(Date.now() - staleMs), options.lockTestRace || ""]
-    );
-    if (result.startsWith("acquired:")) {
-      const [, device, inode] = result.split(":");
-      return { lockPath, device, inode };
-    }
-    if (result !== "wait") {
-      throw new Error(`secure filesystem try-lock returned invalid result for ${lockPath}`);
-    }
-    if (Date.now() >= deadline) {
-      throw new Error(`timed out waiting for Python runtime lock: ${lockPath}`);
-    }
-    sleepSync(Math.min(pollMs, Math.max(1, deadline - Date.now())));
-  }
+function createTempRuntime(finalDirectory) {
+  return runSecureFilesystemOperation("create-temp-directory", path.resolve(finalDirectory));
 }
 
-function releaseRuntimeLock(lock) {
-  runSecureFilesystemOperation(
-    "release-lock",
-    lock.lockPath,
+function removeTempRuntime(directory) {
+  runSecureFilesystemOperation("remove-tree", path.resolve(directory));
+}
+
+function publishRuntime(tempDirectory, finalDirectory) {
+  return runSecureFilesystemOperation(
+    "publish-directory",
+    path.resolve(tempDirectory),
     "",
-    [lock.device, lock.inode]
+    [path.resolve(finalDirectory)]
   );
 }
 
@@ -684,13 +682,6 @@ async function maybeSelfUpdate(root, currentVersion, commandName, args) {
   return true;
 }
 
-function executablePath(venvDir, name) {
-  if (process.platform === "win32") {
-    return path.join(venvDir, "Scripts", `${name}.exe`);
-  }
-  return path.join(venvDir, "bin", name);
-}
-
 function venvPythonPath(venvDir) {
   if (process.platform === "win32") {
     return path.join(venvDir, "Scripts", "python.exe");
@@ -702,12 +693,12 @@ function markerPath(venvDir) {
   return path.join(venvDir, ".kagent-node-install.json");
 }
 
-function installMarker(root, version, dependencyFingerprint) {
+function installMarker(version, dependencyFingerprint, pythonIdentityHash) {
   return {
-    packageRoot: root,
-    version,
+    schema: 1,
     dependencyHash: dependencyFingerprint,
-    sourceHash: sourceHash(root)
+    pythonIdentityHash,
+    createdFromVersion: version
   };
 }
 
@@ -796,41 +787,6 @@ function dependencyHash(root) {
   }));
 }
 
-function sourceHash(root) {
-  const hasher = crypto.createHash("sha256");
-  for (const relativePath of sourceFingerprintPaths(root)) {
-    const absolutePath = path.join(root, relativePath);
-    hasher.update(relativePath);
-    hasher.update("\0");
-    hasher.update(fs.readFileSync(absolutePath));
-    hasher.update("\0");
-  }
-  return hasher.digest("hex");
-}
-
-function sourceFingerprintPaths(root) {
-  const paths = ["package.json", "pyproject.toml"];
-  collectRelativeFiles(path.join(root, "src"), "src", paths);
-  paths.sort();
-  return paths;
-}
-
-function collectRelativeFiles(directory, relativeDirectory, output) {
-  if (!fs.existsSync(directory)) {
-    return;
-  }
-  const entries = fs.readdirSync(directory, { withFileTypes: true });
-  for (const entry of entries) {
-    const relativePath = path.posix.join(relativeDirectory, entry.name);
-    const absolutePath = path.join(directory, entry.name);
-    if (entry.isDirectory()) {
-      collectRelativeFiles(absolutePath, relativePath, output);
-    } else if (entry.isFile()) {
-      output.push(relativePath);
-    }
-  }
-}
-
 function readMarker(venvDir) {
   const pathToMarker = markerPath(venvDir);
   if (!privateFileStat(pathToMarker)) {
@@ -845,10 +801,9 @@ function readMarker(venvDir) {
 
 function markerMatches(actual, expected) {
   return Boolean(actual) &&
-    actual.packageRoot === expected.packageRoot &&
-    actual.version === expected.version &&
+    actual.schema === expected.schema &&
     actual.dependencyHash === expected.dependencyHash &&
-    actual.sourceHash === expected.sourceHash;
+    actual.pythonIdentityHash === expected.pythonIdentityHash;
 }
 
 function writeMarker(venvDir, marker) {
@@ -889,15 +844,42 @@ function runtimeCacheDirectory(cache, identity, platform, arch, dependencyFinger
   const implementation = safeRuntimeComponent(identity.implementation, "implementation", 24);
   const hostPlatform = safeRuntimeComponent(platform, "platform", 24);
   const hostArch = safeRuntimeComponent(arch, "architecture", 32);
-  const identityFingerprint = sha256(JSON.stringify(identity)).slice(0, 24);
+  const identityFingerprint = sha256(JSON.stringify(identity));
   const abi = `${implementation}-${identity.major}.${identity.minor}-${identityFingerprint}`;
   return path.join(cache, abi, `${hostPlatform}-${hostArch}`, dependencyFingerprint);
+}
+
+function runtimeState(venvDir, expectedMarker, pythonWorks = commandWorks) {
+  let stat;
+  try {
+    stat = fs.lstatSync(venvDir);
+  } catch (error) {
+    if (error.code === "ENOENT") {
+      return "missing";
+    }
+    throw error;
+  }
+  if (stat.isSymbolicLink()) {
+    throw new Error(`refusing symbolic link in managed path: ${venvDir}`);
+  }
+  if (!stat.isDirectory()) {
+    throw new Error(`invalid cached Python runtime: ${venvDir}`);
+  }
+  validatePrivateDirectory(venvDir);
+  const marker = readMarker(venvDir);
+  const pythonPath = venvPythonPath(venvDir);
+  if (!markerMatches(marker, expectedMarker) ||
+      !fs.existsSync(pythonPath) || !pythonWorks(pythonPath, ["-c", "import kagent"])) {
+    throw new Error(`invalid cached Python runtime: ${venvDir}`);
+  }
+  return "valid";
 }
 
 function ensureVenv(root, version, options = {}) {
   const python = options.python || findPython();
   const identity = options.pythonIdentity || pythonRuntimeIdentity(python);
   const dependencyFingerprint = dependencyHash(root);
+  const pythonIdentityHash = sha256(JSON.stringify(identity));
   const cache = options.cacheRoot || ensureCacheRoot();
   const platform = options.platform || process.platform;
   const arch = options.arch || process.arch;
@@ -905,51 +887,60 @@ function ensureVenv(root, version, options = {}) {
   const ensureDirectory = options.ensurePrivateDirectory || ensurePrivateDirectory;
   const checkedRun = options.runChecked || runChecked;
   const markerWriter = options.writeMarker || writeMarker;
-  ensureDirectory(venvDir);
-  const runtimeLock = acquireRuntimeLock(venvDir, options);
+  const pythonWorks = options.runtimePythonWorks || commandWorks;
+  const expectedMarker = installMarker(version, dependencyFingerprint, pythonIdentityHash);
+  ensureDirectory(path.dirname(venvDir));
+  if (runtimeState(venvDir, expectedMarker, pythonWorks) === "valid") {
+    return venvDir;
+  }
+
+  const tempDir = createTempRuntime(venvDir);
   try {
-    const expectedMarker = installMarker(root, version, dependencyFingerprint);
-    const pythonPath = venvPythonPath(venvDir);
-    const actualMarker = readMarker(venvDir);
-    const hadPython = fs.existsSync(pythonPath);
-    if (hadPython && markerMatches(actualMarker, expectedMarker)) {
-      return venvDir;
-    }
-
-    if (!hadPython) {
-      process.stderr.write(`kagent: preparing Python runtime in ${venvDir}\n`);
-      const venvArgs = ["-m", "venv"];
-      if (actualMarker) {
-        venvArgs.push("--clear");
-      }
-      venvArgs.push(venvDir);
-      checkedRun(python, venvArgs, { cwd: root });
-    }
-
+    process.stderr.write(`kagent: preparing Python runtime in ${tempDir}\n`);
+    checkedRun(python, ["-m", "venv", tempDir], { cwd: root });
+    const tempPython = venvPythonPath(tempDir);
     process.stderr.write("kagent: preparing Python runtime\n");
-    const sourceOnlyInstall = hadPython && actualMarker &&
-      actualMarker.dependencyHash === dependencyFingerprint;
-    const installArgs = ["-m", "pip", "install"];
-    if (sourceOnlyInstall) {
-      installArgs.push("--no-deps");
-    }
-    installArgs.push("--disable-pip-version-check", "--quiet", root);
     checkedRun(
-      pythonPath,
-      installArgs,
+      tempPython,
+      ["-m", "pip", "install", "--disable-pip-version-check", "--quiet", root],
       { cwd: root, stdio: "pipe" }
     );
-    markerWriter(venvDir, expectedMarker);
+    markerWriter(tempDir, expectedMarker);
+    if (runtimeState(tempDir, expectedMarker, pythonWorks) !== "valid") {
+      throw new Error(`failed to prepare Python runtime: ${tempDir}`);
+    }
+    const publishResult = publishRuntime(tempDir, venvDir);
+    if (publishResult !== "published" && publishResult !== "exists") {
+      throw new Error(`invalid Python runtime publish result: ${publishResult}`);
+    }
+    if (runtimeState(venvDir, expectedMarker, pythonWorks) !== "valid") {
+      throw new Error(`invalid cached Python runtime: ${venvDir}`);
+    }
     return venvDir;
   } finally {
-    releaseRuntimeLock(runtimeLock);
+    removeTempRuntime(tempDir);
   }
 }
 
-function spawnEntrypoint(venvDir, commandName, args) {
-  const command = executablePath(venvDir, commandName);
-  const result = childProcess.spawnSync(command, args, {
-    env: process.env,
+function pythonEnvironment(root, env = process.env) {
+  const source = path.join(root, "src");
+  return Object.assign({}, env, {
+    PYTHONPATH: env.PYTHONPATH ? `${source}${path.delimiter}${env.PYTHONPATH}` : source
+  });
+}
+
+function pythonEntrypointArgs(commandName, args) {
+  const target = PYTHON_ENTRYPOINTS[commandName];
+  if (!target) {
+    throw new Error(`unsupported Python entrypoint: ${commandName}`);
+  }
+  return ["-c", PYTHON_ENTRYPOINT_CODE, commandName, target[0], target[1]].concat(args || []);
+}
+
+function spawnEntrypoint(venvDir, root, commandName, args) {
+  const command = venvPythonPath(venvDir);
+  const result = childProcess.spawnSync(command, pythonEntrypointArgs(commandName, args), {
+    env: pythonEnvironment(root),
     stdio: "inherit"
   });
   if (result.error) {
@@ -972,17 +963,19 @@ function ensurePythonRuntime() {
 
 function spawnPythonModule(moduleName, args, options) {
   const runtime = ensurePythonRuntime();
+  const provided = options || {};
+  const spawnOptions = Object.assign(
+    { cwd: runtime.root, stdio: ["pipe", "pipe", "pipe"] },
+    provided
+  );
+  spawnOptions.env = pythonEnvironment(
+    runtime.root,
+    Object.assign({}, process.env, provided.env || {})
+  );
   return childProcess.spawn(
     runtime.pythonPath,
     ["-m", moduleName].concat(args || []),
-    Object.assign(
-      {
-        cwd: runtime.root,
-        env: process.env,
-        stdio: ["pipe", "pipe", "pipe"]
-      },
-      options || {}
-    )
+    spawnOptions
   );
 }
 
@@ -997,7 +990,7 @@ async function runPythonEntrypoint(commandName, args) {
       return;
     }
     const venvDir = ensureVenv(root, version);
-    spawnEntrypoint(venvDir, commandName, args);
+    spawnEntrypoint(venvDir, root, commandName, args);
   } catch (error) {
     process.stderr.write(`kagent failed to start: ${error.message}\n`);
     process.exit(1);
@@ -1018,10 +1011,11 @@ module.exports = {
     isNewerVersion,
     metadataCacheRoot,
     maybePrintNodeHandledOutput,
+    pythonEnvironment,
+    pythonEntrypointArgs,
     pythonRuntimeIdentity,
     readSelfUpdateState,
     shouldCheckSelfUpdate,
-    sourceHash,
     writeSelfUpdateState
   }
 };
