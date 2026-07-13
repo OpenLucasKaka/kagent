@@ -8,6 +8,8 @@
   macOS Chinese preedit text no longer overlaps `Ask kagent`.
 - Suppressed the empty prompt while a run is thinking and guarded against
   duplicate Enter events submitting the same prompt twice before React rerenders.
+- Kept the latest user prompt visible with its assistant answer even when the
+  answer is taller than the live transcript viewport.
 
 ## 0.1.9 - 2026-07-13
 

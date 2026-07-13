@@ -42,3 +42,15 @@ function entry(id, role, text) {
     });
     strict_1.default.deepEqual(visible.map((item) => item.id), ["u1", "a1", "u2", "a2"]);
 });
+(0, node_test_1.default)("keeps the latest user prompt with an oversized assistant answer", () => {
+    const entries = [
+        entry("u1", "user", "那你是谁"),
+        entry("a1", "assistant", Array(40).fill("我是 kagent").join("\n")),
+    ];
+    const visible = (0, transcript_1.selectTranscriptViewport)(entries, {
+        columns: 80,
+        rows: 10,
+        reservedRows: 2,
+    });
+    strict_1.default.deepEqual(visible.map((item) => item.id), ["u1", "a1"]);
+});

@@ -321,10 +321,13 @@ function avoidOrphanedLeadingAssistant(
   let nextUsedRows = usedRows;
   while (
     nextStart > 0 &&
-    nextStart < end - 1 &&
+    nextStart < end &&
     entries[nextStart].role === "assistant" &&
     entries[nextStart - 1].role === "user"
   ) {
+    if (nextStart === end - 1) {
+      return nextStart - 1;
+    }
     const userRows = estimateEntryRows(entries[nextStart - 1], columns);
     if (nextUsedRows + userRows <= availableRows) {
       return nextStart - 1;
