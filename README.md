@@ -170,7 +170,7 @@ Python session. While kagent is working, the prompt remains editable and Enter
 queues the latest additional instruction for the next planner or tool boundary;
 Escape requests cancellation. Ctrl+O expands or collapses the safe activity
 evidence while a turn is running; after a run, Ctrl+O continues to expand or
-collapse the latest result with available detail/content. Permission prompts
+collapse the latest result with available content. Permission prompts
 show the user-facing action and target while keeping internal tool identifiers
 out of the normal transcript.
 Completed file changes, artifacts, browser actions, HTTP fetches, workspace
