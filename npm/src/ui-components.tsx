@@ -1,6 +1,7 @@
 import type ReactNamespace from "react";
 
 import type { ApprovalChoice } from "./approval-choice";
+import type { RuntimeActivityState } from "./activity";
 import type { CommandMenuState } from "./commands";
 import { splitGraphemes } from "./editor";
 import { maskSecret, selectedProvider, type ProviderSetupState } from "./provider-setup";
@@ -27,6 +28,7 @@ export type TerminalLayout = {
   promptColumns: number;
   promptRowLimit: number;
   reservedRows: number;
+  activityRowLimit?: number;
 };
 
 export type PromptViewport = {
@@ -81,6 +83,7 @@ export function createTerminalLayout(
     approval: boolean | ApprovalLayout;
     commandMenu: boolean | CommandMenuState;
     introVisible?: boolean;
+    activity?: RuntimeActivityState | null;
     prompt?: string;
     promptCursor?: number;
   },
@@ -108,9 +111,15 @@ export function createTerminalLayout(
     compact,
     commandColumns,
   );
+  const activityColumns = Math.max(4, safeColumns - horizontalPadding * 2);
+  const activityRows = overlays.activity
+    ? estimateRuntimeActivityRows(overlays.activity, activityColumns, compact)
+    : 0;
+  const minimumActivityRows = overlays.activity ? 1 : 0;
   const commandCapacity = Math.max(
     1,
-    safeRows - 1 - fixedBaseRows - 1 - commandExtraRows - approvalRows,
+    safeRows - 1 - fixedBaseRows - 1 - commandExtraRows - approvalRows -
+      minimumActivityRows,
   );
   const commandLimit = overlays.commandMenu
     ? Math.min(defaultCommandLimit, commandCapacity)
@@ -127,7 +136,8 @@ export function createTerminalLayout(
     1,
     Math.min(
       compact ? 4 : 6,
-      safeRows - 1 - fixedBaseRows - approvalRows - commandRows,
+      safeRows - 1 - fixedBaseRows - approvalRows - commandRows -
+        minimumActivityRows,
     ),
   );
   const promptRows = overlays.prompt === undefined
@@ -142,6 +152,15 @@ export function createTerminalLayout(
         promptColumns,
       );
   const baseRows = fixedBaseRows + promptRows;
+  const activityRowLimit = overlays.activity
+    ? Math.min(
+        activityRows,
+        Math.max(
+          1,
+          safeRows - 1 - baseRows - approvalRows - commandRows,
+        ),
+      )
+    : 0;
   return {
     columns: safeColumns,
     rows: safeRows,
@@ -153,9 +172,38 @@ export function createTerminalLayout(
     promptRowLimit,
     reservedRows: Math.min(
       safeRows - 1,
-      baseRows + approvalRows + commandRows,
+      baseRows + approvalRows + commandRows + activityRowLimit,
     ),
+    ...(overlays.activity ? { activityRowLimit } : {}),
   };
+}
+
+export function estimateRuntimeActivityRows(
+  activity: RuntimeActivityState,
+  columns: number,
+  compact: boolean,
+): number {
+  const safeColumns = Math.max(4, columns);
+  const rows = (value: string): number =>
+    Math.max(1, estimateTextRows(value, safeColumns));
+  const phaseRows = rows(
+    `⠋ ${activity.phase}${activity.phase ? " · " : ""}99s`,
+  );
+  const detailRows = activity.detail ? rows(activity.detail) : 0;
+  const outcomeRows = !compact && activity.latestOutcome
+    ? rows(activity.latestOutcome)
+    : 0;
+  const footerRows = rows(
+    `${activity.completedCount} completed · Ctrl+O details · Esc stop`,
+  );
+  const timelineRows = activity.expanded
+    ? activity.timeline.slice(-2).reduce(
+        (total, item) =>
+          total + rows([item.title, item.detail].filter(Boolean).join(" · ")),
+        0,
+      )
+    : 0;
+  return phaseRows + detailRows + outcomeRows + footerRows + timelineRows;
 }
 
 export function NarrowTerminal({
@@ -535,6 +583,101 @@ export function MessageList({
         ),
       );
     }),
+  );
+}
+
+export function RuntimeActivityWorkspace({
+  React,
+  Box,
+  Text,
+  activity,
+  compact,
+  frame,
+  elapsedSeconds,
+  maxRows,
+  columns = 80,
+}: RenderProps & {
+  activity: RuntimeActivityState;
+  compact: boolean;
+  frame: number;
+  elapsedSeconds: number;
+  maxRows: number;
+  columns?: number;
+}): ReactNamespace.ReactElement {
+  const safeColumns = Math.max(4, columns);
+  const elapsed = elapsedSeconds > 0 ? ` · ${elapsedSeconds}s` : "";
+  const phase =
+    `${TERMINAL_SPINNER_FRAMES[frame]} ${terminalSafeText(activity.phase)}${elapsed}`;
+  const footer = `${activity.completedCount} completed · Ctrl+O details · Esc stop`;
+  const rows = (value: string): number =>
+    Math.max(1, estimateTextRows(value, safeColumns));
+  const phaseRows = rows(phase);
+  const footerRows = rows(footer);
+  const footerVisible = phaseRows + footerRows <= maxRows;
+  let contentRows = Math.max(
+    0,
+    maxRows - phaseRows - (footerVisible ? footerRows : 0),
+  );
+  const detailRows = activity.detail ? rows(activity.detail) : 0;
+  const canShowDetail = detailRows > 0 && detailRows <= contentRows;
+  if (canShowDetail) {
+    contentRows -= detailRows;
+  }
+  const outcomeRows = activity.latestOutcome ? rows(activity.latestOutcome) : 0;
+  const canShowOutcome = !compact && outcomeRows > 0 && outcomeRows <= contentRows;
+  if (canShowOutcome) {
+    contentRows -= outcomeRows;
+  }
+  const timeline = activity.expanded
+    ? activity.timeline.slice(-2).reduceRight<RuntimeActivityState["timeline"]>(
+        (visible, item) => {
+          const itemRows = rows(
+            [item.title, item.detail].filter(Boolean).join(" · "),
+          );
+          return itemRows <= contentRows
+            ? (contentRows -= itemRows, [item, ...visible])
+            : visible;
+        },
+        [],
+      )
+    : [];
+
+  return React.createElement(
+    Box,
+    { flexDirection: "column" },
+    React.createElement(
+      Text,
+      { color: "cyan", wrap: "wrap" },
+      phase,
+    ),
+    canShowDetail
+      ? React.createElement(
+          Text,
+          { color: "gray", wrap: "wrap" },
+          terminalSafeText(activity.detail),
+        )
+      : null,
+    canShowOutcome
+      ? React.createElement(
+          Text,
+          { color: "gray", wrap: "wrap" },
+          terminalSafeText(activity.latestOutcome),
+        )
+      : null,
+    footerVisible
+      ? React.createElement(
+          Text,
+          { color: "gray", wrap: "wrap" },
+          footer,
+        )
+      : null,
+    ...timeline.map((item, index) =>
+      React.createElement(
+        Text,
+        { key: `${index}-${item.title}`, color: "gray", wrap: "wrap" },
+        terminalSafeText([item.title, item.detail].filter(Boolean).join(" · ")),
+      ),
+    ),
   );
 }
 

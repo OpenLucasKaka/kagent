@@ -159,6 +159,41 @@ test("omits the session header from the startup render tree", () => {
   assert.match(text, /Starting runtime/);
 });
 
+test("renders active runtime activity between messages and approval without a duplicate status line", () => {
+  const harness = createHarness();
+  const runtime = idleRuntime();
+
+  harness.render(runtime);
+  harness.effects[0]();
+  harness.effects[1]();
+  runtime.emitReady();
+  harness.render(runtime);
+  harness.inputEvents.emit("input", "plan");
+  harness.render(runtime);
+  harness.inputEvents.emit("input", "\r");
+  runtime.emitRun({
+    type: "run_progress",
+    event: { type: "answer_started" },
+  });
+  const activeText = renderTreeText(harness.render(runtime));
+  assert.match(activeText, /Writing the response/);
+  assert.match(activeText, /Ctrl\+O details · Esc stop/);
+  assert.doesNotMatch(activeText, /Working/);
+
+  runtime.emitRun({
+    type: "approval_required",
+    action_id: "approve",
+    title: "Send the report",
+    target: "team@example.test",
+    reason: "The user asked for this action.",
+  });
+  const text = renderTreeText(harness.render(runtime));
+
+  assert.match(text, /Waiting for your decision/);
+  assert.match(text, /Permission required/);
+  assert.equal(text.indexOf("Waiting for your decision") < text.indexOf("Permission required"), true);
+});
+
 test("positions terminal cursor as soon as the sync effect runs", () => {
   const writes: string[] = [];
   const cleanup = scheduleTerminalCursorSync(

@@ -121,7 +121,7 @@ def test_npm_terminal_layout_adapts_to_narrow_and_wide_terminals():
 
     script = r"""
 const assert = require("node:assert/strict");
-const {createPromptViewport, createTerminalLayout} = require("./npm/lib/ui-components");
+const {createPromptViewport, createTerminalLayout, estimateRuntimeActivityRows} = require("./npm/lib/ui-components");
 const {estimateTextRows} = require("./npm/lib/terminal-width");
 
 assert.deepEqual(createTerminalLayout(40, 24, {approval: true, commandMenu: true}), {
@@ -197,6 +197,39 @@ assert.equal(
   14,
 );
 assert.equal(estimateTextRows("中文abcd", 6), 2);
+const activity = {
+  phase: "Creating the release notes",
+  detail: "Summarising the completed work",
+  latestOutcome: "Updated docs/release-notes.md",
+  completedCount: 2,
+  expanded: false,
+  timeline: [],
+};
+assert.equal(estimateRuntimeActivityRows(activity, 40, true), 3);
+assert.equal(estimateRuntimeActivityRows(activity, 56, false), 4);
+assert.equal(estimateRuntimeActivityRows(activity, 100, false), 4);
+assert.equal(estimateRuntimeActivityRows({...activity, expanded: true, timeline: [
+  {title: "Checked changelog", detail: "README.md"},
+  {title: "Wrote release notes", detail: "docs/release-notes.md"},
+]}, 100, false), 6);
+const compactActivity = createTerminalLayout(40, 24, {
+  approval: false,
+  commandMenu: false,
+  activity,
+  prompt: "",
+  promptCursor: 0,
+});
+assert.equal(compactActivity.activityRowLimit, 3);
+const constrainedActivity = createTerminalLayout(40, 10, {
+  approval: true,
+  commandMenu: false,
+  activity,
+  prompt: "",
+  promptCursor: 0,
+});
+assert.equal(constrainedActivity.activityRowLimit, 1);
+assert.ok(constrainedActivity.reservedRows <= 9);
+assert.ok(constrainedActivity.promptRowLimit >= 1);
 const tooNarrow = createTerminalLayout(10, 20, {
   approval: false,
   commandMenu: false,
@@ -258,7 +291,19 @@ async function renderAt(columns) {
   stdin.isTTY = true;
   stdin.setRawMode = () => {};
   const stderr = new PassThrough();
-  const layout = ui.createTerminalLayout(columns, 24, {approval: true, commandMenu: true});
+  const activity = {
+    phase: "Writing the response",
+    detail: "正在整理最终答复",
+    latestOutcome: "Created summary",
+    completedCount: 2,
+    expanded: false,
+    timeline: [],
+  };
+  const layout = ui.createTerminalLayout(columns, 24, {
+    approval: true,
+    commandMenu: true,
+    activity,
+  });
   const menu = {
     query: "/",
     selectedIndex: 0,
@@ -318,6 +363,17 @@ async function renderAt(columns) {
         },
       ],
     }),
+    React.createElement(ui.RuntimeActivityWorkspace, {
+      React,
+      Box: Ink.Box,
+      Text: Ink.Text,
+      activity,
+      compact: layout.compact,
+      frame: 0,
+      elapsedSeconds: 4,
+      maxRows: layout.activityRowLimit,
+      columns: layout.columns - layout.horizontalPadding * 2,
+    }),
     React.createElement(ui.TranscriptPosition, {
       React,
       Text: Ink.Text,
@@ -370,7 +426,7 @@ async function renderAt(columns) {
 async function main() {
   const {default: stripAnsi} = await import("strip-ansi");
   const {default: stringWidth} = await import("string-width");
-  for (const columns of [40, 100]) {
+  for (const columns of [40, 56, 100]) {
     const chunks = await renderAt(columns);
     const frameChunks = chunks.filter((chunk) => chunk.includes("kagent"));
     assert.ok(frameChunks.length > 0, JSON.stringify(chunks));
@@ -378,6 +434,7 @@ async function main() {
     assert.doesNotMatch(frameChunks.at(-1), /\u001b\]52;/);
     assert.match(plain, /kagent/);
     assert.match(plain, /History · 3 newer/);
+    assert.match(plain, /Writing the response/);
     assert.match(plain, /Permission required/);
     assert.match(plain, /Ask kagent|帮我继续完善/);
     assert.match(plain, /保留第二行/);

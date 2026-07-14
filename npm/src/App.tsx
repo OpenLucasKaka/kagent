@@ -56,6 +56,7 @@ import {
   NarrowTerminal,
   PromptLine,
   ProviderSetupPanel,
+  RuntimeActivityWorkspace,
   StatusLine,
   TERMINAL_SPINNER_FRAMES,
   TranscriptPosition,
@@ -288,7 +289,7 @@ export function KagentInkApp({
           activity,
           prompt: editor.value,
           promptCursor: editor.cursor,
-        } as Parameters<typeof createTerminalLayout>[2],
+        },
       );
       setTranscriptOffset((current) =>
         moveTranscriptViewport(
@@ -410,7 +411,7 @@ export function KagentInkApp({
         activity,
         prompt: editor.value,
         promptCursor: editor.cursor,
-      } as Parameters<typeof createTerminalLayout>[2],
+      },
     );
     if (editorVisualLineCount(editor.value, promptLayout.promptColumns) > 1) {
       setEditor((current) =>
@@ -593,7 +594,7 @@ export function KagentInkApp({
       approval: false,
       commandMenu: false,
       activity: null,
-    } as Parameters<typeof createTerminalLayout>[2]);
+    });
     if (layout.tooNarrow) {
       return React.createElement(NarrowTerminal, { React, Box, Text });
     }
@@ -632,7 +633,7 @@ export function KagentInkApp({
     activity,
     prompt: editor.value,
     promptCursor: editor.cursor,
-  } as Parameters<typeof createTerminalLayout>[2]);
+  });
   if (layout.tooNarrow) {
     return React.createElement(NarrowTerminal, { React, Box, Text });
   }
@@ -675,6 +676,19 @@ export function KagentInkApp({
       newerCount: transcriptOffset,
     }),
     React.createElement(MessageList, { React, Box, Text, messages: visibleTranscript }),
+    activity
+      ? React.createElement(RuntimeActivityWorkspace, {
+          React,
+          Box,
+          Text,
+          activity,
+          compact: layout.compact,
+          frame,
+          elapsedSeconds: activitySeconds,
+          maxRows: layout.activityRowLimit ?? 1,
+          columns: layout.columns - layout.horizontalPadding * 2,
+        })
+      : null,
     approval
       ? React.createElement(ApprovalPanel, {
           React,
@@ -686,14 +700,16 @@ export function KagentInkApp({
           showDetails: showApprovalDetails,
         })
       : null,
-    React.createElement(StatusLine, {
-      React,
-      Text,
-      elapsedSeconds: activitySeconds,
-      frame,
-      status,
-      statusText,
-    }),
+    activity
+      ? null
+      : React.createElement(StatusLine, {
+          React,
+          Text,
+          elapsedSeconds: activitySeconds,
+          frame,
+          status,
+          statusText,
+        }),
     commandMenu && status === "idle"
       ? React.createElement(CommandPalette, {
           React,

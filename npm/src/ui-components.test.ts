@@ -2,11 +2,14 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  estimateRuntimeActivityRows,
+  RuntimeActivityWorkspace,
   shouldRenderInkPromptCursor,
   shouldRenderPromptPlaceholder,
   createPromptTerminalCursorControl,
   createTerminalLayout,
 } from "./ui-components";
+import { createRuntimeActivityState } from "./activity";
 
 test("does not reserve session header rows after the intro has been shown", () => {
   type LayoutOverlays = Parameters<typeof createTerminalLayout>[2] & {
@@ -34,6 +37,101 @@ test("does not reserve session header rows after the intro has been shown", () =
   });
 
   assert.equal(withIntro.reservedRows - withoutIntro.reservedRows, 3);
+});
+
+test("reserves the compact and wide runtime activity workspace heights", () => {
+  const activity = {
+    ...createRuntimeActivityState(),
+    phase: "Creating the release notes",
+    detail: "Summarising the completed work",
+    latestOutcome: "Updated docs/release-notes.md",
+    completedCount: 2,
+  };
+
+  assert.equal(estimateRuntimeActivityRows(activity, 40, true), 3);
+  assert.equal(estimateRuntimeActivityRows(activity, 56, false), 4);
+  assert.equal(estimateRuntimeActivityRows(activity, 100, false), 4);
+  assert.equal(
+    estimateRuntimeActivityRows({
+      ...activity,
+      expanded: true,
+      timeline: [
+        { title: "Checked changelog", detail: "README.md" },
+        { title: "Wrote release notes", detail: "docs/release-notes.md" },
+      ],
+    }, 100, false),
+    6,
+  );
+});
+
+test("limits runtime activity rows before approval and prompt space", () => {
+  const activity = {
+    ...createRuntimeActivityState(),
+    phase: "Writing response",
+    detail: "A detailed update",
+    latestOutcome: "Updated status",
+    completedCount: 2,
+  };
+  const layout = createTerminalLayout(40, 10, {
+    approval: true,
+    commandMenu: false,
+    activity,
+    prompt: "",
+    promptCursor: 0,
+  });
+
+  assert.equal(layout.activityRowLimit, 1);
+  assert.ok(layout.reservedRows <= 9);
+  assert.ok(layout.promptRowLimit >= 1);
+});
+
+test("renders runtime activity details and only the newest expanded timeline entries", () => {
+  const activity = {
+    ...createRuntimeActivityState(),
+    phase: "Writing response",
+    detail: "Answering in Chinese: 正在整理",
+    latestOutcome: "Created summary",
+    completedCount: 3,
+    expanded: true,
+    timeline: [
+      { title: "Old entry", detail: "hidden" },
+      { title: "Recent entry", detail: "one" },
+      { title: "Newest entry", detail: "two" },
+    ],
+  };
+  const text: string[] = [];
+  const React = {
+    createElement(type: unknown, props: unknown, ...children: unknown[]) {
+      if (typeof type === "function") {
+        return (type as (componentProps: unknown) => unknown)({
+          ...(props && typeof props === "object" ? props : {}),
+          children,
+        });
+      }
+      text.push(...children.filter((child): child is string => typeof child === "string"));
+      return { type, props, children };
+    },
+  };
+
+  RuntimeActivityWorkspace({
+    React: React as never,
+    Box: "Box" as never,
+    Text: "Text" as never,
+    activity,
+    compact: false,
+    frame: 0,
+    elapsedSeconds: 4,
+    maxRows: 6,
+  });
+
+  const rendered = text.join(" ");
+  assert.match(rendered, /Writing response · 4s/);
+  assert.match(rendered, /Answering in Chinese: 正在整理/);
+  assert.match(rendered, /Created summary/);
+  assert.match(rendered, /3 completed · Ctrl\+O details · Esc stop/);
+  assert.doesNotMatch(rendered, /Old entry/);
+  assert.match(rendered, /Recent entry · one/);
+  assert.match(rendered, /Newest entry · two/);
 });
 
 test("positions the real terminal cursor on the empty prompt input cell", () => {
