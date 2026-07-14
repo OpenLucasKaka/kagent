@@ -96,61 +96,38 @@ test("omits the session header from the startup render tree", () => {
   assert.match(text, /Starting runtime/);
 });
 
-test("defers terminal cursor positioning until after the Ink render flush", () => {
+test("positions terminal cursor as soon as the sync effect runs", () => {
   const writes: string[] = [];
-  const scheduled: Array<() => void> = [];
   const cleanup = scheduleTerminalCursorSync(
     { position: "position", restore: "restore" },
     {
       write(value: string) {
         writes.push(value);
       },
-      defer(callback: () => void) {
-        scheduled.push(callback);
-        return callback;
-      },
-      cancel(token: () => void) {
-        const index = scheduled.indexOf(token);
-        if (index >= 0) {
-          scheduled.splice(index, 1);
-        }
-      },
     },
   );
 
-  assert.deepEqual(writes, []);
-  scheduled.shift()?.();
+  assert.deepEqual(writes, ["position"]);
   assert.deepEqual(writes, ["position"]);
   cleanup();
   assert.deepEqual(writes, ["position", "restore"]);
 });
 
-test("does not restore terminal cursor when deferred positioning was cancelled", () => {
+test("terminal cursor scheduler exposes no later-tick scheduling hook", () => {
   const writes: string[] = [];
-  const scheduled: Array<() => void> = [];
-  const cleanup = scheduleTerminalCursorSync(
-    { position: "position", restore: "restore" },
-    {
-      write(value: string) {
-        writes.push(value);
-      },
-      defer(callback: () => void) {
-        scheduled.push(callback);
-        return callback;
-      },
-      cancel(token: () => void) {
-        const index = scheduled.indexOf(token);
-        if (index >= 0) {
-          scheduled.splice(index, 1);
-        }
-      },
+  const scheduler: Parameters<typeof scheduleTerminalCursorSync>[1] = {
+    write(value: string) {
+      writes.push(value);
     },
+  };
+
+  scheduleTerminalCursorSync(
+    { position: "position", restore: "restore" },
+    scheduler,
   );
 
-  cleanup();
-
-  assert.deepEqual(writes, []);
-  assert.equal(scheduled.length, 0);
+  assert.deepEqual(writes, ["position"]);
+  assert.equal("defer" in scheduler, false);
 });
 
 function createHarness(): {

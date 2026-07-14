@@ -80,51 +80,28 @@ const App_1 = require("./App");
     strict_1.default.doesNotMatch(text, /◆ kagent/);
     strict_1.default.match(text, /Starting runtime/);
 });
-(0, node_test_1.default)("defers terminal cursor positioning until after the Ink render flush", () => {
+(0, node_test_1.default)("positions terminal cursor as soon as the sync effect runs", () => {
     const writes = [];
-    const scheduled = [];
     const cleanup = (0, App_1.scheduleTerminalCursorSync)({ position: "position", restore: "restore" }, {
         write(value) {
             writes.push(value);
         },
-        defer(callback) {
-            scheduled.push(callback);
-            return callback;
-        },
-        cancel(token) {
-            const index = scheduled.indexOf(token);
-            if (index >= 0) {
-                scheduled.splice(index, 1);
-            }
-        },
     });
-    strict_1.default.deepEqual(writes, []);
-    scheduled.shift()?.();
+    strict_1.default.deepEqual(writes, ["position"]);
     strict_1.default.deepEqual(writes, ["position"]);
     cleanup();
     strict_1.default.deepEqual(writes, ["position", "restore"]);
 });
-(0, node_test_1.default)("does not restore terminal cursor when deferred positioning was cancelled", () => {
+(0, node_test_1.default)("terminal cursor scheduler exposes no later-tick scheduling hook", () => {
     const writes = [];
-    const scheduled = [];
-    const cleanup = (0, App_1.scheduleTerminalCursorSync)({ position: "position", restore: "restore" }, {
+    const scheduler = {
         write(value) {
             writes.push(value);
         },
-        defer(callback) {
-            scheduled.push(callback);
-            return callback;
-        },
-        cancel(token) {
-            const index = scheduled.indexOf(token);
-            if (index >= 0) {
-                scheduled.splice(index, 1);
-            }
-        },
-    });
-    cleanup();
-    strict_1.default.deepEqual(writes, []);
-    strict_1.default.equal(scheduled.length, 0);
+    };
+    (0, App_1.scheduleTerminalCursorSync)({ position: "position", restore: "restore" }, scheduler);
+    strict_1.default.deepEqual(writes, ["position"]);
+    strict_1.default.equal("defer" in scheduler, false);
 });
 function createHarness() {
     const states = [];

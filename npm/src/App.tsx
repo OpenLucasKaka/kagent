@@ -98,31 +98,22 @@ export function shouldRenderSessionHeader(
   return status !== "starting" && transcriptEntryCount === 0;
 }
 
-export type TerminalCursorScheduler<Token = NodeJS.Immediate> = {
+export type TerminalCursorScheduler = {
   write: (value: string) => void;
-  defer: (callback: () => void) => Token;
-  cancel: (token: Token) => void;
 };
 
-export function scheduleTerminalCursorSync<Token>(
+export function scheduleTerminalCursorSync(
   control: PromptTerminalCursorControl,
-  scheduler: TerminalCursorScheduler<Token>,
+  scheduler: TerminalCursorScheduler,
 ): () => void {
-  let positioned = false;
-  const token = scheduler.defer(() => {
-    positioned = true;
-    scheduler.write(control.position);
-  });
+  scheduler.write(control.position);
   let active = true;
   return () => {
     if (!active) {
       return;
     }
     active = false;
-    scheduler.cancel(token);
-    if (positioned) {
-      scheduler.write(control.restore);
-    }
+    scheduler.write(control.restore);
   };
 }
 
@@ -742,8 +733,6 @@ function TerminalCursorSync({
     }
     return scheduleTerminalCursorSync(control, {
       write: (value) => process.stdout.write(value),
-      defer: (callback) => setImmediate(callback),
-      cancel: (token) => clearImmediate(token),
     });
   });
   return null;
