@@ -169,9 +169,10 @@ complete. Ctrl-C cooperatively cancels an active run without restarting the
 Python session. While kagent is working, the prompt remains editable and Enter
 queues the latest additional instruction for the next planner or tool boundary;
 Escape requests cancellation. Ctrl+O expands or collapses the safe activity
-evidence while a turn is running; after it completes, Ctrl+O still expands or
-collapses the latest outcome. Permission prompts show the user-facing action
-and target while keeping internal tool identifiers out of the normal transcript.
+evidence while a turn is running; after a run, Ctrl+O continues to expand or
+collapse the latest result with available detail/content. Permission prompts
+show the user-facing action and target while keeping internal tool identifiers
+out of the normal transcript.
 Completed file changes, artifacts, browser actions, HTTP fetches, workspace
 diffs, and bounded command results appear as concise outcome lines without
 internal tool names.
