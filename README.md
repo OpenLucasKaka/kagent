@@ -155,7 +155,10 @@ kagent
 ```
 
 TTY sessions show live progress and a compact operator transcript by default.
-Final answers stream into one stable transcript entry as provider chunks arrive.
+During a runtime turn, a compact activity workspace shows the current
+user-visible phase, elapsed time, latest safe outcome when space permits, and
+the completed-step count. Final answers stream into one stable transcript entry
+as provider chunks arrive.
 The Ink editor supports wrapped Chinese and emoji input, pasted graphemes,
 Backspace and forward Delete, Home/End, prompt history, and a responsive layout
 tested at 40 and 100 columns. PageUp/PageDown browse older conversation pages
@@ -165,12 +168,13 @@ Type `/` to open the command palette, use Up/Down to select, and Tab to
 complete. Ctrl-C cooperatively cancels an active run without restarting the
 Python session. While kagent is working, the prompt remains editable and Enter
 queues the latest additional instruction for the next planner or tool boundary;
-Escape also requests cancellation. Permission prompts show the user-facing
-action and target while keeping internal tool identifiers out of the normal
-transcript.
+Escape requests cancellation. Ctrl+O expands or collapses the safe activity
+evidence while a turn is running; after it completes, Ctrl+O still expands or
+collapses the latest outcome. Permission prompts show the user-facing action
+and target while keeping internal tool identifiers out of the normal transcript.
 Completed file changes, artifacts, browser actions, HTTP fetches, workspace
 diffs, and bounded command results appear as concise outcome lines without
-internal tool names. Ctrl+O expands or collapses the latest outcome content.
+internal tool names.
 
 Use `/pwd`, `/cd PATH`, `/status`, `/config`, `/tools`, `/memory`,
 `/compact-memory`, `/clear`, `/reset`, and `/help` in the Ink terminal. The
