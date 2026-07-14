@@ -303,3 +303,55 @@ def test_runtime_agent_adds_safe_start_presentation_only_when_available():
     assert "artifact-action-secret" not in serialized
     assert "note-action-secret" not in serialized
     assert "secret-value" not in serialized
+
+
+def test_direct_action_graph_emits_safe_start_presentation_for_every_tool():
+    cases = [
+        (
+            "artifact",
+            {
+                "title": "Release sk-secret123",
+                "kind": "report",
+                "format": "markdown",
+                "content": "Bearer secret-value",
+            },
+            {
+                "title": "Creating Release [REDACTED]",
+                "detail": "Preparing an artifact",
+            },
+        ),
+        ("note", {"text": "internal secret-value"}, None),
+        ("read_file", {"path": "secret-value.txt"}, None),
+    ]
+
+    for tool, input_value, expected in cases:
+        provider = FakeLLMProvider(
+            json.dumps(
+                {
+                    "actions": [
+                        {
+                            "id": f"{tool}-action-secret",
+                            "tool": tool,
+                            "input": input_value,
+                            "reason": "run",
+                        }
+                    ],
+                    "final_answer": "done",
+                }
+            )
+        )
+
+        result = run_runtime_agent("prepare status", provider=provider)
+        started = [
+            event
+            for event in result["progress_events"]
+            if event["type"] == "tool_started"
+        ]
+
+        assert len(started) == 1
+        assert "presentation" in started[0]
+        assert started[0]["presentation"] == expected
+        assert "input" not in started[0]
+        serialized = json.dumps(started[0]["presentation"])
+        assert f"{tool}-action-secret" not in serialized
+        assert "secret-value" not in serialized

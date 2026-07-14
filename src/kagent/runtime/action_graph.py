@@ -16,7 +16,10 @@ from kagent.runtime.checkpoint_state import (
     utc_timestamp,
 )
 from kagent.runtime.policy import RuntimePolicy
-from kagent.runtime.presentation import project_runtime_presentation
+from kagent.runtime.presentation import (
+    project_runtime_presentation,
+    project_runtime_start_presentation,
+)
 from kagent.runtime.tools import default_runtime_tools, execute_runtime_tool
 from kagent.runtime.types import AgentObservation, parse_agent_plan
 
@@ -414,6 +417,10 @@ def execute_action_graph_node(
     action = cache_entry["action"]
     action_id = str(action.get("id", ""))
     tool_name = str(action.get("tool", ""))
+    start_presentation = project_runtime_start_presentation(
+        tool_name,
+        cache_entry["input"],
+    )
     progress_events, sink_failures = _append_checkpoint_progress(
         state,
         context,
@@ -424,6 +431,7 @@ def execute_action_graph_node(
             "action_id": action_id,
             "tool": tool_name,
             "status": "started",
+            "presentation": start_presentation or None,
         },
     )
     observation = execute_runtime_tool(
