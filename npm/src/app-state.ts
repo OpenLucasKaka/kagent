@@ -148,6 +148,8 @@ function reduceLifecycleEvent(
         ...state,
         provider: event.provider,
         commandCatalog: event.session_commands || [],
+        approval: null,
+        activity: null,
         setup: event.provider.configured
           ? null
           : createProviderSetupState(event.provider_options),

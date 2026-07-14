@@ -114,3 +114,44 @@ test("clears activity for each failed run terminal event", () => {
   });
   assert.equal(invalidCompletion.activity, null);
 });
+
+test("clears stale run state when the runtime session becomes ready", () => {
+  let state = appRuntimeReducer(createAppRuntimeState(), {
+    type: "submit",
+    text: "Book a flight",
+    command: false,
+  });
+  state = appRuntimeReducer(state, {
+    type: "runtime_event",
+    channel: "run",
+    event: {
+      type: "approval_required",
+      action_id: "approve-1",
+      title: "Book flight",
+      reason: "This charges your card",
+      target: "Shanghai → Tokyo",
+    },
+  });
+
+  state = appRuntimeReducer(state, {
+    type: "runtime_event",
+    channel: "lifecycle",
+    event: {
+      type: "runtime_ready",
+      provider: {
+        configured: true,
+        provider: "test",
+        display_name: "Test",
+        base_url_configured: true,
+        model: "model",
+        api_key_configured: true,
+      },
+      provider_options: [],
+      session_commands: [],
+    },
+  });
+
+  assert.equal(state.activity, null);
+  assert.equal(state.approval, null);
+  assert.equal(state.status, "idle");
+});
