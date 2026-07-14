@@ -64,6 +64,69 @@ test("does not submit the same prompt twice before React renders the busy state"
   );
 });
 
+test("uses Ctrl+O to expand active activity without changing the transcript", () => {
+  const harness = createHarness();
+  const runtime = idleRuntime();
+
+  harness.render(runtime);
+  harness.effects[0]();
+  harness.effects[1]();
+  runtime.emitReady();
+  harness.render(runtime);
+  harness.inputEvents.emit("input", "plan");
+  harness.render(runtime);
+  harness.inputEvents.emit("input", "\r");
+  harness.render(runtime);
+
+  const before = harness.states[2] as {
+    activity: { expanded: boolean } | null;
+    transcript: unknown;
+  };
+  assert.equal(before.activity?.expanded, false);
+  const transcript = before.transcript;
+
+  harness.inputEvents.emit("input", "\x0f");
+
+  const after = harness.states[2] as {
+    activity: { expanded: boolean } | null;
+    transcript: unknown;
+  };
+  assert.equal(after.activity?.expanded, true);
+  assert.equal(after.transcript, transcript);
+});
+
+test("keeps Ctrl+O bound to the latest completed result when activity is idle", () => {
+  const harness = createHarness();
+  const runtime = idleRuntime();
+
+  harness.render(runtime);
+  harness.effects[0]();
+  harness.effects[1]();
+  runtime.emitReady();
+  harness.render(runtime);
+  harness.inputEvents.emit("input", "plan");
+  harness.render(runtime);
+  harness.inputEvents.emit("input", "\r");
+  runtime.emitRun({
+    type: "run_progress",
+    event: {
+      type: "tool_completed",
+      presentation: { title: "Result", detail: "Ready", content: "Details" },
+    },
+  });
+  runtime.emitRun({ type: "run_completed", status: "done", answer: "Done", payload: {} });
+  harness.render(runtime);
+
+  harness.inputEvents.emit("input", "\x0f");
+  const state = harness.states[2] as {
+    activity: unknown;
+    transcript: { entries: Array<{ title?: string; expanded?: boolean }> };
+  };
+  assert.equal(state.activity, null);
+  assert.equal(state.transcript.entries.at(-2)?.title, "Result");
+  assert.equal(state.transcript.entries.at(-2)?.expanded, true);
+});
+
 test("hides only the empty interactive prompt while the runtime is busy", () => {
   assert.equal(shouldRenderInteractivePrompt("idle"), true);
   assert.equal(shouldRenderInteractivePrompt("approval"), true);
@@ -212,6 +275,51 @@ function createHarness(): {
       });
     },
     states,
+  };
+}
+
+function idleRuntime(): {
+  emitReady: () => void;
+  emitRun: (event: unknown) => void;
+  subscribe: (handler: (event: unknown) => void) => () => void;
+  run: (_goal: string, handler: (event: unknown) => void) => void;
+  command: () => void;
+  steer: () => void;
+  close: () => void;
+  cancel: () => void;
+} {
+  let lifecycleHandler: ((event: unknown) => void) | undefined;
+  let runHandler: ((event: unknown) => void) | undefined;
+  return {
+    emitReady() {
+      lifecycleHandler?.({
+        type: "runtime_ready",
+        provider: {
+          configured: true,
+          provider: "test",
+          display_name: "Test",
+          base_url_configured: true,
+          model: "model",
+          api_key_configured: true,
+        },
+        provider_options: [],
+        session_commands: [],
+      });
+    },
+    emitRun(event) {
+      runHandler?.(event);
+    },
+    subscribe(handler) {
+      lifecycleHandler = handler;
+      return () => undefined;
+    },
+    run(_goal, handler) {
+      runHandler = handler;
+    },
+    command() {},
+    steer() {},
+    close() {},
+    cancel() {},
   };
 }
 

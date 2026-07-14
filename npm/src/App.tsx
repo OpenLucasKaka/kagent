@@ -135,7 +135,7 @@ export function KagentInkApp({
   const [terminalSize, setTerminalSize] = React.useState(() => currentTerminalSize());
   const [activitySeconds, setActivitySeconds] = React.useState(0);
   const [approvalChoice, setApprovalChoice] = React.useState<ApprovalChoice>("deny");
-  const { transcript, status, statusText, approval, provider, setup, commandCatalog } =
+  const { transcript, activity, status, statusText, approval, provider, setup, commandCatalog } =
     runtimeState;
   const commandMenu = updateCommandMenu(commandCatalog, editor.value, selectedCommand);
   const terminalInputHandler = React.useRef<TerminalInputHandler>(() => undefined);
@@ -267,10 +267,14 @@ export function KagentInkApp({
       return;
     }
     if (key.ctrl && key.name === "o") {
-      dispatchRuntime({
-        type: "transcript_action",
-        action: { type: "toggle_latest_result" },
-      });
+      if (activity) {
+        dispatchRuntime({ type: "activity_toggle" });
+      } else {
+        dispatchRuntime({
+          type: "transcript_action",
+          action: { type: "toggle_latest_result" },
+        });
+      }
       return;
     }
     if (key.name === "pageup" || key.name === "pagedown") {
@@ -281,9 +285,10 @@ export function KagentInkApp({
           approval: approval !== null,
           commandMenu: status === "idle" && commandMenu ? commandMenu : false,
           introVisible: transcript.entries.length === 0,
+          activity,
           prompt: editor.value,
           promptCursor: editor.cursor,
-        },
+        } as Parameters<typeof createTerminalLayout>[2],
       );
       setTranscriptOffset((current) =>
         moveTranscriptViewport(
@@ -402,9 +407,10 @@ export function KagentInkApp({
         approval: approval !== null,
         commandMenu: false,
         introVisible: transcript.entries.length === 0,
+        activity,
         prompt: editor.value,
         promptCursor: editor.cursor,
-      },
+      } as Parameters<typeof createTerminalLayout>[2],
     );
     if (editorVisualLineCount(editor.value, promptLayout.promptColumns) > 1) {
       setEditor((current) =>
@@ -586,7 +592,8 @@ export function KagentInkApp({
     const layout = createTerminalLayout(terminalSize.columns, terminalSize.rows, {
       approval: false,
       commandMenu: false,
-    });
+      activity: null,
+    } as Parameters<typeof createTerminalLayout>[2]);
     if (layout.tooNarrow) {
       return React.createElement(NarrowTerminal, { React, Box, Text });
     }
@@ -622,9 +629,10 @@ export function KagentInkApp({
       : false,
     commandMenu: status === "idle" && commandMenu ? commandMenu : false,
     introVisible: sessionHeaderVisible,
+    activity,
     prompt: editor.value,
     promptCursor: editor.cursor,
-  });
+  } as Parameters<typeof createTerminalLayout>[2]);
   if (layout.tooNarrow) {
     return React.createElement(NarrowTerminal, { React, Box, Text });
   }

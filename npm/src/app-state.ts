@@ -17,10 +17,17 @@ import {
   type TranscriptAction,
   type TranscriptState,
 } from "./transcript";
+import {
+  createRuntimeActivityState,
+  reduceRuntimeActivity,
+  toggleRuntimeActivity,
+  type RuntimeActivityState,
+} from "./activity";
 import type { AgentStatus } from "./ui-components";
 
 export type AppRuntimeState = {
   transcript: TranscriptState;
+  activity: RuntimeActivityState | null;
   status: AgentStatus;
   statusText: string;
   approval: ApprovalRequiredEvent | null;
@@ -37,12 +44,14 @@ export type AppRuntimeAction =
   | { type: "setup_action"; action: ProviderSetupAction }
   | { type: "approval_response"; approved: boolean }
   | { type: "cancel_requested"; label: string }
+  | { type: "activity_toggle" }
   | { type: "transcript_action"; action: TranscriptAction }
   | { type: "error"; message: string };
 
 export function createAppRuntimeState(): AppRuntimeState {
   return {
     transcript: createTranscriptState(),
+    activity: null,
     status: "starting",
     statusText: "",
     approval: null,
@@ -65,6 +74,9 @@ export function appRuntimeReducer(
       }),
       status: "thinking",
       statusText: action.command ? "Running command" : "Thinking",
+      activity: action.command
+        ? state.activity
+        : activityFor(null, "Preparing your request"),
     };
   }
   if (action.type === "setup_action") {
@@ -78,10 +90,24 @@ export function appRuntimeReducer(
       approval: null,
       status: "thinking",
       statusText: action.approved ? "Continuing" : "Cancelling",
+      activity: activityFor(
+        state.activity,
+        action.approved ? "Continuing" : "Cancelling",
+      ),
     };
   }
   if (action.type === "cancel_requested") {
-    return { ...state, status: "cancelling", statusText: action.label };
+    return {
+      ...state,
+      status: "cancelling",
+      statusText: action.label,
+      activity: activityFor(state.activity, "Stopping"),
+    };
+  }
+  if (action.type === "activity_toggle") {
+    return state.activity
+      ? { ...state, activity: toggleRuntimeActivity(state.activity) }
+      : state;
   }
   if (action.type === "transcript_action") {
     return {
@@ -195,20 +221,34 @@ function reduceRunEvent(
   event: RuntimeClientEvent,
 ): AppRuntimeState {
   if (event.type === "run_started") {
-    return { ...state, status: "thinking", statusText: "Thinking" };
+    return {
+      ...state,
+      status: "thinking",
+      statusText: "Thinking",
+      activity: activityFor(null, "Planning next steps"),
+    };
   }
   if (event.type === "run_progress") {
     const transcriptAction = progressTranscriptAction(event.event);
     return {
       ...state,
       statusText: progressLabel(event.event),
+      activity: reduceRuntimeActivity(
+        state.activity ?? createRuntimeActivityState(),
+        event.event,
+      ),
       transcript: transcriptAction
         ? transcriptReducer(state.transcript, transcriptAction)
         : state.transcript,
     };
   }
   if (event.type === "run_cancel_requested") {
-    return { ...state, status: "cancelling", statusText: "Stopping" };
+    return {
+      ...state,
+      status: "cancelling",
+      statusText: "Stopping",
+      activity: activityFor(state.activity, "Stopping"),
+    };
   }
   if (event.type === "run_steer_queued") {
     return {
@@ -224,7 +264,16 @@ function reduceRunEvent(
     };
   }
   if (event.type === "approval_required") {
-    return { ...state, approval: event, status: "approval", statusText: "" };
+    return {
+      ...state,
+      approval: event,
+      status: "approval",
+      statusText: "",
+      activity: reduceRuntimeActivity(
+        state.activity ?? createRuntimeActivityState(),
+        event,
+      ),
+    };
   }
   if (event.type === "run_completed") {
     if (event.status !== "done" && event.status !== "cancelled") {
@@ -237,6 +286,7 @@ function reduceRunEvent(
     return {
       ...state,
       approval: null,
+      activity: null,
       status: "idle",
       statusText: "",
       transcript: transcriptReducer(state.transcript, {
@@ -275,10 +325,21 @@ function failureState(state: AppRuntimeState, message: string): AppRuntimeState 
   return {
     ...state,
     approval: null,
+    activity: null,
     status: "error",
     statusText: "",
     transcript: transcriptReducer(state.transcript, { type: "error", text: message }),
   };
+}
+
+function activityFor(
+  activity: RuntimeActivityState | null,
+  phase: string,
+): RuntimeActivityState {
+  return reduceRuntimeActivity(activity ?? createRuntimeActivityState(), {
+    type: "tool_started",
+    presentation: { title: phase },
+  });
 }
 
 function progressLabel(event: Record<string, unknown>): string {
