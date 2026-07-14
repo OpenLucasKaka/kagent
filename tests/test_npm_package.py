@@ -121,7 +121,11 @@ def test_npm_terminal_layout_adapts_to_narrow_and_wide_terminals():
 
     script = r"""
 const assert = require("node:assert/strict");
-const {createPromptViewport, createTerminalLayout, estimateRuntimeActivityRows} = require("./npm/lib/ui-components");
+const {
+  createPromptViewport,
+  createTerminalLayout,
+  estimateRuntimeActivityRows,
+} = require("./npm/lib/ui-components");
 const {estimateTextRows} = require("./npm/lib/terminal-width");
 
 assert.deepEqual(createTerminalLayout(40, 24, {approval: true, commandMenu: true}), {
