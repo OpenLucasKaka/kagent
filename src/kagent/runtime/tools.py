@@ -52,6 +52,7 @@ _DELEGATE_MAX_ITERATIONS = 3
 _HTTP_REQUEST_MAX_BYTES = 65536
 _HTTP_REQUEST_TIMEOUT_SECONDS = 10.0
 _BLOCKED_HTTP_HOSTS = {"localhost", "localhost."}
+_PROXY_SYNTHETIC_IPV4_NETWORK = ipaddress.ip_network("198.18.0.0/15")
 _HTTP_REDIRECT_STATUS_CODES = {301, 302, 303, 307, 308}
 _URL_SECRET_KEY_PARTS = (
     "api_key",
@@ -3147,6 +3148,8 @@ def _validate_resolved_http_host(host: str, port: int | None) -> None:
             address = ipaddress.ip_address(sockaddr[0])
         except ValueError as exc:
             raise ValueError("url host resolved to an invalid address") from exc
+        if address in _PROXY_SYNTHETIC_IPV4_NETWORK:
+            continue
         if _is_blocked_http_address(address):
             raise ValueError("url host is not allowed")
 

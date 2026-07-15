@@ -1327,6 +1327,7 @@ def test_http_request_tool_rejects_private_and_loopback_targets():
         "http://localhost/admin",
         "http://127.0.0.1/admin",
         "http://10.0.0.1/admin",
+        "http://198.18.0.27/admin",
         "http://169.254.169.254/latest/meta-data",
         "http://[::1]/admin",
     ]:
@@ -1340,6 +1341,24 @@ def test_http_request_tool_rejects_private_and_loopback_targets():
         assert observation.status == "failed"
         assert observation.error_code == "invalid_tool_input"
         assert "url host is not allowed" in observation.error
+
+
+def test_http_request_url_allows_proxy_synthetic_dns_for_public_hostname(monkeypatch):
+    monkeypatch.setattr(
+        runtime_tools.socket,
+        "getaddrinfo",
+        lambda *_args, **_kwargs: [
+            (
+                runtime_tools.socket.AF_INET,
+                runtime_tools.socket.SOCK_STREAM,
+                6,
+                "",
+                ("198.18.0.27", 443),
+            )
+        ],
+    )
+
+    runtime_tools._validate_http_request_url("https://example.com/data")
 
 
 def test_http_request_tool_rejects_url_credentials():
