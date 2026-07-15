@@ -48,6 +48,7 @@ def test_runtime_delegate_task_rejects_nested_delegation_by_default():
                 '"input":{"goal":"too deep","max_iterations":1},'
                 '"reason":"nested delegate"}]}'
             ),
+            "delegated once",
         ]
     )
 

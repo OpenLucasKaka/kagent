@@ -117,7 +117,7 @@ def test_internal_runtime_client_example_can_call_local_service(tmp_path):
         thread.join(timeout=5)
 
     assert run["status"] == "done"
-    assert run["answer"] == "client-done"
+    assert run["answer"] == "client example"
     assert run["auth_subject"] == "team-a"
     assert approvals["count"] == "0"
     assert approval_summary["pending_approval_count"] == "0"

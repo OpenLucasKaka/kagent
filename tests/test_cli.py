@@ -686,7 +686,10 @@ def test_cli_can_run_codex_style_runtime_with_inline_plan():
     assert completed.stderr == ""
     assert payload["trace_type"] == "codex_runtime"
     assert payload["status"] == "done"
-    assert payload["answer"] == "ready"
+    assert payload["answer"].startswith(
+        "Problem: score readiness\nAction: rubric_score\nResult: "
+    )
+    assert '"score_percent": 100.0' in payload["answer"]
     assert payload["observations"][0]["output"]["score_percent"] == 100.0
 
 
@@ -1053,7 +1056,11 @@ def test_cli_interactive_runtime_runs_goals_from_stdin_with_inline_plan(tmp_path
 
     assert completed.stderr == ""
     assert payload["status"] == "done"
-    assert payload["answer"] == "created"
+    assert payload["answer"] == (
+        "问题：创建 docs/hello.md\n"
+        "执行：apply_patch\n"
+        "结果：1 file: docs/hello.md"
+    )
     assert payload["observations"][0]["tool"] == "apply_patch"
     assert (tmp_path / "docs" / "hello.md").read_text(encoding="utf-8") == (
         "# Hello\n\ncreated by agent\n"
@@ -1125,7 +1132,11 @@ def test_cli_interactive_runtime_can_update_file_with_inline_plan(tmp_path):
 
     assert completed.stderr == ""
     assert payload["status"] == "done"
-    assert payload["answer"] == "updated"
+    assert payload["answer"] == (
+        "问题：把 plan.md 状态改成 ready\n"
+        "执行：apply_patch\n"
+        "结果：1 file: plan.md"
+    )
     assert payload["observations"][0]["tool"] == "apply_patch"
     assert payload["observations"][0]["output"]["changed_files"][0]["operation"] == "update"
     assert target.read_text(encoding="utf-8") == "# Plan\n\nstatus: ready\n"

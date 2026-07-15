@@ -110,7 +110,7 @@ def test_runtime_lifecycle_hook_failures_are_observable_without_failing_run():
     )
 
     assert result["status"] == "done"
-    assert result["answer"] == "captured hello"
+    assert result["answer"] == "hello"
     assert result["hook_failure_count"] == "3"
     hook_failures = [
         event

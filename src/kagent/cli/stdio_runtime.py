@@ -60,6 +60,8 @@ class PendingApproval:
     runtime_goal: str
     plan: Dict[str, Any]
     phase: str = "awaiting_approval"
+    allow_live_replan: bool = True
+    max_iterations: int = DEFAULT_RUNTIME_MAX_ITERATIONS
 
 
 @dataclass(frozen=True)
@@ -68,6 +70,7 @@ class ActiveRun:
     cancellation_token: RuntimeCancellationToken
     steering_buffer: RuntimeSteeringBuffer
     thread: threading.Thread
+    allow_live_replan: bool
 
 
 class StdioRuntimeSession:
@@ -196,6 +199,9 @@ class StdioRuntimeSession:
             runtime_goal,
             provider=provider,
             max_iterations=max_iterations,
+            allow_live_replan=not bool(
+                str(request.get("runtime_plan", "")).strip()
+            ),
         )
 
     def _handle_cancel_request(self, request: Request) -> None:
@@ -368,7 +374,27 @@ class StdioRuntimeSession:
             runtime_goal=pending.runtime_goal,
             plan=pending.plan,
             phase="approved_executing",
+            allow_live_replan=pending.allow_live_replan,
+            max_iterations=pending.max_iterations,
         )
+        if pending.allow_live_replan:
+            missing = missing_provider_config_fields(self.provider_config)
+            if missing:
+                self._fail(
+                    "provider_not_configured",
+                    runtime_provider_config_message(missing),
+                )
+                return
+            provider = _ReplayThenLiveProvider(
+                resumable_plan,
+                build_llm_provider(self.provider_config),
+            )
+            max_iterations = max(2, pending.max_iterations)
+        else:
+            provider = FakeLLMProvider(
+                json.dumps(resumable_plan, ensure_ascii=False, sort_keys=True)
+            )
+            max_iterations = 1
         save_pending_approval(
             self.pending_approval_path,
             {
@@ -377,6 +403,8 @@ class StdioRuntimeSession:
                 "runtime_goal": executing.runtime_goal,
                 "plan": executing.plan,
                 "phase": executing.phase,
+                "allow_live_replan": executing.allow_live_replan,
+                "max_iterations": executing.max_iterations,
             },
         )
         with self._state_lock:
@@ -384,17 +412,18 @@ class StdioRuntimeSession:
         self._start_active_run(
             pending.goal,
             pending.runtime_goal,
-            provider=FakeLLMProvider(
-                json.dumps(resumable_plan, ensure_ascii=False, sort_keys=True)
-            ),
-            max_iterations=1,
+            provider=provider,
+            max_iterations=max_iterations,
             approved_action_ids={action_id},
+            allow_live_replan=pending.allow_live_replan,
         )
 
     def _start_active_run(
         self,
         goal: str,
         runtime_goal: str,
+        *,
+        allow_live_replan: bool = True,
         **run_kwargs: Any,
     ) -> None:
         run_kwargs.setdefault("stream_answers", True)
@@ -419,7 +448,13 @@ class StdioRuntimeSession:
                 name=f"kagent-stdio-run-{generation}",
                 daemon=False,
             )
-            self.active_run = ActiveRun(generation, token, steering_buffer, thread)
+            self.active_run = ActiveRun(
+                generation,
+                token,
+                steering_buffer,
+                thread,
+                allow_live_replan,
+            )
             self._state_changed.notify_all()
         thread.start()
 
@@ -479,7 +514,15 @@ class StdioRuntimeSession:
             return
         payload["goal"] = goal
         if payload.get("status") == "requires_approval":
-            pending = _pending_approval_from_result(payload, goal, runtime_goal)
+            active_run = self.active_run
+            pending = _pending_approval_from_result(
+                payload,
+                goal,
+                runtime_goal,
+                allow_live_replan=(
+                    active_run.allow_live_replan if active_run else False
+                ),
+            )
             if pending is None:
                 self._clear_active_run_locked(generation)
                 self._fail("invalid_approval_state", "runtime approval state is incomplete")
@@ -492,6 +535,8 @@ class StdioRuntimeSession:
                     "runtime_goal": pending.runtime_goal,
                     "plan": pending.plan,
                     "phase": pending.phase,
+                    "allow_live_replan": pending.allow_live_replan,
+                    "max_iterations": pending.max_iterations,
                 },
             )
             with self._state_lock:
@@ -658,6 +703,8 @@ def _pending_approval_from_result(
     payload: Dict[str, Any],
     goal: str,
     runtime_goal: str,
+    *,
+    allow_live_replan: bool,
 ) -> PendingApproval | None:
     action = payload.get("pending_approval")
     plan = payload.get("plan")
@@ -665,13 +712,53 @@ def _pending_approval_from_result(
         return None
     if not str(action.get("id", "")).strip():
         return None
+    try:
+        max_iterations = _positive_int(
+            payload.get("max_iterations"),
+            default=DEFAULT_RUNTIME_MAX_ITERATIONS,
+        )
+    except (TypeError, ValueError):
+        max_iterations = DEFAULT_RUNTIME_MAX_ITERATIONS
     return PendingApproval(
-        dict(action),
-        goal,
-        runtime_goal,
-        dict(plan),
-        "awaiting_approval",
+        action=dict(action),
+        goal=goal,
+        runtime_goal=runtime_goal,
+        plan=dict(plan),
+        phase="awaiting_approval",
+        allow_live_replan=allow_live_replan,
+        max_iterations=max_iterations,
     )
+
+
+class _ReplayThenLiveProvider:
+    def __init__(self, plan: Dict[str, Any], live_provider: Any) -> None:
+        self._plan_text = json.dumps(plan, ensure_ascii=False, sort_keys=True)
+        self._live_provider = live_provider
+        self._replayed = False
+
+    def complete(self, system: str, user: str) -> str:
+        if not self._replayed:
+            self._replayed = True
+            return self._plan_text
+        return str(self._live_provider.complete(system, user))
+
+    def stream_complete(self, system: str, user: str):
+        if not self._replayed:
+            self._replayed = True
+            yield self._plan_text
+            return
+        stream_complete = getattr(self._live_provider, "stream_complete", None)
+        if callable(stream_complete):
+            yield from stream_complete(system, user)
+            return
+        yield str(self._live_provider.complete(system, user))
+
+    def request_diagnostics(self) -> Dict[str, str]:
+        diagnostics = getattr(self._live_provider, "request_diagnostics", None)
+        if not callable(diagnostics):
+            return {}
+        value = diagnostics()
+        return value if isinstance(value, dict) else {}
 
 
 def _approval_event(action: Dict[str, Any]) -> Dict[str, Any]:

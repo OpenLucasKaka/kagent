@@ -1721,7 +1721,9 @@ def test_service_router_runtime_run_accepts_plan_sequence_for_replanning():
     assert payload["observations"][0]["status"] == "failed"
     assert payload["observations"][0]["error_code"] == "invalid_tool_input"
     assert payload["observations"][1]["output"] == {"text": "hello"}
-    assert payload["answer"] == "trimmed"
+    assert payload["answer"] == (
+        "Problem: trim hello\nAction: transform_text\nResult: hello"
+    )
 
 
 def test_service_router_runtime_run_replans_after_invalid_plan_sequence_item():

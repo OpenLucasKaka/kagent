@@ -141,7 +141,7 @@ run_status, run = request_json(
 )
 assert_status(run_status, 200, run, "runtime run")
 assert run["status"] == "done", run
-assert run["answer"] == "staging-acceptance-done", run
+assert run["answer"] == "staging-acceptance-runtime", run
 run_id = run["run_id"]
 
 status_status, status_payload = request_json(f"/runtime/runs/{run_id}")

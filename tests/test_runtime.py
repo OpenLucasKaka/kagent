@@ -1473,6 +1473,32 @@ def test_runtime_agent_can_execute_action_after_explicit_approval():
     assert result["events"][1]["status"] == "approved"
 
 
+def test_runtime_agent_summarizes_approved_action_without_remaining_iteration():
+    provider = SequentialLLMProvider(
+        [
+            (
+                '{"actions":[{"id":"step-1","tool":"transform_text",'
+                '"input":{"text":"hello","mode":"uppercase"},'
+                '"reason":"normalize"}]}'
+            ),
+            '{"actions":[],"final_answer":"已将 hello 转换为 HELLO。"}',
+        ]
+    )
+
+    result = run_runtime_agent(
+        "normalize hello",
+        provider=provider,
+        max_iterations=1,
+        policy=RuntimePolicy(allowed_tools={"note"}),
+        approved_action_ids={"step-1"},
+    )
+
+    assert result["status"] == "done"
+    assert result["answer"] == "已将 hello 转换为 HELLO。"
+    assert result["observations"][0]["output"] == {"text": "HELLO"}
+    assert len(provider.calls) == 2
+
+
 def test_runtime_agent_reports_only_consumed_approved_action_ids():
     provider = FakeLLMProvider(
         '{"actions":[{"id":"step-1","tool":"note",'
@@ -1752,13 +1778,14 @@ def test_runtime_agent_can_replan_from_previous_observations():
                 '"input":{"text":"HELLO"},"reason":"persist"}],'
                 '"final_answer":"persisted HELLO"}'
             ),
+            '{"actions":[],"final_answer":"persisted HELLO"}',
         ]
     )
 
     result = run_runtime_agent("normalize then persist", provider=provider, max_iterations=2)
 
     assert result["status"] == "done"
-    assert len(provider.calls) == 2
+    assert len(provider.calls) == 3
     assert "Previous observations" in provider.calls[1]["user"]
     assert "HELLO" in provider.calls[1]["user"]
     assert len(result["plans"]) == 2
@@ -1783,13 +1810,14 @@ def test_runtime_agent_can_replan_after_tool_input_failure():
                 '"reason":"retry with valid mode"}],'
                 '"final_answer":"trimmed"}'
             ),
+            '{"actions":[],"final_answer":"trimmed"}',
         ]
     )
 
     result = run_runtime_agent("trim hello", provider=provider, max_iterations=2)
 
     assert result["status"] == "done"
-    assert len(provider.calls) == 2
+    assert len(provider.calls) == 3
     assert "invalid_tool_input" in provider.calls[1]["user"]
     assert result["observations"][0]["status"] == "failed"
     assert result["observations"][0]["error_code"] == "invalid_tool_input"
@@ -1811,6 +1839,7 @@ def test_runtime_agent_can_replan_after_tool_output_failure():
                 '"input":{"text":"fallback"},"reason":"recover"}],'
                 '"final_answer":"recovered"}'
             ),
+            '{"actions":[],"final_answer":"recovered"}',
         ]
     )
     tools = default_runtime_tools()
@@ -1841,7 +1870,7 @@ def test_runtime_agent_can_replan_after_tool_output_failure():
     )
 
     assert result["status"] == "done"
-    assert len(provider.calls) == 2
+    assert len(provider.calls) == 3
     assert "invalid_tool_output" in provider.calls[1]["user"]
     assert result["observations"][0]["status"] == "failed"
     assert result["observations"][0]["error_code"] == "invalid_tool_output"
@@ -1955,13 +1984,14 @@ def test_runtime_agent_can_replan_after_invalid_planner_output():
                 '"input":{"text":"recovered"},"reason":"recover"}],'
                 '"final_answer":"recovered"}'
             ),
+            '{"actions":[],"final_answer":"recovered"}',
         ]
     )
 
     result = run_runtime_agent("capture after bad plan", provider=provider, max_iterations=2)
 
     assert result["status"] == "done"
-    assert len(provider.calls) == 2
+    assert len(provider.calls) == 3
     assert "invalid_plan" in provider.calls[1]["user"]
     assert result["observations"][0]["tool"] == "planner"
     assert result["observations"][0]["status"] == "failed"
@@ -2090,22 +2120,120 @@ def test_runtime_agent_returns_final_answer_from_converged_plan():
     assert result["plan"] == {"actions": [], "final_answer": "captured hello"}
 
 
-def test_runtime_agent_stops_after_successful_actions_with_final_answer():
-    provider = FakeLLMProvider(
-        '{"actions":[{"id":"step-1","tool":"note",'
-        '"input":{"text":"hello"},"reason":"capture"}],'
-        '"final_answer":"captured hello"}'
+def test_runtime_agent_synthesizes_final_answer_after_successful_actions():
+    provider = SequentialLLMProvider(
+        [
+            (
+                '{"actions":[{"id":"step-1","tool":"note",'
+                '"input":{"text":"hello"},"reason":"capture"}],'
+                '"final_answer":"让我帮你记录"}'
+            ),
+            '{"actions":[],"final_answer":"已记录 hello。"}',
+        ]
     )
 
     result = run_runtime_agent("capture hello", provider=provider, max_iterations=3)
 
     assert result["status"] == "done"
-    assert result["answer"] == "captured hello"
+    assert result["answer"] == "已记录 hello。"
     assert result["iteration_count"] == "1"
     assert result["iteration_budget_remaining"] == "2"
-    assert len(provider.calls) == 1
+    assert len(provider.calls) == 2
+    assert "final response writer" in provider.calls[1]["system"]
+    assert "Previous observations" in provider.calls[1]["user"]
+    assert "hello" in provider.calls[1]["user"]
     assert len(result["plans"]) == 1
     assert len(result["observations"]) == 1
+
+
+def test_runtime_agent_returns_note_content_directly_when_finalizer_has_no_answer():
+    provider = SequentialLLMProvider(
+        [
+            (
+                '{"actions":[{"id":"step-1","tool":"note",'
+                '"input":{"text":"hello"},"reason":"capture"}],'
+                '"final_answer":"让我帮你记录"}'
+            ),
+            (
+                '{"actions":[{"id":"step-2","tool":"note",'
+                '"input":{"text":"repeat"},"reason":"repeat"}],'
+                '"final_answer":"repeat"}'
+            ),
+        ]
+    )
+
+    result = run_runtime_agent("记录 hello", provider=provider, max_iterations=3)
+
+    assert result["status"] == "done"
+    assert result["answer"] == "hello"
+    assert len(result["observations"]) == 1
+
+
+def test_runtime_agent_uses_observation_fallback_when_finalizer_is_unstructured():
+    provider = SequentialLLMProvider(
+        [
+            (
+                '{"actions":[{"id":"step-1","tool":"note",'
+                '"input":{"text":"https://github.com"},"reason":"capture"}],'
+                '"final_answer":"我来打开 GitHub"}'
+            ),
+            (
+                "GitHub 已成功打开。\n\n"
+                "接下来可以继续处理旅行攻略、打开其他网页或应用、整理项目文件。"
+            ),
+        ]
+    )
+
+    result = run_runtime_agent("打开 GitHub", provider=provider, max_iterations=3)
+
+    assert result["status"] == "done"
+    assert result["answer"] == "https://github.com"
+    assert "旅行攻略" not in result["answer"]
+    assert "打开其他网页" not in result["answer"]
+    assert "final_answer_guardrail" not in result
+
+
+def test_runtime_planner_prompt_forbids_unrelated_follow_up_offers():
+    provider = FakeLLMProvider('{"actions":[],"final_answer":"今天是星期三。"}')
+
+    result = run_runtime_agent("今天周几", provider=provider)
+
+    assert result["status"] == "done"
+    assert "Do not offer unrelated follow-up tasks" in provider.calls[0]["system"]
+    assert "Do not mention prior requests unless the current user message asks" in (
+        provider.calls[0]["system"]
+    )
+    assert "Never use shell_command for curl, wget, or other network requests" in (
+        provider.calls[0]["system"]
+    )
+    assert "Do not use note merely to compose an answer" in (
+        provider.calls[0]["system"]
+    )
+
+
+def test_runtime_agent_finalizer_uses_only_current_message_from_session_memory():
+    provider = SequentialLLMProvider(
+        [
+            (
+                '{"actions":[{"id":"step-1","tool":"note",'
+                '"input":{"text":"Wednesday"},"reason":"capture"}],'
+                '"final_answer":"让我帮你查询"}'
+            ),
+            '{"actions":[],"final_answer":"今天是星期三。"}',
+        ]
+    )
+    goal = (
+        "Compacted conversation memory from this interactive session:\n"
+        "Previous unrelated request.\n\n"
+        "Current user message:\n今天周几"
+    )
+
+    result = run_runtime_agent(goal, provider=provider, max_iterations=3)
+
+    assert result["status"] == "done"
+    assert result["answer"] == "今天是星期三。"
+    assert provider.calls[1]["user"].startswith("Goal:\n今天周几\n")
+    assert "Previous unrelated request" not in provider.calls[1]["user"]
 
 
 def test_runtime_agent_normalizes_model_identity_answer():
@@ -2292,7 +2420,7 @@ def test_runtime_agent_does_not_fail_when_progress_event_sink_fails():
     )
 
     assert result["status"] == "done"
-    assert result["answer"] == "done"
+    assert result["answer"] == "hello"
     assert result["progress_event_sink_failure_count"] == "6"
     assert len(result["progress_events"]) == 6
     assert attempted_events == result["progress_events"]

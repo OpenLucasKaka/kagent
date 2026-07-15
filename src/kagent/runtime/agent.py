@@ -102,11 +102,30 @@ Use only tools that are available to you.
     "history or diff, and pass the reviewed current and revision SHA-256 values.\n"
     "Use shell_command for bounded non-interactive local CLI checks; it is "
     "policy-gated and may require explicit approval before execution.\n"
+    "Never use shell_command for curl, wget, or other network requests; use "
+    "http_request for network content.\n"
+    "Do not use note merely to compose an answer; when no external action is "
+    "needed, return an action-free final_answer directly.\n"
+    "When returning actions, omit final_answer because their results are not yet "
+    "available. Do not repeat completed actions from previous observations. After "
+    "the work is complete, return an action-free final_answer that tells the user "
+    "what was handled, what was done, and the actual result.\n"
+    "Answer only the current user request. Do not offer unrelated follow-up tasks "
+    "or end with generic invitations to ask for more help. Do not mention prior "
+    "requests unless the current user message asks about them.\n"
     "If the latest previous observation failed, do not return final_answer with "
     "empty actions; either plan recovery actions or leave the run failed.\n"
     'If the goal is complete, return {"actions":[],"final_answer":"..."} '
     "with a direct user-facing answer."
 )
+
+_FINAL_RESPONSE_SYSTEM_PROMPT = """You are kagent's final response writer.
+Return strict JSON only with this shape:
+{"actions":[],"final_answer":"..."}
+Use the completed tool observations to write final_answer. Do not plan, request,
+or repeat any tool action. Never include unrelated follow-up tasks, generic
+invitations to ask for more help, or prior requests unless the current user
+message asks about them. Be concise and preserve important result values."""
 
 RUNTIME_TRACE_TYPE = "codex_runtime"
 MAX_PLANNER_OBSERVATION_STRING_CHARS = 500
@@ -1547,10 +1566,26 @@ def _run_runtime_agent_loop(
             continue
         if status != "done":
             break
-        if plan.final_answer:
+        approved_action_completed = any(
+            observation.status == "ok"
+            and observation.action_id in active_approvals
+            for observation in observations
+        )
+        if plan.final_answer or (
+            iteration >= iteration_limit and approved_action_completed
+        ):
+            final_text, streamed_final = _complete_post_tool_answer(
+                provider,
+                goal,
+                observations,
+                context_manager=context_manager,
+                emit_progress=emit_progress,
+                stream_answer=stream_answers,
+            )
+            answer_streamed = answer_streamed or streamed_final
             answer, final_answer_guardrail = _runtime_final_answer(
                 goal,
-                plan.final_answer,
+                final_text,
             )
             break
         if iteration >= iteration_limit:
@@ -1670,6 +1705,138 @@ def _complete_plan_text(
         streamer.feed(text)
     plan_text = "".join(chunks)
     return plan_text, streamer.finish()
+
+
+def _complete_post_tool_answer(
+    provider: Any,
+    goal: str,
+    observations: List[AgentObservation],
+    *,
+    context_manager: RuntimeContextManager,
+    emit_progress: Callable[..., None],
+    stream_answer: bool,
+) -> tuple[str, bool]:
+    current_goal = _current_user_message(goal)
+    user_prompt = (
+        "Goal:\n"
+        + current_goal
+        + "\n\nPrevious observations:\n"
+        + json.dumps(
+            [
+                _planner_observation_payload(
+                    observation,
+                    context_manager=context_manager,
+                )
+                for observation in observations
+            ],
+            sort_keys=True,
+        )
+    )
+    try:
+        response_text = str(
+            provider.complete(_FINAL_RESPONSE_SYSTEM_PROMPT, user_prompt)
+        ).strip()
+    except Exception:
+        response_text = ""
+    if response_text:
+        try:
+            response_plan = parse_agent_plan(response_text)
+        except ValueError:
+            final_text = ""
+        else:
+            final_text = (
+                ""
+                if response_plan.actions
+                else response_plan.final_answer.strip()
+            )
+    else:
+        final_text = ""
+    if not final_text:
+        final_text = _fallback_post_tool_answer(
+            current_goal,
+            observations,
+            context_manager=context_manager,
+        )
+    if stream_answer:
+        _emit_runtime_progress(
+            emit_progress,
+            "answer_started",
+            node="finalizer",
+            status="started",
+        )
+        _emit_runtime_progress(
+            emit_progress,
+            "answer_delta",
+            node="finalizer",
+            status="streaming",
+            delta=final_text,
+        )
+        _emit_runtime_progress(
+            emit_progress,
+            "answer_completed",
+            node="finalizer",
+            status="done",
+        )
+    return final_text, stream_answer
+
+
+def _fallback_post_tool_answer(
+    goal: str,
+    observations: List[AgentObservation],
+    *,
+    context_manager: RuntimeContextManager,
+) -> str:
+    chinese = re.search(r"[\u3400-\u9fff]", goal) is not None
+    visible = [item for item in observations if item.status == "ok"] or observations
+    tools = "、".join(item.tool for item in visible)
+    results = [
+        _observation_summary_result(
+            observation,
+            context_manager=context_manager,
+        )
+        for observation in visible
+    ]
+    if len(visible) == 1 and visible[0].tool == "note":
+        return results[0]
+    if len(visible) == 1:
+        if chinese:
+            return f"问题：{goal}\n执行：{tools}\n结果：{results[0]}"
+        return f"Problem: {goal}\nAction: {tools}\nResult: {results[0]}"
+    if chinese:
+        lines = [f"问题：{goal}", f"执行：{tools}", "结果："]
+    else:
+        lines = [f"Problem: {goal}", f"Actions: {tools}", "Results:"]
+    lines.extend(
+        f"- {observation.tool}: {result}"
+        for observation, result in zip(visible, results)
+    )
+    return "\n".join(lines)
+
+
+def _observation_summary_result(
+    observation: AgentObservation,
+    *,
+    context_manager: RuntimeContextManager,
+) -> str:
+    if observation.status != "ok":
+        return observation.error or observation.error_code or observation.status
+    presentation = project_runtime_presentation(
+        observation.tool,
+        observation.status,
+        observation.output,
+    )
+    content = str(presentation.get("content", "")).strip()
+    if content:
+        return content
+    for key in ("text", "body_text", "content", "stdout"):
+        value = observation.output.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    detail = str(presentation.get("detail", "")).strip()
+    if detail:
+        return detail
+    compacted = context_manager.compact_observation_output(observation.output)
+    return json.dumps(compacted, ensure_ascii=False, sort_keys=True)
 
 
 class _DirectFinalAnswerStreamer:
@@ -1800,7 +1967,7 @@ def _runtime_user_prompt(
 
 
 def _runtime_final_answer(goal: str, final_answer: str) -> tuple[str, Dict[str, str]]:
-    goal_text = goal.lower()
+    goal_text = _current_user_message(goal).lower()
     answer_text = final_answer.lower()
     if _is_runtime_identity_question(goal_text) and _looks_like_model_identity(answer_text):
         return _runtime_identity_answer(), _final_answer_guardrail(
@@ -1811,6 +1978,14 @@ def _runtime_final_answer(goal: str, final_answer: str) -> tuple[str, Dict[str, 
             "runtime_deployment_boundary"
         )
     return final_answer, {}
+
+
+def _current_user_message(goal: str) -> str:
+    marker = "Current user message:\n"
+    if marker not in goal:
+        return goal
+    current = goal.rsplit(marker, 1)[1].strip()
+    return current or goal
 
 
 def _final_answer_guardrail(reason: str) -> Dict[str, str]:

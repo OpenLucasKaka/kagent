@@ -508,8 +508,14 @@ The service intentionally keeps a narrow API:
   is rejected and the run remains failed; the planner must schedule recovery
   actions before it can claim completion.
   When actions and `final_answer` appear in the same valid plan, the runtime
-  executes the actions once and stops after successful execution, preserving the
-  remaining iteration budget and preventing duplicate side effects.
+  executes the actions once but does not expose that pre-tool answer. A dedicated
+  final-response writer receives the completed observations and cannot execute
+  more actions, preventing duplicate side effects. Approval resumes with no remaining planner iteration use the same
+  finalization path. If the writer is unavailable or returns no answer, the
+  runtime produces a concise problem/action/result summary from allowlisted tool
+  presentation fields instead of repeating side effects or returning stale text.
+  Finalization rejects any response that still contains actions, and both planner
+  prompts answer only the current request without unrelated follow-up offers.
   When a terminal tool failure or planner failure exhausts the iteration
   budget, the final failed observation's `error_code` and `error` are promoted
   to the run top level so clients and status summaries do not need to inspect

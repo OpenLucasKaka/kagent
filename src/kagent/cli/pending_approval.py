@@ -62,6 +62,16 @@ def load_pending_approval(path: str) -> dict[str, Any] | None:
         or not str(payload["action"].get("id", "")).strip()
     ):
         raise ValueError("pending approval state is invalid")
+    allow_live_replan = payload.get("allow_live_replan", True)
+    max_iterations = payload.get("max_iterations", 3)
+    if not isinstance(allow_live_replan, bool):
+        raise ValueError("pending approval state is invalid")
+    if (
+        isinstance(max_iterations, bool)
+        or not isinstance(max_iterations, int)
+        or max_iterations < 1
+    ):
+        raise ValueError("pending approval state is invalid")
     age_seconds = time.time() - float(payload["saved_at"])
     if age_seconds > _MAX_SNAPSHOT_AGE_SECONDS:
         clear_pending_approval(path)
@@ -74,6 +84,8 @@ def load_pending_approval(path: str) -> dict[str, Any] | None:
         "runtime_goal": payload["runtime_goal"],
         "plan": payload["plan"],
         "phase": payload["phase"],
+        "allow_live_replan": allow_live_replan,
+        "max_iterations": max_iterations,
     }
 
 
@@ -93,6 +105,8 @@ def save_pending_approval(path: str, payload: dict[str, Any]) -> None:
         "runtime_goal": payload["runtime_goal"],
         "plan": payload["plan"],
         "phase": phase,
+        "allow_live_replan": bool(payload.get("allow_live_replan", True)),
+        "max_iterations": int(payload.get("max_iterations", 3)),
         "saved_at": time.time(),
     }
     descriptor, temporary_name = tempfile.mkstemp(

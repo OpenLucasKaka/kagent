@@ -27,6 +27,8 @@ def test_pending_approval_store_is_owner_only_and_atomic(tmp_path):
         "runtime_goal": "open page",
         "plan": {"actions": []},
         "phase": "awaiting_approval",
+        "allow_live_replan": True,
+        "max_iterations": 3,
     }
 
     save_pending_approval(str(path), payload)

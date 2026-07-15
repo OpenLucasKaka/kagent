@@ -395,11 +395,18 @@ responses include the latest `plan`, the full `plans` sequence, and accumulated
 planner output to each tool result. They also include `iteration_count`,
 `max_iterations`, and `iteration_budget_remaining` so dashboards can alert on
 runs that repeatedly spend most of their iteration budget. When a planner
-returns `final_answer`, the runtime also returns that value as top-level
-`answer` for clients that only need the final result. If a planner returns
-actions and `final_answer` together, the runtime executes those actions once
-and stops after they all succeed instead of spending the remaining iteration
-budget on duplicate tool calls.
+returns an action-free `final_answer`, the runtime also returns that value as
+top-level `answer` for clients that only need the final result. If a planner
+returns actions and `final_answer` together, the runtime treats that answer as a
+pre-tool draft, executes the actions once, and runs a non-action final-response
+writer over the completed observations. Approval resumes with no planner budget
+left follow the same path. If final-response generation is unavailable, clients
+receive a bounded problem/action/result summary derived from presentation-safe
+tool output rather than stale intent text or a duplicate action.
+This keeps final response generation separate from planning and prevents
+duplicate tool calls. A finalizer response that still contains actions is treated
+as a stale pre-tool draft and discarded. User-facing answers do not append prior
+open items, generic help menus, or unrelated follow-up offers.
 Tool input or execution failures are kept as observations and can drive another
 planner iteration while `max_iterations` budget remains. For deterministic
 replay of these correction loops over HTTP, send `plan_sequence` as an ordered

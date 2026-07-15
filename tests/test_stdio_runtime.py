@@ -84,7 +84,7 @@ def test_stdio_runtime_accepts_run_request_and_streams_jsonl_events(tmp_path):
     ]
     assert events[-1]["type"] == "run_completed"
     assert events[-1]["status"] == "done"
-    assert events[-1]["answer"] == "stdio done"
+    assert events[-1]["answer"] == "hello from stdio"
     assert set(events[-1]["payload"]) <= {
         "duration_seconds",
         "iteration_count",
@@ -576,6 +576,91 @@ def test_stdio_runtime_resumes_pending_and_remaining_actions(monkeypatch, tmp_pa
     }
     assert events[-1]["type"] == "run_completed"
     assert events[-1]["status"] == "done"
+
+
+def test_stdio_runtime_returns_to_live_provider_after_replaying_approved_plan(
+    monkeypatch,
+    tmp_path,
+):
+    class LiveProvider:
+        def __init__(self):
+            self.calls = []
+
+        def complete(self, system, user):
+            self.calls.append((system, user))
+            return '{"actions":[],"final_answer":"live recovery"}'
+
+    live_provider = LiveProvider()
+    calls = []
+    pending_action = {
+        "id": "fetch-weather",
+        "tool": "shell_command",
+        "input": {"command": "curl https://example.test/weather"},
+        "reason": "fetch weather",
+    }
+    plan = {"actions": [pending_action]}
+
+    def fake_run_runtime_agent(goal, **kwargs):
+        calls.append((goal, kwargs))
+        if len(calls) == 1:
+            return {
+                "status": "requires_approval",
+                "goal": goal,
+                "plan": plan,
+                "pending_approval": pending_action,
+                "max_iterations": "3",
+            }
+        provider = kwargs["provider"]
+        replayed = json.loads(provider.complete("planner", "goal"))
+        recovered = json.loads(provider.complete("planner", "observations"))
+        return {
+            "status": "done",
+            "answer": recovered["final_answer"],
+            "goal": goal,
+            "replayed_plan": replayed,
+        }
+
+    monkeypatch.setattr(stdio_runtime, "run_runtime_agent", fake_run_runtime_agent)
+    monkeypatch.setattr(
+        stdio_runtime,
+        "_provider_from_request",
+        lambda _request, _config: live_provider,
+    )
+    monkeypatch.setattr(
+        stdio_runtime,
+        "missing_provider_config_fields",
+        lambda _config: [],
+    )
+    monkeypatch.setattr(
+        stdio_runtime,
+        "build_llm_provider",
+        lambda _config: live_provider,
+    )
+    stdout = io.StringIO()
+    session = stdio_runtime.StdioRuntimeSession(
+        stdout,
+        memory_path=str(tmp_path / "session-memory.json"),
+        pending_approval_path=str(tmp_path / "pending.json"),
+    )
+
+    session.handle({"type": "run_request", "goal": "weather"})
+    session.wait_until_idle()
+    session.handle(
+        {
+            "type": "approval_response",
+            "action_id": "fetch-weather",
+            "approved": True,
+        }
+    )
+    session.wait_until_idle()
+
+    assert calls[1][1]["max_iterations"] == 3
+    assert calls[1][1]["approved_action_ids"] == {"fetch-weather"}
+    assert calls[1][1]["provider"] is not live_provider
+    assert calls[1][1]["provider"].complete("planner", "later") == (
+        '{"actions":[],"final_answer":"live recovery"}'
+    )
+    assert session.last_payload["answer"] == "live recovery"
 
 
 def test_stdio_runtime_revert_approval_names_paths_without_internal_tool():
