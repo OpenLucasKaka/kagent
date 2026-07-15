@@ -170,6 +170,58 @@ def test_stdio_runtime_reports_invalid_iteration_budget_without_crashing(tmp_pat
     assert completed.stderr == ""
 
 
+def test_stdio_runtime_uses_local_fast_plan_for_simple_open_app_requests(tmp_path):
+    request = {"type": "run_request", "goal": "打开qq"}
+
+    env = _runtime_env(tmp_path)
+    env["KAGENT_PENDING_APPROVAL_PATH"] = str(tmp_path / "pending-approval.json")
+
+    completed = subprocess.run(
+        [".venv/bin/python", "-m", "kagent.cli.stdio_runtime"],
+        input=f"{json.dumps(request, ensure_ascii=False)}\n",
+        capture_output=True,
+        text=True,
+        check=True,
+        env=env,
+    )
+
+    events = _jsonl(completed.stdout)
+    assert [event["type"] for event in events[:4]] == [
+        "runtime_ready",
+        "run_started",
+        "run_progress",
+        "run_progress",
+    ]
+    assert events[2]["event"]["type"] == "planner_started"
+    assert events[3]["event"]["type"] == "planner_completed"
+    assert events[-1]["type"] == "approval_required"
+    assert events[-1]["title"] == "Open an application"
+    assert events[-1]["target"] == "QQ"
+    assert completed.stderr == ""
+
+
+def test_stdio_runtime_does_not_fast_plan_web_targets_as_open_apps(tmp_path):
+    request = {"type": "run_request", "goal": "打开 github"}
+
+    env = _runtime_env(tmp_path)
+    env["KAGENT_PENDING_APPROVAL_PATH"] = str(tmp_path / "pending-approval.json")
+
+    completed = subprocess.run(
+        [".venv/bin/python", "-m", "kagent.cli.stdio_runtime"],
+        input=f"{json.dumps(request, ensure_ascii=False)}\n",
+        capture_output=True,
+        text=True,
+        check=True,
+        env=env,
+    )
+
+    events = _jsonl(completed.stdout)
+    assert events[1]["type"] == "run_started"
+    assert events[2]["type"] == "run_failed"
+    assert events[2]["error_code"] == "provider_not_configured"
+    assert completed.stderr == ""
+
+
 def test_stdio_runtime_session_commands_share_cwd_memory_and_runtime_state(tmp_path):
     workspace = tmp_path / "workspace with spaces"
     workspace.mkdir()
@@ -975,6 +1027,11 @@ def test_stdio_runtime_remains_busy_until_terminal_event_is_flushed(
 
 
 def test_stdio_runtime_flushes_worker_failure_before_shutdown(monkeypatch, tmp_path):
+    monkeypatch.setenv(
+        "KAGENT_SESSION_MEMORY_PATH",
+        str(tmp_path / "session-memory.json"),
+    )
+
     def fake_run_runtime_agent(_goal, **_kwargs):
         raise RuntimeError("worker failed")
 

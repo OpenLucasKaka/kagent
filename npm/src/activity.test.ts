@@ -13,9 +13,12 @@ test("reduces the runtime activity lifecycle into safe user-facing labels", () =
   activity = reduceRuntimeActivity(activity, { type: "planner_started" });
   assert.equal(activity.phase, "Planning next steps");
 
-  activity = reduceRuntimeActivity(activity, { type: "planner_completed" });
-  assert.equal(activity.phase, "Plan ready");
-  assert.equal(activity.completedCount, 1);
+  activity = reduceRuntimeActivity(activity, {
+    type: "planner_completed",
+    action_count: "1",
+  });
+  assert.equal(activity.phase, "Preparing 1 step");
+  assert.equal(activity.completedCount, 0);
 
   activity = reduceRuntimeActivity(activity, {
     type: "tool_started",
@@ -36,7 +39,7 @@ test("reduces the runtime activity lifecycle into safe user-facing labels", () =
   });
   assert.equal(activity.phase, "Created Status report");
   assert.equal(activity.latestOutcome, "Created Status report · Report · Markdown");
-  assert.equal(activity.completedCount, 2);
+  assert.equal(activity.completedCount, 1);
 
   activity = reduceRuntimeActivity(activity, { type: "answer_started" });
   assert.equal(activity.phase, "Writing the response");
@@ -51,6 +54,21 @@ test("reduces the runtime activity lifecycle into safe user-facing labels", () =
   });
   assert.equal(activity.phase, "Waiting for your decision");
   assert.equal(activity.detail, "Open page · https://example.test");
+});
+
+test("does not repeat identical planning records in the activity timeline", () => {
+  let activity = createRuntimeActivityState();
+
+  activity = reduceRuntimeActivity(activity, {
+    type: "tool_started",
+    presentation: { title: "Planning next steps" },
+  });
+  activity = reduceRuntimeActivity(activity, { type: "planner_started" });
+  activity = reduceRuntimeActivity(activity, { type: "planner_started" });
+
+  assert.deepEqual(activity.timeline, [
+    { title: "Planning next steps", detail: "" },
+  ]);
 });
 
 test("uses safe fallbacks without exposing malformed presentation or raw event data", () => {

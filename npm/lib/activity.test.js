@@ -10,9 +10,12 @@ const activity_1 = require("./activity");
     let activity = (0, activity_1.createRuntimeActivityState)();
     activity = (0, activity_1.reduceRuntimeActivity)(activity, { type: "planner_started" });
     strict_1.default.equal(activity.phase, "Planning next steps");
-    activity = (0, activity_1.reduceRuntimeActivity)(activity, { type: "planner_completed" });
-    strict_1.default.equal(activity.phase, "Plan ready");
-    strict_1.default.equal(activity.completedCount, 1);
+    activity = (0, activity_1.reduceRuntimeActivity)(activity, {
+        type: "planner_completed",
+        action_count: "1",
+    });
+    strict_1.default.equal(activity.phase, "Preparing 1 step");
+    strict_1.default.equal(activity.completedCount, 0);
     activity = (0, activity_1.reduceRuntimeActivity)(activity, {
         type: "tool_started",
         presentation: {
@@ -31,7 +34,7 @@ const activity_1 = require("./activity");
     });
     strict_1.default.equal(activity.phase, "Created Status report");
     strict_1.default.equal(activity.latestOutcome, "Created Status report · Report · Markdown");
-    strict_1.default.equal(activity.completedCount, 2);
+    strict_1.default.equal(activity.completedCount, 1);
     activity = (0, activity_1.reduceRuntimeActivity)(activity, { type: "answer_started" });
     strict_1.default.equal(activity.phase, "Writing the response");
     activity = (0, activity_1.reduceRuntimeActivity)(activity, { type: "steering_applied" });
@@ -43,6 +46,18 @@ const activity_1 = require("./activity");
     });
     strict_1.default.equal(activity.phase, "Waiting for your decision");
     strict_1.default.equal(activity.detail, "Open page · https://example.test");
+});
+(0, node_test_1.default)("does not repeat identical planning records in the activity timeline", () => {
+    let activity = (0, activity_1.createRuntimeActivityState)();
+    activity = (0, activity_1.reduceRuntimeActivity)(activity, {
+        type: "tool_started",
+        presentation: { title: "Planning next steps" },
+    });
+    activity = (0, activity_1.reduceRuntimeActivity)(activity, { type: "planner_started" });
+    activity = (0, activity_1.reduceRuntimeActivity)(activity, { type: "planner_started" });
+    strict_1.default.deepEqual(activity.timeline, [
+        { title: "Planning next steps", detail: "" },
+    ]);
 });
 (0, node_test_1.default)("uses safe fallbacks without exposing malformed presentation or raw event data", () => {
     let activity = (0, activity_1.createRuntimeActivityState)();

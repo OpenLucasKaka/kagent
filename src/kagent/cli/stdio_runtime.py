@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 import threading
 import warnings
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Dict, Iterable, TextIO
 
 from kagent.cli.conversation import (
@@ -51,6 +53,42 @@ _APPROVAL_EXECUTION_INTERRUPTED_MESSAGE = (
     "The approved action was interrupted and was not replayed "
     "because its side-effect state is uncertain."
 )
+_LOCAL_OPEN_APP_ALIASES = {
+    "feishu": "Feishu",
+    "qq": "QQ",
+    "wechat": "WeChat",
+    "weixin": "WeChat",
+    "微信": "WeChat",
+    "飞书": "Feishu",
+}
+_LOCAL_OPEN_APP_PREFIXES = (
+    "打开",
+    "开启",
+    "启动",
+    "唤起",
+    "运行",
+    "帮我打开",
+    "请打开",
+    "麻烦打开",
+)
+_LOCAL_OPEN_APP_ENGLISH_PREFIXES = ("open ", "launch ", "start ")
+_LOCAL_OPEN_APP_UNSAFE_MARKERS = (
+    "http://",
+    "https://",
+    "然后",
+    "并且",
+    "顺便",
+    " and ",
+    " then ",
+)
+_LOCAL_OPEN_APP_WEB_TARGETS = {
+    "github",
+    "gitlab",
+    "google",
+    "gmail",
+    "baidu",
+    "youtube",
+}
 
 
 @dataclass(frozen=True)
@@ -82,6 +120,9 @@ class StdioRuntimeSession:
         pending_approval_path: str | None = None,
     ) -> None:
         self.stdout = stdout
+        custom_memory_path = memory_path is not None or bool(
+            os.environ.get("KAGENT_SESSION_MEMORY_PATH", "").strip()
+        )
         self.memory_path = (
             default_runtime_session_memory_path() if memory_path is None else memory_path
         )
@@ -90,10 +131,10 @@ class StdioRuntimeSession:
             max_turns=RUNTIME_MEMORY_MAX_TURNS,
         )
         self.provider_config = LLMProviderConfig.from_sources()
-        self.pending_approval_path = (
-            default_pending_approval_path()
-            if pending_approval_path is None
-            else pending_approval_path
+        self.pending_approval_path = _resolve_pending_approval_path(
+            pending_approval_path,
+            self.memory_path,
+            custom_memory_path=custom_memory_path,
         )
         persisted_pending = load_pending_approval(self.pending_approval_path)
         self.pending_approval = (
@@ -188,8 +229,15 @@ class StdioRuntimeSession:
                 "max_iterations": str(max_iterations),
             },
         )
+        runtime_plan = str(request.get("runtime_plan", "")).strip()
+        local_runtime_plan = "" if runtime_plan else _local_open_app_runtime_plan(goal)
+        effective_request = (
+            {**request, "runtime_plan": local_runtime_plan}
+            if local_runtime_plan
+            else request
+        )
         try:
-            provider = _provider_from_request(request, self.provider_config)
+            provider = _provider_from_request(effective_request, self.provider_config)
             runtime_goal = runtime_goal_with_memory(goal, self.memory)
         except RuntimeProviderConfigError as exc:
             self._fail("provider_not_configured", str(exc))
@@ -200,7 +248,7 @@ class StdioRuntimeSession:
             provider=provider,
             max_iterations=max_iterations,
             allow_live_replan=not bool(
-                str(request.get("runtime_plan", "")).strip()
+                str(effective_request.get("runtime_plan", "")).strip()
             ),
         )
 
@@ -837,6 +885,72 @@ def _provider_from_request(request: Request, config: LLMProviderConfig) -> Any:
     if missing:
         raise RuntimeProviderConfigError(runtime_provider_config_message(missing))
     return build_llm_provider(config)
+
+
+def _resolve_pending_approval_path(
+    configured_path: str | None,
+    memory_path: str,
+    *,
+    custom_memory_path: bool,
+) -> str:
+    if configured_path is not None:
+        return configured_path
+    if os.environ.get("KAGENT_PENDING_APPROVAL_PATH", "").strip():
+        return default_pending_approval_path()
+    if custom_memory_path:
+        path = Path(memory_path)
+        return str(path.with_name(f"{path.stem}-pending-approval.json"))
+    return default_pending_approval_path()
+
+
+def _local_open_app_runtime_plan(goal: str) -> str:
+    application = _local_open_app_name(goal)
+    if not application:
+        return ""
+    plan = {
+        "actions": [
+            {
+                "id": "open-app",
+                "tool": "open_app",
+                "input": {"application": application},
+                "reason": "open requested app",
+            }
+        ]
+    }
+    return json.dumps(plan, ensure_ascii=False, sort_keys=True)
+
+
+def _local_open_app_name(goal: str) -> str:
+    text = " ".join(str(goal or "").strip().split())
+    if not text:
+        return ""
+    lowered = f" {text.casefold()} "
+    if any(marker in lowered for marker in _LOCAL_OPEN_APP_UNSAFE_MARKERS):
+        return ""
+    for prefix in _LOCAL_OPEN_APP_PREFIXES:
+        if text.startswith(prefix):
+            return _normalize_local_open_app_name(text[len(prefix) :])
+    lower_text = text.casefold()
+    for prefix in _LOCAL_OPEN_APP_ENGLISH_PREFIXES:
+        if lower_text.startswith(prefix):
+            return _normalize_local_open_app_name(text[len(prefix) :])
+    return ""
+
+
+def _normalize_local_open_app_name(value: str) -> str:
+    application = value.strip(" \t\r\n。.!！?？'\"“”‘’")
+    if application.endswith("一下"):
+        application = application[:-2].strip()
+    if application.endswith("应用"):
+        application = application[:-2].strip()
+    if not application:
+        return ""
+    if "/" in application or "\\" in application or "\x00" in application:
+        return ""
+    normalized = application.casefold()
+    if "." in normalized or normalized in _LOCAL_OPEN_APP_WEB_TARGETS:
+        return ""
+    return _LOCAL_OPEN_APP_ALIASES.get(normalized, application)
 
 
 def _provider_error_field(message: str) -> str:

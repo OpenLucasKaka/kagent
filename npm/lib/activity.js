@@ -20,7 +20,12 @@ function reduceRuntimeActivity(state, event) {
         return applyActivity(state, "Planning next steps");
     }
     if (type === "planner_completed") {
-        return applyActivity(state, "Plan ready", "", 1);
+        const actionCount = safeNonNegativeInteger(event.action_count);
+        return applyActivity(state, actionCount === 1
+            ? "Preparing 1 step"
+            : actionCount > 1
+                ? `Preparing ${actionCount} steps`
+                : "Plan ready");
     }
     if (type === "tool_started") {
         const presentation = activityPresentation(event.presentation);
@@ -47,13 +52,17 @@ function toggleRuntimeActivity(state) {
 }
 function applyActivity(state, phase, detail = "", completedIncrement = 0, latestOutcome = state.latestOutcome) {
     const record = { title: phase, detail };
+    const previous = state.timeline.at(-1);
+    const timeline = previous?.title === record.title && previous.detail === record.detail
+        ? state.timeline
+        : state.timeline.concat(record).slice(-MAX_TIMELINE_RECORDS);
     return {
         ...state,
         phase,
         detail,
         latestOutcome,
         completedCount: state.completedCount + completedIncrement,
-        timeline: state.timeline.concat(record).slice(-MAX_TIMELINE_RECORDS),
+        timeline,
     };
 }
 function activityPresentation(value) {
@@ -70,6 +79,19 @@ function isRecord(value) {
 }
 function safeString(value) {
     return typeof value === "string" ? value.trim() : "";
+}
+function safeNonNegativeInteger(value) {
+    if (typeof value === "number" && Number.isInteger(value) && value >= 0) {
+        return value;
+    }
+    if (typeof value !== "string") {
+        return 0;
+    }
+    const trimmed = value.trim();
+    if (!/^\d+$/.test(trimmed)) {
+        return 0;
+    }
+    return Number.parseInt(trimmed, 10);
 }
 function formatOutcome(title, detail) {
     return detail ? `${title} · ${detail}` : title;
