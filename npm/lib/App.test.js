@@ -157,29 +157,6 @@ const App_1 = require("./App");
     strict_1.default.match(text, /Permission required/);
     strict_1.default.equal(text.indexOf("Waiting for your decision") < text.indexOf("Permission required"), true);
 });
-(0, node_test_1.default)("positions terminal cursor as soon as the sync effect runs", () => {
-    const writes = [];
-    const cleanup = (0, App_1.scheduleTerminalCursorSync)({ position: "position", restore: "restore" }, {
-        write(value) {
-            writes.push(value);
-        },
-    });
-    strict_1.default.deepEqual(writes, ["position"]);
-    strict_1.default.deepEqual(writes, ["position"]);
-    cleanup();
-    strict_1.default.deepEqual(writes, ["position", "restore"]);
-});
-(0, node_test_1.default)("terminal cursor scheduler exposes no later-tick scheduling hook", () => {
-    const writes = [];
-    const scheduler = {
-        write(value) {
-            writes.push(value);
-        },
-    };
-    (0, App_1.scheduleTerminalCursorSync)({ position: "position", restore: "restore" }, scheduler);
-    strict_1.default.deepEqual(writes, ["position"]);
-    strict_1.default.equal("defer" in scheduler, false);
-});
 function createHarness() {
     const states = [];
     const refs = [];

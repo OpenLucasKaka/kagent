@@ -190,8 +190,8 @@ test("positions the real terminal cursor on the empty prompt input cell", () => 
       horizontalPadding: 1,
     }),
     {
-      position: "\u001b[?25h\u001b[2A\u001b[3C",
-      restore: "\r\u001b[2B",
+      position: "\u001b[?25h\u001b[1A\u001b[3C",
+      restore: "\r\u001b[1B",
     },
   );
 });
@@ -206,8 +206,8 @@ test("positions the real terminal cursor on wrapped prompt input", () => {
       horizontalPadding: 0,
     }),
     {
-      position: "\u001b[?25h\u001b[2A\u001b[2C",
-      restore: "\r\u001b[2B",
+      position: "\u001b[?25h\u001b[1A\u001b[2C",
+      restore: "\r\u001b[1B",
     },
   );
 });
@@ -222,8 +222,8 @@ test("restores from an upper prompt cursor row before the next Ink render", () =
       horizontalPadding: 0,
     }),
     {
-      position: "\u001b[?25h\u001b[3A\u001b[4C",
-      restore: "\r\u001b[3B",
+      position: "\u001b[?25h\u001b[2A\u001b[4C",
+      restore: "\r\u001b[2B",
     },
   );
 });

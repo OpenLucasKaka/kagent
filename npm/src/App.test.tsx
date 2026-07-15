@@ -4,7 +4,6 @@ import test from "node:test";
 
 import {
   KagentInkApp,
-  scheduleTerminalCursorSync,
   shouldRenderInteractivePrompt,
   shouldRenderSessionHeader,
 } from "./App";
@@ -192,40 +191,6 @@ test("renders active runtime activity between messages and approval without a du
   assert.match(text, /Waiting for your decision/);
   assert.match(text, /Permission required/);
   assert.equal(text.indexOf("Waiting for your decision") < text.indexOf("Permission required"), true);
-});
-
-test("positions terminal cursor as soon as the sync effect runs", () => {
-  const writes: string[] = [];
-  const cleanup = scheduleTerminalCursorSync(
-    { position: "position", restore: "restore" },
-    {
-      write(value: string) {
-        writes.push(value);
-      },
-    },
-  );
-
-  assert.deepEqual(writes, ["position"]);
-  assert.deepEqual(writes, ["position"]);
-  cleanup();
-  assert.deepEqual(writes, ["position", "restore"]);
-});
-
-test("terminal cursor scheduler exposes no later-tick scheduling hook", () => {
-  const writes: string[] = [];
-  const scheduler: Parameters<typeof scheduleTerminalCursorSync>[1] = {
-    write(value: string) {
-      writes.push(value);
-    },
-  };
-
-  scheduleTerminalCursorSync(
-    { position: "position", restore: "restore" },
-    scheduler,
-  );
-
-  assert.deepEqual(writes, ["position"]);
-  assert.equal("defer" in scheduler, false);
 });
 
 function createHarness(): {

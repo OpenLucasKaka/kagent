@@ -83,6 +83,11 @@ type AppProps = {
   React: typeof ReactNamespace;
   Ink: InkApi;
   runtimeSessionFactory?: typeof createRuntimeSessionClient;
+  terminalCursor?: TerminalCursorController;
+};
+
+export type TerminalCursorController = {
+  update: (control: PromptTerminalCursorControl | null) => void;
 };
 
 export function shouldRenderInteractivePrompt(
@@ -99,29 +104,11 @@ export function shouldRenderSessionHeader(
   return status !== "starting" && transcriptEntryCount === 0;
 }
 
-export type TerminalCursorScheduler = {
-  write: (value: string) => void;
-};
-
-export function scheduleTerminalCursorSync(
-  control: PromptTerminalCursorControl,
-  scheduler: TerminalCursorScheduler,
-): () => void {
-  scheduler.write(control.position);
-  let active = true;
-  return () => {
-    if (!active) {
-      return;
-    }
-    active = false;
-    scheduler.write(control.restore);
-  };
-}
-
 export function KagentInkApp({
   React,
   Ink,
   runtimeSessionFactory = createRuntimeSessionClient,
+  terminalCursor,
 }: AppProps): ReactNamespace.ReactElement {
   const { Box, Text } = Ink;
   const app = Ink.useApp();
@@ -148,6 +135,11 @@ export function KagentInkApp({
     setRuntimeState((current) => appRuntimeReducer(current, action));
   }
 
+  function exitApp(): void {
+    terminalCursor?.update(null);
+    app.exit();
+  }
+
   React.useEffect(() => {
     const bridge = createTerminalInputBridge((input, key) => {
       terminalInputHandler.current(input, key);
@@ -169,6 +161,11 @@ export function KagentInkApp({
       runtime.close();
     };
   }, [React, runtime]);
+
+  React.useLayoutEffect?.(
+    () => () => terminalCursor?.update(null),
+    [React, terminalCursor],
+  );
 
   React.useEffect(() => {
     const handleResize = (): void => setTerminalSize(currentTerminalSize());
@@ -243,7 +240,7 @@ export function KagentInkApp({
           dispatchRuntime({ type: "setup_action", action: { type: "back" } });
           return;
         }
-        app.exit();
+        exitApp();
         return;
       }
       if (status === "thinking" || status === "cancelling") {
@@ -260,7 +257,7 @@ export function KagentInkApp({
         }
         return;
       }
-      app.exit();
+      exitApp();
       return;
     }
     if (setup) {
@@ -435,7 +432,7 @@ export function KagentInkApp({
     }
     if (key.name === "escape") {
       if (setup.stage === "provider") {
-        app.exit();
+        exitApp();
       } else {
         dispatchRuntime({ type: "setup_action", action: { type: "back" } });
       }
@@ -523,7 +520,7 @@ export function KagentInkApp({
     }
     const goal = submission.value;
     if (["exit", "quit", ":q"].includes(goal.toLowerCase())) {
-      app.exit();
+      exitApp();
       return;
     }
     submitInFlight.current = true;
@@ -590,6 +587,7 @@ export function KagentInkApp({
   }
 
   if (setup) {
+    terminalCursor?.update(null);
     const layout = createTerminalLayout(terminalSize.columns, terminalSize.rows, {
       approval: false,
       commandMenu: false,
@@ -635,6 +633,7 @@ export function KagentInkApp({
     promptCursor: editor.cursor,
   });
   if (layout.tooNarrow) {
+    terminalCursor?.update(null);
     return React.createElement(NarrowTerminal, { React, Box, Text });
   }
   const visibleTranscript = selectTranscriptViewport(
@@ -655,6 +654,9 @@ export function KagentInkApp({
     maxRows: layout.promptRowLimit,
     horizontalPadding: layout.horizontalPadding,
   });
+  terminalCursor?.update(
+    promptVisible && !promptDisabled ? promptCursorControl : null,
+  );
 
   return React.createElement(
     Box,
@@ -736,30 +738,8 @@ export function KagentInkApp({
             maxRows: layout.promptRowLimit,
             imeSafe: true,
           }),
-          React.createElement(TerminalCursorSync, {
-            React,
-            control: promptDisabled ? null : promptCursorControl,
-          }),
         ),
   );
-}
-
-function TerminalCursorSync({
-  React,
-  control,
-}: {
-  React: typeof ReactNamespace;
-  control: PromptTerminalCursorControl | null;
-}): null {
-  React.useEffect(() => {
-    if (!control || !process.stdout.isTTY) {
-      return undefined;
-    }
-    return scheduleTerminalCursorSync(control, {
-      write: (value) => process.stdout.write(value),
-    });
-  });
-  return null;
 }
 
 function currentTerminalSize(): { columns: number; rows: number } {
