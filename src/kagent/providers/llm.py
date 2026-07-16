@@ -16,7 +16,6 @@ from typing import Any, Callable, Dict, Iterator, List, Mapping, Optional
 from kagent.runtime.redaction import REDACTED_VALUE, redact_runtime_text
 from kagent.utils.paths import kagent_config_dir, migrate_legacy_kagent_state
 
-DEFAULT_LLM_MODEL = "qwen3.5-122b-a10b"
 PROVIDER_CONFIG_SCHEMA_VERSION = "1"
 
 
@@ -29,7 +28,7 @@ class ProviderKind(str, Enum):
 
 @dataclass(frozen=True)
 class LLMProviderConfig:
-    provider: ProviderKind = ProviderKind.OPENAI_COMPATIBLE
+    provider: Optional[ProviderKind] = None
     base_url: str = ""
     api_key: str = ""
     model: str = ""
@@ -42,8 +41,9 @@ class LLMProviderConfig:
         source = env if env is not None else environ
         base_url = source.get("KAGENT_LLM_BASE_URL", cls.base_url)
         model = source.get("KAGENT_LLM_MODEL", cls.model)
+        provider_value = source.get("KAGENT_LLM_PROVIDER", "").strip()
         return cls(
-            provider=_provider_from_env(source, base_url=base_url, model=model),
+            provider=normalize_provider_kind(provider_value) if provider_value else None,
             base_url=base_url,
             api_key=source.get("KAGENT_LLM_API_KEY", cls.api_key),
             model=model,
@@ -75,7 +75,9 @@ class LLMProviderConfig:
             config_path or default_provider_config_path(source)
         )
         merged = {
-            "KAGENT_LLM_PROVIDER": file_config.provider.value,
+            "KAGENT_LLM_PROVIDER": (
+                file_config.provider.value if file_config.provider is not None else ""
+            ),
             "KAGENT_LLM_BASE_URL": file_config.base_url,
             "KAGENT_LLM_API_KEY": file_config.api_key,
             "KAGENT_LLM_MODEL": file_config.model,
@@ -85,23 +87,31 @@ class LLMProviderConfig:
                 file_config.retry_backoff_seconds
             ),
         }
-        for key, value in source.items():
-            if key.startswith("KAGENT_LLM_") and value != "":
-                merged[key] = value
-        provider_overridden = bool(source.get("KAGENT_LLM_PROVIDER", "").strip())
-        endpoint_overridden = bool(
-            source.get("KAGENT_LLM_BASE_URL", "").strip()
-            or source.get("KAGENT_LLM_MODEL", "").strip()
-        )
-        if endpoint_overridden and not provider_overridden:
-            merged["KAGENT_LLM_PROVIDER"] = ""
+        identity_keys = {
+            "KAGENT_LLM_PROVIDER",
+            "KAGENT_LLM_BASE_URL",
+            "KAGENT_LLM_API_KEY",
+            "KAGENT_LLM_MODEL",
+        }
+        operational_keys = {
+            "KAGENT_LLM_TIMEOUT_SECONDS",
+            "KAGENT_LLM_MAX_RETRIES",
+            "KAGENT_LLM_RETRY_BACKOFF_SECONDS",
+        }
+        for key in identity_keys:
+            if key in source:
+                merged[key] = source[key]
+        for key in operational_keys:
+            if source.get(key, "") != "":
+                merged[key] = source[key]
         return cls.from_env(merged)
 
     def redacted_snapshot(self) -> Dict[str, str]:
-        provider = self.provider.value if self.base_url and self.model else "unconfigured"
+        configured = self.provider is not None and bool(self.base_url and self.model)
+        provider = self.provider.value if configured else "unconfigured"
         display_name = (
             provider_display_name(self.provider)
-            if self.base_url and self.model
+            if configured
             else "Unconfigured"
         )
         base_url_configured = bool(self.base_url)
@@ -118,7 +128,8 @@ class LLMProviderConfig:
         }
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "provider", normalize_provider_kind(self.provider))
+        if self.provider is not None:
+            object.__setattr__(self, "provider", normalize_provider_kind(self.provider))
         if self.timeout_seconds <= 0:
             raise ValueError("timeout_seconds must be positive")
         if self.max_retries < 0:
@@ -145,7 +156,8 @@ def load_provider_config(path: str = "") -> LLMProviderConfig:
         raise ValueError("provider config must be a JSON object")
     if str(payload.get("schema_version", "")) != PROVIDER_CONFIG_SCHEMA_VERSION:
         raise ValueError("provider config schema_version is unsupported")
-    provider = normalize_provider_kind(str(payload.get("provider", "openai_compatible")))
+    provider_value = str(payload.get("provider", "")).strip()
+    provider = normalize_provider_kind(provider_value) if provider_value else None
     return LLMProviderConfig(
         provider=provider,
         base_url=str(payload.get("base_url", "")),
@@ -165,6 +177,7 @@ def load_provider_config(path: str = "") -> LLMProviderConfig:
 
 
 def save_provider_config(config: LLMProviderConfig, path: str = "") -> str:
+    validate_provider_setup_config(config)
     config_path = Path(path or default_provider_config_path())
     _validate_provider_config_path_for_write(config_path)
     config_path.parent.mkdir(parents=True, exist_ok=True)
@@ -195,7 +208,6 @@ def normalize_provider_kind(value: object) -> ProviderKind:
         return value
     normalized = str(value or "").strip().lower().replace("-", "_")
     aliases = {
-        "": ProviderKind.OPENAI_COMPATIBLE,
         "openai": ProviderKind.OPENAI_COMPATIBLE,
         "openai_compatible": ProviderKind.OPENAI_COMPATIBLE,
         "openai-compatible": ProviderKind.OPENAI_COMPATIBLE,
@@ -215,24 +227,10 @@ def normalize_provider_kind(value: object) -> ProviderKind:
         raise ValueError(f"unsupported llm provider: {value}") from exc
 
 
-def detect_provider_kind(base_url: str, model: str = "") -> ProviderKind:
-    haystack = f"{base_url} {model}".strip().lower()
-    if not haystack:
-        return ProviderKind.OPENAI_COMPATIBLE
-    if "deepseek" in haystack:
-        return ProviderKind.DEEPSEEK
-    if any(marker in haystack for marker in ("dashscope", "aliyuncs", "qwen")):
-        return ProviderKind.QWEN_OPENAI_COMPATIBLE
-    if any(marker in haystack for marker in ("localhost:11434", "127.0.0.1:11434", "ollama")):
-        return ProviderKind.OLLAMA_OPENAI_COMPATIBLE
-    return ProviderKind.OPENAI_COMPATIBLE
-
-
 def provider_display_name(provider: object) -> str:
-    try:
-        kind = normalize_provider_kind(provider)
-    except ValueError:
-        kind = ProviderKind.OPENAI_COMPATIBLE
+    if provider is None:
+        return "Unconfigured"
+    kind = normalize_provider_kind(provider)
     names = {
         ProviderKind.OPENAI_COMPATIBLE: "OpenAI-compatible",
         ProviderKind.DEEPSEEK: "DeepSeek",
@@ -242,36 +240,26 @@ def provider_display_name(provider: object) -> str:
     return names[kind]
 
 
-def provider_setup_options(
-    default_model: str = DEFAULT_LLM_MODEL,
-) -> List[Dict[str, object]]:
+def provider_setup_options() -> List[Dict[str, object]]:
     return [
         {
             "provider": ProviderKind.QWEN_OPENAI_COMPATIBLE,
             "label": "Qwen / DashScope",
-            "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
-            "model": default_model,
             "api_key_required": True,
         },
         {
             "provider": ProviderKind.DEEPSEEK,
             "label": "DeepSeek",
-            "base_url": "https://api.deepseek.com/v1",
-            "model": "deepseek-chat",
             "api_key_required": True,
         },
         {
             "provider": ProviderKind.OLLAMA_OPENAI_COMPATIBLE,
             "label": "Ollama local",
-            "base_url": "http://localhost:11434/v1",
-            "model": "llama3",
             "api_key_required": False,
         },
         {
             "provider": ProviderKind.OPENAI_COMPATIBLE,
             "label": "OpenAI-compatible / custom",
-            "base_url": "",
-            "model": default_model,
             "api_key_required": False,
         },
     ]
@@ -279,6 +267,8 @@ def provider_setup_options(
 
 def missing_provider_config_fields(config: LLMProviderConfig) -> List[str]:
     missing = []
+    if config.provider is None:
+        missing.append("KAGENT_LLM_PROVIDER")
     if not config.base_url.strip():
         missing.append("KAGENT_LLM_BASE_URL")
     if not config.model.strip():
@@ -292,6 +282,8 @@ def missing_provider_config_fields(config: LLMProviderConfig) -> List[str]:
 
 
 def validate_provider_setup_config(config: LLMProviderConfig) -> None:
+    if config.provider is None:
+        raise ValueError("provider is required")
     if not config.base_url.strip():
         raise ValueError("base_url is required")
     endpoint = urllib.parse.urlsplit(config.base_url)
@@ -304,18 +296,6 @@ def validate_provider_setup_config(config: LLMProviderConfig) -> None:
         ProviderKind.DEEPSEEK,
     } and not config.api_key.strip():
         raise ValueError("api_key is required for this provider")
-
-
-def _provider_from_env(
-    env: Mapping[str, str],
-    *,
-    base_url: str,
-    model: str,
-) -> ProviderKind:
-    explicit = env.get("KAGENT_LLM_PROVIDER", "")
-    if explicit.strip():
-        return normalize_provider_kind(explicit)
-    return detect_provider_kind(base_url, model)
 
 
 def _validate_provider_config_path_for_read(path: Path) -> None:
@@ -634,7 +614,7 @@ def build_llm_provider(
 ) -> OpenAICompatibleProvider:
     # DeepSeek, Qwen, Ollama, and many company gateways expose the same
     # /v1/chat/completions contract. Native protocol adapters can branch here.
-    normalize_provider_kind(config.provider)
+    validate_provider_setup_config(config)
     return OpenAICompatibleProvider(config, urlopen=urlopen, sleep=sleep)
 
 

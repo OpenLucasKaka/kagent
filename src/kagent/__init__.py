@@ -29,7 +29,6 @@ __all__ = [
     "LLMProviderConfig",
     "ProviderKind",
     "__version__",
-    "detect_provider_kind",
     "runtime_topology",
     "run_runtime_agent",
 ]
@@ -40,7 +39,6 @@ def __getattr__(name):
         "FakeLLMProvider",
         "LLMProviderConfig",
         "ProviderKind",
-        "detect_provider_kind",
     }:
         from kagent.providers import llm_provider
 

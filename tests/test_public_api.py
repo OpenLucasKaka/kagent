@@ -1,12 +1,12 @@
 import json
 from pathlib import Path
 
+import kagent
 from kagent import (
     FakeLLMProvider,
     LLMProviderConfig,
     ProviderKind,
     __version__,
-    detect_provider_kind,
     run_runtime_agent,
     runtime_topology,
 )
@@ -84,6 +84,6 @@ def test_public_api_exports_runtime_agent_entrypoint():
     assert LLMProviderConfig.from_env({}).redacted_snapshot()["llm_provider"] == "unconfigured"
 
 
-def test_public_api_exports_provider_kind_helpers():
+def test_public_api_exports_provider_kind_without_inference_helpers():
     assert ProviderKind.DEEPSEEK.value == "deepseek"
-    assert detect_provider_kind("https://api.deepseek.com/v1") == ProviderKind.DEEPSEEK
+    assert "detect_provider_kind" not in kagent.__all__
