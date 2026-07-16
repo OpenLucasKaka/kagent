@@ -54,8 +54,6 @@ export type ProviderSnapshot = {
 export type ProviderOption = {
   provider: string;
   label: string;
-  base_url: string;
-  model: string;
   api_key_required: boolean;
 };
 

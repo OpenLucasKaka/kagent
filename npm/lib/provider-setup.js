@@ -13,7 +13,7 @@ function createProviderSetupState(options) {
     return {
         stage: "provider",
         options,
-        selectedIndex: 0,
+        selectedIndex: null,
         baseUrl: "",
         model: "",
         apiKey: "",
@@ -24,13 +24,23 @@ function createProviderSetupState(options) {
 function providerSetupReducer(state, action) {
     if (action.type === "select" && state.stage === "provider") {
         const length = state.options.length;
-        const selectedIndex = (state.selectedIndex + action.offset + length) % length;
+        const selectedIndex = state.selectedIndex === null
+            ? action.offset < 0 ? length - 1 : 0
+            : (state.selectedIndex + action.offset + length) % length;
         return { ...state, selectedIndex, error: "" };
     }
     if (action.type === "edit" && isInputStage(state.stage)) {
         return { ...state, editor: action.editor, error: "" };
     }
     if (action.type === "failure") {
+        if (action.field === "provider") {
+            return {
+                ...state,
+                stage: "provider",
+                editor: editorFor(""),
+                error: action.message,
+            };
+        }
         const stage = action.field ?? "api_key";
         const value = stage === "base_url" ? state.baseUrl : stage === "model" ? state.model : state.apiKey;
         return {
@@ -49,6 +59,9 @@ function providerSetupReducer(state, action) {
     return state;
 }
 function selectedProvider(state) {
+    if (state.selectedIndex === null) {
+        throw new Error("Choose a provider.");
+    }
     return state.options[state.selectedIndex];
 }
 function providerConfiguration(state) {
@@ -67,18 +80,21 @@ function isInputStage(stage) {
     return stage === "base_url" || stage === "model" || stage === "api_key";
 }
 function nextStage(state) {
-    const option = selectedProvider(state);
     if (state.stage === "provider") {
+        if (state.selectedIndex === null) {
+            return { ...state, error: "Choose a provider." };
+        }
         return {
             ...state,
             stage: "base_url",
-            baseUrl: option.base_url,
-            model: option.model,
+            baseUrl: "",
+            model: "",
             apiKey: "",
-            editor: editorFor(option.base_url),
+            editor: editorFor(""),
             error: "",
         };
     }
+    const option = selectedProvider(state);
     const value = state.editor.value.trim();
     if (state.stage === "base_url") {
         if (!value) {

@@ -490,7 +490,6 @@ export function ProviderSetupPanel({
   frame,
   setup,
 }: RenderProps & { frame: number; setup: ProviderSetupState }): ReactNamespace.ReactElement {
-  const option = selectedProvider(setup);
   if (setup.stage === "provider") {
     return React.createElement(
       Box,
@@ -504,16 +503,23 @@ export function ProviderSetupPanel({
             Text,
             {
               key: candidate.provider,
-              bold: index === setup.selectedIndex,
-              color: index === setup.selectedIndex ? "cyan" : undefined,
+              bold: setup.selectedIndex !== null && index === setup.selectedIndex,
+              color:
+                setup.selectedIndex !== null && index === setup.selectedIndex
+                  ? "cyan"
+                  : undefined,
             },
-            `${index === setup.selectedIndex ? "›" : " "} ${candidate.label}`,
+            `${
+              setup.selectedIndex !== null && index === setup.selectedIndex ? "›" : " "
+            } ${candidate.label}`,
           ),
         ),
       ),
+      setup.error ? React.createElement(Text, { color: "red", wrap: "wrap" }, setup.error) : null,
       React.createElement(Text, { color: "gray" }, "↑↓ choose  enter continue  esc quit"),
     );
   }
+  const option = selectedProvider(setup);
   if (setup.stage === "saving") {
     return React.createElement(
       Box,

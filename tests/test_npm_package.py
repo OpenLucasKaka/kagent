@@ -884,34 +884,35 @@ lifecycleHandler({
   provider_options: [{
     provider: "test",
     label: "Test",
-    base_url: "x",
-    model: "model",
     api_key_required: false,
   }],
 });
 render();
 
+inputEvents.emit("input", "\u001b[B");
+render();
 inputEvents.emit("input", "\r");
 render();
 inputEvents.emit("input", "👍");
 inputEvents.emit("input", "🏽");
 assert.deepEqual(
   [states[2].setup.editor.value, states[2].setup.editor.cursor],
-  ["x👍🏽", 2],
+  ["👍🏽", 1],
 );
 inputEvents.emit("input", "e");
 inputEvents.emit("input", "\u0301");
 assert.deepEqual(
   [states[2].setup.editor.value, states[2].setup.editor.cursor],
-  ["x👍🏽e\u0301", 3],
+  ["👍🏽e\u0301", 2],
 );
 inputEvents.emit("input", "a\nb");
 assert.deepEqual(
   [states[2].setup.editor.value, states[2].setup.editor.cursor],
-  ["x👍🏽e\u0301a b", 6],
+  ["👍🏽e\u0301a b", 5],
 );
 inputEvents.emit("input", "\r");
 render();
+inputEvents.emit("input", "model");
 inputEvents.emit("input", "\r");
 render();
 inputEvents.emit("input", "\r");
@@ -919,7 +920,7 @@ render();
 effects[4]();
 assert.deepEqual(configuredProvider, {
   provider: "test",
-  baseUrl: "x👍🏽e\u0301a b",
+  baseUrl: "👍🏽e\u0301a b",
   model: "model",
   apiKey: "",
 });
@@ -943,7 +944,7 @@ assert.equal(inputEvents.listenerCount("input"), 0);
     subprocess.run([node, "-e", script], check=True)
 
 
-def test_npm_provider_setup_state_machine_supports_menu_defaults_and_secret_masking():
+def test_npm_provider_setup_state_machine_requires_explicit_values_and_masks_secrets():
     node = shutil.which("node")
     if node is None:
         return
@@ -961,41 +962,58 @@ const options = [
   {
     provider: "qwen_openai_compatible",
     label: "Qwen / DashScope",
-    base_url: "https://dashscope.example/v1",
-    model: "qwen-plus",
     api_key_required: true,
   },
   {
     provider: "ollama_openai_compatible",
     label: "Ollama local",
-    base_url: "http://localhost:11434/v1",
-    model: "llama3",
     api_key_required: false,
   },
 ];
 
 let state = createProviderSetupState(options);
+state = providerSetupReducer(state, {type: "next"});
+assert.equal(state.stage, "provider");
+assert.match(state.error, /Choose a provider/);
 state = providerSetupReducer(state, {type: "select", offset: -1});
 assert.equal(state.selectedIndex, 1);
 state = providerSetupReducer(state, {type: "next"});
 assert.equal(state.stage, "base_url");
-assert.equal(state.editor.value, "http://localhost:11434/v1");
+assert.equal(state.editor.value, "");
+state = providerSetupReducer(state, {
+  type: "edit",
+  editor: {value: "https://local.example.test/v1", cursor: 29},
+});
 state = providerSetupReducer(state, {type: "next"});
 assert.equal(state.stage, "model");
+assert.equal(state.editor.value, "");
+state = providerSetupReducer(state, {
+  type: "edit",
+  editor: {value: "local-model", cursor: 11},
+});
 state = providerSetupReducer(state, {type: "next"});
 assert.equal(state.stage, "api_key");
 state = providerSetupReducer(state, {type: "next"});
 assert.equal(state.stage, "saving");
 assert.deepEqual(providerConfiguration(state), {
   provider: "ollama_openai_compatible",
-  baseUrl: "http://localhost:11434/v1",
-  model: "llama3",
+  baseUrl: "https://local.example.test/v1",
+  model: "local-model",
   apiKey: "",
 });
 
 let required = createProviderSetupState(options);
+required = providerSetupReducer(required, {type: "select", offset: 1});
 required = providerSetupReducer(required, {type: "next"});
+required = providerSetupReducer(required, {
+  type: "edit",
+  editor: {value: "https://hosted.example.test/v1", cursor: 30},
+});
 required = providerSetupReducer(required, {type: "next"});
+required = providerSetupReducer(required, {
+  type: "edit",
+  editor: {value: "hosted-model", cursor: 12},
+});
 required = providerSetupReducer(required, {type: "next"});
 required = providerSetupReducer(required, {type: "next"});
 assert.equal(required.stage, "api_key");
@@ -1369,8 +1387,6 @@ const provider = {
 const option = {
   provider: "test",
   label: "Test",
-  base_url: "https://example.test/v1",
-  model: "model",
   api_key_required: false,
 };
 let state = createAppRuntimeState();
@@ -1390,6 +1406,16 @@ assert.equal(state.status, "idle");
 assert.equal(state.setup.stage, "provider");
 assert.equal(state.commandCatalog[0].command, "/status");
 
+state = appRuntimeReducer(state, {
+  type: "setup_action",
+  action: {type: "next"},
+});
+assert.equal(state.setup.stage, "provider");
+assert.match(state.setup.error, /Choose a provider/);
+state = appRuntimeReducer(state, {
+  type: "setup_action",
+  action: {type: "select", offset: 1},
+});
 state = appRuntimeReducer(state, {
   type: "setup_action",
   action: {type: "next"},

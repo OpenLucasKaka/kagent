@@ -229,14 +229,16 @@ function Header({ React, Box, Text, compact, provider, setup, workspace, }) {
     return React.createElement(Box, { flexDirection: "column", marginBottom: 1 }, React.createElement(Box, { flexDirection: "row", flexShrink: 0 }, React.createElement(Text, { bold: true, color: "cyan" }, "◆ kagent"), React.createElement(Text, { color: "gray" }, setup ? "  setup" : "")), React.createElement(Text, { color: "gray", wrap: "truncate" }, sessionLabel));
 }
 function ProviderSetupPanel({ React, Box, Text, frame, setup, }) {
-    const option = (0, provider_setup_1.selectedProvider)(setup);
     if (setup.stage === "provider") {
         return React.createElement(Box, { flexDirection: "column" }, React.createElement(Text, { bold: true }, "Connect a model provider"), React.createElement(Box, { flexDirection: "column", marginTop: 1 }, ...setup.options.map((candidate, index) => React.createElement(Text, {
             key: candidate.provider,
-            bold: index === setup.selectedIndex,
-            color: index === setup.selectedIndex ? "cyan" : undefined,
-        }, `${index === setup.selectedIndex ? "›" : " "} ${candidate.label}`))), React.createElement(Text, { color: "gray" }, "↑↓ choose  enter continue  esc quit"));
+            bold: setup.selectedIndex !== null && index === setup.selectedIndex,
+            color: setup.selectedIndex !== null && index === setup.selectedIndex
+                ? "cyan"
+                : undefined,
+        }, `${setup.selectedIndex !== null && index === setup.selectedIndex ? "›" : " "} ${candidate.label}`))), setup.error ? React.createElement(Text, { color: "red", wrap: "wrap" }, setup.error) : null, React.createElement(Text, { color: "gray" }, "↑↓ choose  enter continue  esc quit"));
     }
+    const option = (0, provider_setup_1.selectedProvider)(setup);
     if (setup.stage === "saving") {
         return React.createElement(Box, { flexDirection: "column" }, React.createElement(Text, { bold: true }, `Connect ${option.label}`), React.createElement(Text, { color: "cyan" }, `${exports.TERMINAL_SPINNER_FRAMES[frame]} Saving settings`));
     }
