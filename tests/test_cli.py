@@ -348,6 +348,7 @@ def test_cli_can_run_codex_style_runtime_with_inline_plan():
 
 def test_cli_missing_runtime_provider_config_for_goal_avoids_argparse_usage(tmp_path):
     env = os.environ.copy()
+    env.pop("KAGENT_LLM_PROVIDER", None)
     env.pop("KAGENT_LLM_BASE_URL", None)
     env.pop("KAGENT_LLM_MODEL", None)
     env.pop("KAGENT_LLM_API_KEY", None)
@@ -372,12 +373,30 @@ def test_cli_missing_runtime_provider_config_for_goal_avoids_argparse_usage(tmp_
     assert "Traceback" not in completed.stderr
 
 
+def test_cli_provider_setup_requires_explicit_provider_selection(tmp_path):
+    from kagent.cli.main import _configure_runtime_provider_interactively
+    from kagent.providers.llm import LLMProviderConfig
+
+    try:
+        _configure_runtime_provider_interactively(
+            LLMProviderConfig,
+            default_config_path=lambda: str(tmp_path / "provider.json"),
+            save_config=lambda _config: str(tmp_path / "provider.json"),
+            input_fn=lambda _prompt: "",
+            secret_input_fn=lambda _prompt: "",
+        )
+    except ValueError as exc:
+        assert str(exc) == "provider selection is required"
+    else:
+        raise AssertionError("empty provider selection was accepted")
+
+
 def test_cli_provider_setup_collects_values_and_saves_config(tmp_path):
     from kagent.cli.main import _configure_runtime_provider_interactively
     from kagent.providers.llm import LLMProviderConfig, ProviderKind
 
     prompts = []
-    answers = iter(["2", "", ""])
+    answers = iter(["2", "https://gateway.example.test/v1", "user-model"])
     saved_configs = []
 
     def input_answer(prompt):
@@ -390,7 +409,6 @@ def test_cli_provider_setup_collects_values_and_saves_config(tmp_path):
 
     config = _configure_runtime_provider_interactively(
         LLMProviderConfig,
-        default_model="default-model",
         default_config_path=lambda: str(tmp_path / "provider.json"),
         save_config=save_config,
         input_fn=input_answer,
@@ -399,8 +417,8 @@ def test_cli_provider_setup_collects_values_and_saves_config(tmp_path):
 
     assert prompts[0].startswith("Provider")
     assert config.provider == ProviderKind.DEEPSEEK
-    assert config.base_url == "https://api.deepseek.com/v1"
-    assert config.model == "deepseek-chat"
+    assert config.base_url == "https://gateway.example.test/v1"
+    assert config.model == "user-model"
     assert config.api_key == "secret-key"
     assert saved_configs == [config]
 
@@ -418,7 +436,6 @@ def test_cli_provider_setup_allows_custom_openai_compatible_values(tmp_path):
 
     config = _configure_runtime_provider_interactively(
         LLMProviderConfig,
-        default_model="default-model",
         default_config_path=lambda: str(tmp_path / "provider.json"),
         save_config=save_config,
         input_fn=lambda _prompt: next(answers),
@@ -430,6 +447,28 @@ def test_cli_provider_setup_allows_custom_openai_compatible_values(tmp_path):
     assert config.model == "gateway-model"
     assert config.api_key == "secret-key"
     assert saved_configs == [config]
+
+
+def test_cli_provider_setup_options_have_no_endpoint_or_model_presets():
+    from kagent.cli.main import _provider_setup_options
+
+    assert all(
+        "base_url" not in option and "model" not in option
+        for option in _provider_setup_options()
+    )
+
+
+def test_cli_provider_config_message_uses_neutral_explicit_placeholders():
+    from kagent.cli.provider import runtime_provider_config_message
+
+    message = runtime_provider_config_message(
+        ["KAGENT_LLM_PROVIDER", "KAGENT_LLM_BASE_URL", "KAGENT_LLM_MODEL"]
+    )
+
+    assert "KAGENT_LLM_PROVIDER='your-provider'" in message
+    assert "KAGENT_LLM_BASE_URL='https://your-endpoint/v1'" in message
+    assert "KAGENT_LLM_MODEL='your-model'" in message
+    assert "qwen3.5-122b-a10b" not in message
 
 
 def test_cli_configure_flag_rejects_goal_without_traceback():
