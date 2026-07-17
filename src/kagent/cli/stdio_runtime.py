@@ -81,6 +81,7 @@ _LOCAL_OPEN_APP_UNSAFE_MARKERS = (
     " and ",
     " then ",
 )
+_LOCAL_OPEN_APP_TRAILING_PARTICLES = "啊呀哦呢吧哈"
 _LOCAL_OPEN_APP_WEB_TARGETS = {
     "github",
     "gitlab",
@@ -862,6 +863,8 @@ def _approval_details(action_input: Dict[str, Any]) -> list[str]:
 def _completion_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
     allowed_keys = (
         "duration_seconds",
+        "error",
+        "error_code",
         "iteration_count",
         "max_iterations",
         "run_id",
@@ -943,6 +946,7 @@ def _normalize_local_open_app_name(value: str) -> str:
         application = application[:-2].strip()
     if application.endswith("应用"):
         application = application[:-2].strip()
+    application = application.rstrip(_LOCAL_OPEN_APP_TRAILING_PARTICLES).strip()
     if not application:
         return ""
     if "/" in application or "\\" in application or "\x00" in application:

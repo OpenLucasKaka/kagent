@@ -3042,7 +3042,9 @@ def _open_app(input_payload: Dict[str, Any]) -> Dict[str, Any]:
         except (OSError, subprocess.CalledProcessError) as exc:
             last_error = exc
             continue
-    raise ValueError("open app failed") from last_error
+    raise ValueError(
+        f"application is not installed or cannot be opened: {normalized_application}"
+    ) from last_error
 
 
 def _app_frontmost_script(application: str) -> str:

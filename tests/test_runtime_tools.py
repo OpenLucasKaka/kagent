@@ -1667,6 +1667,32 @@ def test_open_app_tool_falls_back_to_open_when_activation_fails(monkeypatch):
     ]
 
 
+def test_open_app_tool_reports_missing_application_name(monkeypatch):
+    class FakeCalledProcessError(Exception):
+        pass
+
+    class FakeSubprocess:
+        CalledProcessError = FakeCalledProcessError
+        TimeoutExpired = TimeoutError
+
+        @staticmethod
+        def run(args, *, check, capture_output, text, timeout):
+            raise FakeCalledProcessError()
+
+    monkeypatch.setattr(runtime_tools, "subprocess", FakeSubprocess, raising=False)
+
+    observation = execute_runtime_tool(
+        default_runtime_tools(),
+        "open_app",
+        {"application": "QQ"},
+        action_id="step-1",
+    )
+
+    assert observation.status == "failed"
+    assert observation.error_code == "invalid_tool_input"
+    assert observation.error == "application is not installed or cannot be opened: QQ"
+
+
 def test_open_app_tool_normalizes_feishu_alias(monkeypatch):
     calls = []
 

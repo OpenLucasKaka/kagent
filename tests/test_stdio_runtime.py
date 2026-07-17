@@ -200,6 +200,33 @@ def test_stdio_runtime_reports_invalid_iteration_budget_without_crashing(tmp_pat
     assert completed.stderr == ""
 
 
+def test_stdio_runtime_failed_completion_payload_includes_error_details(tmp_path):
+    stream = io.StringIO()
+    session = stdio_runtime.StdioRuntimeSession(
+        stream,
+        memory_path=str(tmp_path / "memory.json"),
+        pending_approval_path=str(tmp_path / "pending-approval.json"),
+    )
+
+    session._complete(
+        "打开qq",
+        {
+            "status": "failed",
+            "error_code": "invalid_tool_input",
+            "error": "application is not installed or cannot be opened: QQ",
+        },
+    )
+
+    events = _jsonl(stream.getvalue())
+    assert events[-1]["type"] == "run_completed"
+    assert events[-1]["status"] == "failed"
+    assert events[-1]["payload"]["error_code"] == "invalid_tool_input"
+    assert (
+        events[-1]["payload"]["error"]
+        == "application is not installed or cannot be opened: QQ"
+    )
+
+
 def test_stdio_runtime_uses_local_fast_plan_for_simple_open_app_requests(tmp_path):
     request = {"type": "run_request", "goal": "打开qq"}
 
@@ -228,6 +255,30 @@ def test_stdio_runtime_uses_local_fast_plan_for_simple_open_app_requests(tmp_pat
     assert events[-1]["title"] == "Open an application"
     assert events[-1]["target"] == "QQ"
     assert completed.stderr == ""
+
+
+def test_stdio_runtime_ignores_empty_modal_particle_open_app_request(tmp_path):
+    assert stdio_runtime._local_open_app_runtime_plan("打开啊") == ""
+
+
+def test_stdio_runtime_strips_modal_particle_from_open_app_target(tmp_path):
+    request = {"type": "run_request", "goal": "打开飞书啊"}
+
+    env = _runtime_env(tmp_path)
+    env["KAGENT_PENDING_APPROVAL_PATH"] = str(tmp_path / "pending-approval.json")
+
+    completed = subprocess.run(
+        [".venv/bin/python", "-m", "kagent.cli.stdio_runtime"],
+        input=f"{json.dumps(request, ensure_ascii=False)}\n",
+        capture_output=True,
+        text=True,
+        check=True,
+        env=env,
+    )
+
+    events = _jsonl(completed.stdout)
+    assert events[-1]["type"] == "approval_required"
+    assert events[-1]["target"] == "Feishu"
 
 
 def test_stdio_runtime_does_not_fast_plan_web_targets_as_open_apps(tmp_path):
