@@ -70,6 +70,10 @@ export type RuntimeProviderState = {
 
 export function createRuntimeSessionClient(): RuntimeSessionClient {
   const sessionId = randomUUID();
+  const configuredSessionMemoryPath = process.env.KAGENT_SESSION_MEMORY_PATH;
+  const sessionMemoryPath = configuredSessionMemoryPath !== undefined
+    ? configuredSessionMemoryPath
+    : path.join(kagentStatePath("sessions"), `${sessionId}.json`);
   const configuredPendingApprovalPath = process.env.KAGENT_PENDING_APPROVAL_PATH;
   const pendingApprovalPath = configuredPendingApprovalPath || (() => {
     const pendingApprovalDirectory = kagentStatePath("pending-approvals");
@@ -101,6 +105,7 @@ export function createRuntimeSessionClient(): RuntimeSessionClient {
         cwd: process.cwd(),
         env: {
           ...process.env,
+          KAGENT_SESSION_MEMORY_PATH: sessionMemoryPath,
           KAGENT_PENDING_APPROVAL_PATH: pendingApprovalPath,
         },
       });

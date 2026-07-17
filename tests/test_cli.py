@@ -2836,33 +2836,19 @@ def test_cli_session_memory_requires_interactive_runtime():
     assert "Traceback" not in completed.stderr
 
 
-def test_cli_defaults_session_memory_to_kagent_home_for_tty(monkeypatch, tmp_path):
-    import kagent.cli.memory as memory_module
+def test_cli_starts_tty_sessions_without_shared_memory_by_default(monkeypatch, tmp_path):
     from kagent.cli.main import _session_memory_path_from_args
 
-    calls = []
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.delenv("KAGENT_HOME", raising=False)
     monkeypatch.delenv("KAGENT_SESSION_MEMORY_PATH", raising=False)
-    monkeypatch.setattr(
-        memory_module,
-        "migrate_legacy_kagent_state",
-        lambda env: calls.append(env),
-        raising=False,
-    )
 
-    memory_path = _session_memory_path_from_args(
-        Namespace(session_memory=""),
-        interactive_tty=True,
-    )
+    memory_path = _session_memory_path_from_args(Namespace(session_memory=""))
 
-    assert memory_path == str(
-        tmp_path / ".kagent" / "state" / "session-memory.json"
-    )
-    assert len(calls) == 1
+    assert memory_path == ""
 
 
-def test_cli_does_not_default_session_memory_for_piped_interactive_runs(
+def test_cli_does_not_use_legacy_state_as_session_memory(
     monkeypatch,
     tmp_path,
 ):
@@ -2871,15 +2857,12 @@ def test_cli_does_not_default_session_memory_for_piped_interactive_runs(
     monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
 
     assert (
-        _session_memory_path_from_args(
-            Namespace(session_memory=""),
-            interactive_tty=False,
-        )
+        _session_memory_path_from_args(Namespace(session_memory=""))
         == ""
     )
 
 
-def test_cli_session_memory_env_override_can_disable_default_memory(
+def test_cli_session_memory_env_can_disable_persistence(
     monkeypatch,
     tmp_path,
 ):
@@ -2889,11 +2872,19 @@ def test_cli_session_memory_env_override_can_disable_default_memory(
     monkeypatch.setenv("KAGENT_SESSION_MEMORY_PATH", "")
 
     assert (
-        _session_memory_path_from_args(
-            Namespace(session_memory=""),
-            interactive_tty=True,
-        )
+        _session_memory_path_from_args(Namespace(session_memory=""))
         == ""
+    )
+
+
+def test_cli_session_memory_env_selects_explicit_memory_file(monkeypatch, tmp_path):
+    from kagent.cli.main import _session_memory_path_from_args
+
+    memory_path = tmp_path / "chosen-session.json"
+    monkeypatch.setenv("KAGENT_SESSION_MEMORY_PATH", str(memory_path))
+
+    assert _session_memory_path_from_args(Namespace(session_memory="")) == str(
+        memory_path
     )
 
 

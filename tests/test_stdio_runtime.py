@@ -114,6 +114,36 @@ def test_stdio_runtime_reports_malformed_json_as_structured_error(tmp_path):
     assert events[-1]["error_code"] == "invalid_json"
 
 
+def test_stdio_runtime_does_not_load_shared_memory_without_session_path(
+    monkeypatch,
+    tmp_path,
+):
+    shared_memory = tmp_path / ".kagent" / "state" / "session-memory.json"
+    shared_memory.parent.mkdir(parents=True)
+    shared_memory.write_text(
+        json.dumps(
+            {
+                "schema_version": "2",
+                "summary": "old conversation",
+                "facts": [],
+                "open_items": ["深圳到厦门旅行攻略"],
+                "turns": [],
+                "compacted_turn_count": 0,
+            }
+        ),
+        encoding="utf-8",
+    )
+    shared_memory.chmod(0o600)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.delenv("KAGENT_HOME", raising=False)
+    monkeypatch.delenv("KAGENT_SESSION_MEMORY_PATH", raising=False)
+
+    session = stdio_runtime.StdioRuntimeSession(io.StringIO())
+
+    assert session.memory_path == ""
+    assert not session.memory
+
+
 def test_stdio_runtime_does_not_scan_or_prune_orphan_approvals_on_startup(
     tmp_path,
     monkeypatch,

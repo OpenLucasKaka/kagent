@@ -79,14 +79,11 @@ class RuntimeSessionMemory:
         self.compacted_turn_count = 0
 
 
-def default_runtime_session_memory_path(
+def configured_runtime_session_memory_path(
     env: Mapping[str, str] | None = None,
 ) -> str:
     source = os.environ if env is None else env
-    if SESSION_MEMORY_ENV_VAR in source:
-        return source[SESSION_MEMORY_ENV_VAR]
-    migrate_legacy_kagent_state(source)
-    return str(kagent_state_dir(source) / "session-memory.json")
+    return source.get(SESSION_MEMORY_ENV_VAR, "")
 
 
 def default_runtime_history_path(

@@ -11,7 +11,7 @@ from typing import Any
 from kagent.cli.interactive import (
     run_runtime_interactive as _run_runtime_interactive,
 )
-from kagent.cli.memory import default_runtime_session_memory_path
+from kagent.cli.memory import configured_runtime_session_memory_path
 from kagent.cli.provider import RuntimeProviderConfigError, runtime_provider_config_message
 from kagent.cli.trace import (
     persist_runtime_cli_trace,
@@ -200,10 +200,7 @@ def main() -> None:
 
         if args.interactive:
             try:
-                session_memory_path = _session_memory_path_from_args(
-                    args,
-                    interactive_tty=sys.stdin.isatty(),
-                )
+                session_memory_path = _session_memory_path_from_args(args)
                 provider = (
                     _runtime_provider_from_args(
                         args,
@@ -479,16 +476,10 @@ def _is_introspection_command(args: argparse.Namespace) -> bool:
     )
 
 
-def _session_memory_path_from_args(
-    args: argparse.Namespace,
-    *,
-    interactive_tty: bool,
-) -> str:
+def _session_memory_path_from_args(args: argparse.Namespace) -> str:
     if args.session_memory:
         return args.session_memory
-    if not interactive_tty:
-        return ""
-    return default_runtime_session_memory_path()
+    return configured_runtime_session_memory_path()
 
 
 def _runtime_labels_from_args(

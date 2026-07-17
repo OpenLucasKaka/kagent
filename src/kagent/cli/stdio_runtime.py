@@ -15,7 +15,7 @@ from kagent.cli.conversation import (
     runtime_goal_with_memory,
 )
 from kagent.cli.memory import (
-    default_runtime_session_memory_path,
+    configured_runtime_session_memory_path,
     load_runtime_session_memory,
     redact_runtime_session_memory_text,
     save_runtime_session_memory,
@@ -120,12 +120,12 @@ class StdioRuntimeSession:
         pending_approval_path: str | None = None,
     ) -> None:
         self.stdout = stdout
-        custom_memory_path = memory_path is not None or bool(
-            os.environ.get("KAGENT_SESSION_MEMORY_PATH", "").strip()
-        )
         self.memory_path = (
-            default_runtime_session_memory_path() if memory_path is None else memory_path
+            configured_runtime_session_memory_path()
+            if memory_path is None
+            else memory_path
         )
+        custom_memory_path = bool(self.memory_path)
         self.memory = load_runtime_session_memory(
             self.memory_path,
             max_turns=RUNTIME_MEMORY_MAX_TURNS,

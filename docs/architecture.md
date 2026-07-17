@@ -13,7 +13,7 @@ following is the default layout under `~/.kagent`:
 
 ```text
 ~/.kagent/config/provider.json
-~/.kagent/state/session-memory.json
+~/.kagent/state/sessions/<session-id>.json
 ~/.kagent/state/history
 ~/.kagent/state/pending-approvals/
 ~/.kagent/state/patches/
@@ -40,6 +40,15 @@ after all eligible items succeed. An explicit `KAGENT_HOME` skips discovery of
 legacy XDG state. The marker is `.migration-v1-complete` in the resolved root;
 npm self-update metadata is stored separately at
 `cache/npm-self-update.json` beneath that root.
+
+A migrated legacy `state/session-memory.json` is retained as data but is not
+loaded automatically by a new conversation. Ink creates one random session ID
+per runtime client and passes `state/sessions/<session-id>.json` explicitly to
+the Python stdio runtime. A child-process restart inside that client reuses the
+same path; a new client gets a different path. The classic Python terminal uses
+in-process memory unless an operator explicitly supplies
+`--session-memory PATH` or `KAGENT_SESSION_MEMORY_PATH`. Therefore no global
+memory file is implicitly loaded into model context.
 
 This user-level boundary does not absorb project data. The project-local
 `$PWD/.kagent/runtime/runtime-workspace` and `$PWD/.kagent/skills` directories retain

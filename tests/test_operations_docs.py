@@ -31,7 +31,8 @@ def test_operations_runbook_documents_continuous_iteration_and_failure_triage():
     assert "cooperative cancellation" in runbook
     assert "--session-memory PATH" in runbook
     assert "KAGENT_SESSION_MEMORY_PATH" in runbook
-    assert "session-memory.json" in runbook
+    assert "state/sessions/<session-id>.json" in runbook
+    assert "not loaded from a shared global" in runbook
     assert "`kagent \"goal\"`" in runbook
     assert "--runtime-plan" in runbook
     assert "owner-only" in runbook
@@ -441,7 +442,7 @@ def test_operations_runbook_documents_unified_kagent_home_migration():
 
     assert "KAGENT_HOME" in runbook
     assert "~/.kagent/config/provider.json" in runbook
-    assert "~/.kagent/state/session-memory.json" in runbook
+    assert "~/.kagent/state/sessions/<session-id>.json" in runbook
     assert "~/.kagent/state/history" in runbook
     assert "~/.kagent/state/pending-approvals" in runbook
     assert "~/.kagent/state/patches" in runbook

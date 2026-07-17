@@ -62,7 +62,7 @@ The following is the default layout under `~/.kagent`:
 
 ```text
 ~/.kagent/config/provider.json
-~/.kagent/state/session-memory.json
+~/.kagent/state/sessions/<session-id>.json
 ~/.kagent/state/history
 ~/.kagent/state/pending-approvals/
 ~/.kagent/state/patches/
@@ -181,24 +181,30 @@ classic Python terminal additionally provides `/doctor`, `/json`, `/compact`,
 `/last`, `/trace`, and `/save-trace PATH`. Unknown slash commands and known
 commands with invalid arguments are handled locally with suggestions or usage
 hints and are not sent to the model as goals.
-Persisted session memory is owner-only on read and write,
+Ink session memory is owner-only on read and write,
 uses `0700` parent directories, rejects symlink memory files or parent
 directories, and redacts common API keys, bearer tokens, and URL credentials
-before reusing memory in later turns or writing it to disk. Memory uses a v2
+before reusing memory in later turns of the same session or writing it to disk.
+Each Ink client launch gets a new session ID and never loads another session's
+memory; a Python child restart inside that client keeps the same session ID.
+Memory uses a v2
 compact layout with durable summary, durable facts, open items, and recent
 turns. Long sessions automatically compact older turns before they are reused
 in prompts; `/compact-memory` forces compaction immediately and `/memory`
 shows the current summary/facts/open-items/recent-turns view. The CLI
 defaults to the runtime for both `kagent` and `kagent "goal"`; use
 `--runtime-plan` for LLM-free replay tests. Runtime turns use three planning
-iterations by default. Without a home override, TTY sessions persist
-memory at `~/.kagent/state/session-memory.json`; set
-`KAGENT_SESSION_MEMORY_PATH` to override that path or to an empty value to
-disable default persistence. Without a home override, prompt history is stored
+iterations by default. The classic Python terminal keeps conversation memory
+in-process unless `--session-memory PATH` or `KAGENT_SESSION_MEMORY_PATH` is
+explicitly supplied. Ink persists only its generated current-session path
+under `~/.kagent/state/sessions/`; set `KAGENT_SESSION_MEMORY_PATH` to choose an
+exact path intentionally or to an empty value to disable disk persistence.
+Without a home override, prompt history is stored
 owner-only at `~/.kagent/state/history`; set `KAGENT_HISTORY_PATH`
 to override it or to an empty value to disable persisted prompt history. Both
 memory and prompt history redact common API keys, bearer tokens, and URL
-credentials before writing to disk. Use `--max-iterations` to override the iteration
+credentials before writing to disk. Prompt history only powers local input
+recall and is never injected into model context. Use `--max-iterations` to override the iteration
 budget, `--session-memory PATH` for an explicit memory file, `--runtime-plan`
 for deterministic runtime tests, and `--interactive-json` when you need full
 traces. Runtime and service config values must use JSON integers, not strings

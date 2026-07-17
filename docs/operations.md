@@ -271,7 +271,7 @@ The following is the default layout under `~/.kagent`:
 
 ```text
 ~/.kagent/config/provider.json
-~/.kagent/state/session-memory.json
+~/.kagent/state/sessions/<session-id>.json
 ~/.kagent/state/history
 ~/.kagent/state/pending-approvals/
 ~/.kagent/state/patches/
@@ -637,21 +637,22 @@ a confirmed failure. Set
 Use `kagent --classic` or `.venv/bin/python -m kagent.cli` for the classic
 Python terminal and its detailed operator commands such as `/json`, `/compact`,
 `/last`, `/trace`, `/save-trace PATH`, and `/doctor`. Both terminal paths share
-the same provider config, runtime policy, session commands, and persisted
-memory. Unknown slash commands and invalid arguments are handled locally and
-are not sent to the model as runtime goals.
+the same provider config, runtime policy, and session commands. Their
+conversation memory is session-scoped and is not loaded from a shared global
+file. Unknown slash commands and invalid arguments are handled locally and are
+not sent to the model as runtime goals.
 
 The default turn budget is three planning iterations; add
-`--max-iterations N` only when a workflow needs a
-different budget. TTY sessions persist compact memory across shell restarts by
-default under the resolved Kagent home; without overrides the path is
-`~/.kagent/state/session-memory.json`.
-piped interactive runs keep memory in-process and do not write a default file.
-Add `--session-memory PATH` for an explicit memory file. Set
-`KAGENT_SESSION_MEMORY_PATH` to override the default location, or set it to an
-empty value to disable default persistence for TTY sessions. The memory file is
-loaded and written owner-only; parent directories are created or tightened to
-`0700`, symlink memory files, symlink parent directories, and existing files
+`--max-iterations N` only when a workflow needs a different budget. Each Ink
+runtime client gets a random session ID and persists compact memory only at
+`~/.kagent/state/sessions/<session-id>.json`; a child restart reuses that path,
+while a new conversation gets a different path. The classic Python terminal
+keeps memory in-process and does not write a default file. Add
+`--session-memory PATH` for an explicit classic CLI memory file. Set
+`KAGENT_SESSION_MEMORY_PATH` only when an exact operator-selected path is
+required, or set it to an empty value to disable Ink disk persistence. The
+memory file is loaded and written owner-only; parent directories are created or tightened
+to `0700`, symlink memory files, symlink parent directories, and existing files
 with group or world permissions are rejected before parsing, and `/clear` also
 clears the persisted file. The CLI tightens the parent directory on both memory
 load and save paths. Before reusing session memory in later turns or

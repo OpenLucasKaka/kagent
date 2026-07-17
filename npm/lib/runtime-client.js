@@ -13,6 +13,10 @@ const pythonRunner = require("./python-runner");
 const APPROVAL_EXECUTION_INTERRUPTED_MESSAGE = "The approved action was interrupted and was not replayed because its side-effect state is uncertain.";
 function createRuntimeSessionClient() {
     const sessionId = (0, node_crypto_1.randomUUID)();
+    const configuredSessionMemoryPath = process.env.KAGENT_SESSION_MEMORY_PATH;
+    const sessionMemoryPath = configuredSessionMemoryPath !== undefined
+        ? configuredSessionMemoryPath
+        : node_path_1.default.join((0, kagent_home_1.kagentStatePath)("sessions"), `${sessionId}.json`);
     const configuredPendingApprovalPath = process.env.KAGENT_PENDING_APPROVAL_PATH;
     const pendingApprovalPath = configuredPendingApprovalPath || (() => {
         const pendingApprovalDirectory = (0, kagent_home_1.kagentStatePath)("pending-approvals");
@@ -43,6 +47,7 @@ function createRuntimeSessionClient() {
                 cwd: process.cwd(),
                 env: {
                     ...process.env,
+                    KAGENT_SESSION_MEMORY_PATH: sessionMemoryPath,
                     KAGENT_PENDING_APPROVAL_PATH: pendingApprovalPath,
                 },
             });

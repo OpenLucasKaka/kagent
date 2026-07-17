@@ -183,7 +183,8 @@ def test_readme_documents_console_script_entrypoints():
     assert "secret-exposing" in readme
     assert "--session-memory PATH" in readme
     assert "KAGENT_SESSION_MEMORY_PATH" in readme
-    assert "session-memory.json" in readme
+    assert "state/sessions/<session-id>.json" in readme
+    assert "never loads another session's" in readme
     assert "KAGENT_HISTORY_PATH" in readme
     assert "~/.kagent/state/history" in readme
     assert "prompt history" in readme
@@ -212,7 +213,7 @@ def test_product_docs_document_the_unified_user_home():
         normalized = " ".join(document.split())
         assert "KAGENT_HOME" in document
         assert "~/.kagent/config/provider.json" in document
-        assert "~/.kagent/state/session-memory.json" in document
+        assert "~/.kagent/state/sessions/<session-id>.json" in document
         assert "~/.kagent/state/history" in document
         assert "~/.kagent/cache/npm-python" in document
         assert "~/.kagent/cache/npm-self-update.json" in document

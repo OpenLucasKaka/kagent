@@ -2275,10 +2275,17 @@ def test_npm_runtime_client_preserves_pending_approval_across_child_restart():
     script = r"""
 const assert = require("node:assert/strict");
 const {EventEmitter} = require("node:events");
+const crypto = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
 const {PassThrough} = require("node:stream");
 
+const sessionIds = [
+  "123e4567-e89b-42d3-a456-426614174000",
+  "223e4567-e89b-42d3-a456-426614174000",
+];
+crypto.randomUUID = () => sessionIds.shift();
+delete process.env.KAGENT_SESSION_MEMORY_PATH;
 const children = [];
 const writes = [];
 const spawnOptions = [];
@@ -2354,6 +2361,17 @@ async function main() {
     spawnOptions[0].env.KAGENT_PENDING_APPROVAL_PATH,
     spawnOptions[1].env.KAGENT_PENDING_APPROVAL_PATH,
   );
+  const memoryPath = spawnOptions[0].env.KAGENT_SESSION_MEMORY_PATH;
+  assert.equal(
+    memoryPath,
+    path.join(
+      process.env.KAGENT_HOME || path.join(require("node:os").homedir(), ".kagent"),
+      "state",
+      "sessions",
+      "123e4567-e89b-42d3-a456-426614174000.json",
+    ),
+  );
+  assert.equal(memoryPath, spawnOptions[1].env.KAGENT_SESSION_MEMORY_PATH);
   children[1].stdout.write(JSON.stringify({
     type: "approval_required",
     action_id: "step-1",
@@ -2376,6 +2394,23 @@ async function main() {
   await waitFor(() => events.at(-1)?.type === "run_completed");
   client.close();
   assert.equal(fs.existsSync(pendingPath), true);
+
+  const nextClient = createRuntimeSessionClient();
+  await waitFor(() => spawnOptions.length === 3);
+  assert.equal(
+    spawnOptions[2].env.KAGENT_SESSION_MEMORY_PATH,
+    path.join(
+      process.env.KAGENT_HOME || path.join(require("node:os").homedir(), ".kagent"),
+      "state",
+      "sessions",
+      "223e4567-e89b-42d3-a456-426614174000.json",
+    ),
+  );
+  assert.notEqual(
+    spawnOptions[2].env.KAGENT_SESSION_MEMORY_PATH,
+    spawnOptions[0].env.KAGENT_SESSION_MEMORY_PATH,
+  );
+  nextClient.close();
 }
 
 main().catch((error) => {
