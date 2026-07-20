@@ -102,10 +102,10 @@ function nextStage(state: ProviderSetupState): ProviderSetupState {
     return {
       ...state,
       stage: "base_url",
-      baseUrl: option.base_url,
-      model: option.model,
+      baseUrl: "",
+      model: "",
       apiKey: "",
-      editor: editorFor(option.base_url),
+      editor: editorFor(""),
       error: "",
     };
   }

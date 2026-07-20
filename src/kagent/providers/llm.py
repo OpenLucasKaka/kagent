@@ -16,7 +16,6 @@ from typing import Any, Callable, Dict, Iterator, List, Mapping, Optional
 from kagent.runtime.redaction import REDACTED_VALUE, redact_runtime_text
 from kagent.utils.paths import kagent_config_dir, migrate_legacy_kagent_state
 
-DEFAULT_LLM_MODEL = "qwen3.5-122b-a10b"
 PROVIDER_CONFIG_SCHEMA_VERSION = "1"
 
 
@@ -215,19 +214,6 @@ def normalize_provider_kind(value: object) -> ProviderKind:
         raise ValueError(f"unsupported llm provider: {value}") from exc
 
 
-def detect_provider_kind(base_url: str, model: str = "") -> ProviderKind:
-    haystack = f"{base_url} {model}".strip().lower()
-    if not haystack:
-        return ProviderKind.OPENAI_COMPATIBLE
-    if "deepseek" in haystack:
-        return ProviderKind.DEEPSEEK
-    if any(marker in haystack for marker in ("dashscope", "aliyuncs", "qwen")):
-        return ProviderKind.QWEN_OPENAI_COMPATIBLE
-    if any(marker in haystack for marker in ("localhost:11434", "127.0.0.1:11434", "ollama")):
-        return ProviderKind.OLLAMA_OPENAI_COMPATIBLE
-    return ProviderKind.OPENAI_COMPATIBLE
-
-
 def provider_display_name(provider: object) -> str:
     try:
         kind = normalize_provider_kind(provider)
@@ -242,36 +228,13 @@ def provider_display_name(provider: object) -> str:
     return names[kind]
 
 
-def provider_setup_options(
-    default_model: str = DEFAULT_LLM_MODEL,
-) -> List[Dict[str, object]]:
+def provider_setup_options() -> List[Dict[str, object]]:
     return [
-        {
-            "provider": ProviderKind.QWEN_OPENAI_COMPATIBLE,
-            "label": "Qwen / DashScope",
-            "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
-            "model": default_model,
-            "api_key_required": True,
-        },
-        {
-            "provider": ProviderKind.DEEPSEEK,
-            "label": "DeepSeek",
-            "base_url": "https://api.deepseek.com/v1",
-            "model": "deepseek-chat",
-            "api_key_required": True,
-        },
-        {
-            "provider": ProviderKind.OLLAMA_OPENAI_COMPATIBLE,
-            "label": "Ollama local",
-            "base_url": "http://localhost:11434/v1",
-            "model": "llama3",
-            "api_key_required": False,
-        },
         {
             "provider": ProviderKind.OPENAI_COMPATIBLE,
             "label": "OpenAI-compatible / custom",
             "base_url": "",
-            "model": default_model,
+            "model": "",
             "api_key_required": False,
         },
     ]
@@ -315,7 +278,7 @@ def _provider_from_env(
     explicit = env.get("KAGENT_LLM_PROVIDER", "")
     if explicit.strip():
         return normalize_provider_kind(explicit)
-    return detect_provider_kind(base_url, model)
+    return ProviderKind.OPENAI_COMPATIBLE
 
 
 def _validate_provider_config_path_for_read(path: Path) -> None:

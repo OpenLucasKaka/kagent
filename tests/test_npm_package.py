@@ -338,7 +338,7 @@ async function renderAt(columns) {
         provider: "qwen",
         display_name: "Qwen",
         base_url_configured: true,
-        model: "qwen3.5-122b-a10b",
+        model: "configured-model",
         api_key_configured: true,
       },
       setup: false,
@@ -897,21 +897,22 @@ inputEvents.emit("input", "👍");
 inputEvents.emit("input", "🏽");
 assert.deepEqual(
   [states[2].setup.editor.value, states[2].setup.editor.cursor],
-  ["x👍🏽", 2],
+  ["👍🏽", 1],
 );
 inputEvents.emit("input", "e");
 inputEvents.emit("input", "\u0301");
 assert.deepEqual(
   [states[2].setup.editor.value, states[2].setup.editor.cursor],
-  ["x👍🏽e\u0301", 3],
+  ["👍🏽e\u0301", 2],
 );
 inputEvents.emit("input", "a\nb");
 assert.deepEqual(
   [states[2].setup.editor.value, states[2].setup.editor.cursor],
-  ["x👍🏽e\u0301a b", 6],
+  ["👍🏽e\u0301a b", 5],
 );
 inputEvents.emit("input", "\r");
 render();
+inputEvents.emit("input", "model");
 inputEvents.emit("input", "\r");
 render();
 inputEvents.emit("input", "\r");
@@ -919,7 +920,7 @@ render();
 effects[4]();
 assert.deepEqual(configuredProvider, {
   provider: "test",
-  baseUrl: "x👍🏽e\u0301a b",
+  baseUrl: "👍🏽e\u0301a b",
   model: "model",
   apiKey: "",
 });
@@ -961,15 +962,15 @@ const options = [
   {
     provider: "qwen_openai_compatible",
     label: "Qwen / DashScope",
-    base_url: "https://dashscope.example/v1",
-    model: "qwen-plus",
+    base_url: "",
+    model: "",
     api_key_required: true,
   },
   {
     provider: "ollama_openai_compatible",
     label: "Ollama local",
-    base_url: "http://localhost:11434/v1",
-    model: "llama3",
+    base_url: "http://local-provider.example/v1",
+    model: "local-model",
     api_key_required: false,
   },
 ];
@@ -979,23 +980,39 @@ state = providerSetupReducer(state, {type: "select", offset: -1});
 assert.equal(state.selectedIndex, 1);
 state = providerSetupReducer(state, {type: "next"});
 assert.equal(state.stage, "base_url");
-assert.equal(state.editor.value, "http://localhost:11434/v1");
+assert.equal(state.editor.value, "");
+state = providerSetupReducer(state, {
+  type: "edit",
+  editor: {value: "http://local-provider.example/v1", cursor: 32},
+});
 state = providerSetupReducer(state, {type: "next"});
 assert.equal(state.stage, "model");
+state = providerSetupReducer(state, {
+  type: "edit",
+  editor: {value: "local-model", cursor: 11},
+});
 state = providerSetupReducer(state, {type: "next"});
 assert.equal(state.stage, "api_key");
 state = providerSetupReducer(state, {type: "next"});
 assert.equal(state.stage, "saving");
 assert.deepEqual(providerConfiguration(state), {
   provider: "ollama_openai_compatible",
-  baseUrl: "http://localhost:11434/v1",
-  model: "llama3",
+  baseUrl: "http://local-provider.example/v1",
+  model: "local-model",
   apiKey: "",
 });
 
 let required = createProviderSetupState(options);
 required = providerSetupReducer(required, {type: "next"});
+required = providerSetupReducer(required, {
+  type: "edit",
+  editor: {value: "https://provider.example/v1", cursor: 27},
+});
 required = providerSetupReducer(required, {type: "next"});
+required = providerSetupReducer(required, {
+  type: "edit",
+  editor: {value: "provider-model", cursor: 14},
+});
 required = providerSetupReducer(required, {type: "next"});
 required = providerSetupReducer(required, {type: "next"});
 assert.equal(required.stage, "api_key");
@@ -1804,13 +1821,13 @@ async function main() {
     });
   });
   assert.equal(ready.provider.configured, false);
-  assert.equal(ready.provider_options.length, 4);
+  assert.equal(ready.provider_options.length, 1);
 
   const configured = await new Promise((resolve, reject) => {
     client.configureProvider({
       provider: "ollama_openai_compatible",
-      baseUrl: "http://localhost:11434/v1",
-      model: "llama3",
+      baseUrl: "http://local-provider.example/v1",
+      model: "local-model",
       apiKey: "",
     }, (event) => {
       if (event.type === "provider_configured") {

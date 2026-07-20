@@ -377,7 +377,7 @@ def test_cli_provider_setup_collects_values_and_saves_config(tmp_path):
     from kagent.providers.llm import LLMProviderConfig, ProviderKind
 
     prompts = []
-    answers = iter(["2", "", ""])
+    answers = iter(["1", "https://provider.example/v1", "provider-model"])
     saved_configs = []
 
     def input_answer(prompt):
@@ -390,7 +390,6 @@ def test_cli_provider_setup_collects_values_and_saves_config(tmp_path):
 
     config = _configure_runtime_provider_interactively(
         LLMProviderConfig,
-        default_model="default-model",
         default_config_path=lambda: str(tmp_path / "provider.json"),
         save_config=save_config,
         input_fn=input_answer,
@@ -398,9 +397,9 @@ def test_cli_provider_setup_collects_values_and_saves_config(tmp_path):
     )
 
     assert prompts[0].startswith("Provider")
-    assert config.provider == ProviderKind.DEEPSEEK
-    assert config.base_url == "https://api.deepseek.com/v1"
-    assert config.model == "deepseek-chat"
+    assert config.provider == ProviderKind.OPENAI_COMPATIBLE
+    assert config.base_url == "https://provider.example/v1"
+    assert config.model == "provider-model"
     assert config.api_key == "secret-key"
     assert saved_configs == [config]
 
@@ -409,7 +408,7 @@ def test_cli_provider_setup_allows_custom_openai_compatible_values(tmp_path):
     from kagent.cli.main import _configure_runtime_provider_interactively
     from kagent.providers.llm import LLMProviderConfig, ProviderKind
 
-    answers = iter(["4", "https://gateway.example/v1", "gateway-model"])
+    answers = iter(["1", "https://gateway.example/v1", "gateway-model"])
     saved_configs = []
 
     def save_config(config):
@@ -418,7 +417,6 @@ def test_cli_provider_setup_allows_custom_openai_compatible_values(tmp_path):
 
     config = _configure_runtime_provider_interactively(
         LLMProviderConfig,
-        default_model="default-model",
         default_config_path=lambda: str(tmp_path / "provider.json"),
         save_config=save_config,
         input_fn=lambda _prompt: next(answers),
@@ -1082,7 +1080,7 @@ def test_cli_runtime_doctor_redacts_provider_location_and_secret():
             provider=ProviderKind.QWEN_OPENAI_COMPATIBLE,
             base_url="https://llm.example.test/v1",
             api_key="sk-secret-value",
-            model="qwen3.5-122b-a10b",
+            model="configured-model",
         )
 
     message = format_runtime_interactive_doctor(
@@ -1096,7 +1094,7 @@ def test_cli_runtime_doctor_redacts_provider_location_and_secret():
 
     assert "kagent doctor" in message
     assert "provider     Qwen" in message
-    assert "model        qwen3.5-122b-a10b" in message
+    assert "model        configured-model" in message
     assert "base_url     configured" in message
     assert "api_key      configured" in message
     assert "memory       /state/session-memory.json" in message
@@ -1151,7 +1149,7 @@ def test_cli_runtime_provider_config_redacts_secret_values():
             provider=ProviderKind.QWEN_OPENAI_COMPATIBLE,
             base_url="https://llm.example.test/v1",
             api_key="sk-secret-value",
-            model="qwen3.5-122b-a10b",
+            model="configured-model",
             timeout_seconds=45,
             max_retries=3,
             retry_backoff_seconds=0.5,
@@ -1162,7 +1160,7 @@ def test_cli_runtime_provider_config_redacts_secret_values():
     assert "kagent provider" in message
     assert "provider   Qwen" in message
     assert "base_url   configured" in message
-    assert "model      qwen3.5-122b-a10b" in message
+    assert "model      configured-model" in message
     assert "api_key    configured" in message
     assert "timeout    45s" in message
     assert "retries    3" in message
@@ -2140,7 +2138,7 @@ def test_cli_interactive_runtime_can_show_provider_config_without_model_call(
         config = LLMProviderConfig(
             base_url="https://llm.example.test/v1",
             api_key="sk-secret-value",
-            model="qwen3.5-122b-a10b",
+            model="configured-model",
         )
 
     calls = []
@@ -2157,7 +2155,7 @@ def test_cli_interactive_runtime_can_show_provider_config_without_model_call(
     captured = capsys.readouterr()
     assert calls == []
     assert "kagent provider" in captured.out
-    assert "qwen3.5-122b-a10b" in captured.out
+    assert "configured-model" in captured.out
     assert "sk-secret-value" not in captured.out
 
 

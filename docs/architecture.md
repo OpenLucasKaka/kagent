@@ -828,7 +828,6 @@ for application code:
 - `FakeLLMProvider`
 - `LLMProviderConfig`
 - `ProviderKind`
-- `detect_provider_kind`
 - `run_runtime_agent`
 - `runtime_topology`
 

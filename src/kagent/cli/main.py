@@ -162,7 +162,6 @@ def main() -> None:
         warnings.simplefilter("ignore")
         from kagent import __version__
         from kagent.providers.llm import (
-            DEFAULT_LLM_MODEL,
             FakeLLMProvider,
             LLMProviderConfig,
             build_llm_provider,
@@ -192,7 +191,6 @@ def main() -> None:
         if args.configure:
             _configure_runtime_provider_interactively(
                 LLMProviderConfig,
-                default_model=DEFAULT_LLM_MODEL,
                 default_config_path=default_provider_config_path,
                 save_config=save_provider_config,
             )
@@ -208,7 +206,6 @@ def main() -> None:
                         build_llm_provider,
                         LLMProviderConfig,
                         interactive_setup=sys.stdin.isatty(),
-                        default_model=DEFAULT_LLM_MODEL,
                         default_config_path=default_provider_config_path,
                         save_config=save_provider_config,
                     )
@@ -247,7 +244,6 @@ def main() -> None:
                         build_llm_provider,
                         LLMProviderConfig,
                         interactive_setup=sys.stdin.isatty(),
-                        default_model=DEFAULT_LLM_MODEL,
                         default_config_path=default_provider_config_path,
                         save_config=save_provider_config,
                     )
@@ -282,7 +278,6 @@ def _runtime_provider_from_args(
     LLMProviderConfig,
     *,
     interactive_setup: bool = False,
-    default_model: str = "qwen3.5-122b-a10b",
     default_config_path=None,
     save_config=None,
 ):
@@ -296,7 +291,6 @@ def _runtime_provider_from_args(
         if interactive_setup and default_config_path is not None and save_config is not None:
             config = _configure_runtime_provider_interactively(
                 LLMProviderConfig,
-                default_model=default_model,
                 default_config_path=default_config_path,
                 save_config=save_config,
             )
@@ -310,7 +304,6 @@ def _runtime_provider_from_args(
 def _configure_runtime_provider_interactively(
     LLMProviderConfig,
     *,
-    default_model: str,
     default_config_path,
     save_config,
     input_fn=input,
@@ -326,21 +319,12 @@ def _configure_runtime_provider_interactively(
         file=prompt_stream,
     )
     provider_option = _select_provider_for_setup(
-        default_model=default_model,
         input_fn=input_fn,
         prompt_stream=prompt_stream,
     )
     provider = provider_option["provider"]
-    default_base_url = str(provider_option["base_url"])
-    default_provider_model = str(provider_option["model"])
-    base_url_prompt = (
-        f"Base URL [{default_base_url}]: " if default_base_url else "Base URL: "
-    )
-    base_url = input_fn(base_url_prompt).strip() or default_base_url
-    model = (
-        input_fn(f"Model [{default_provider_model}]: ").strip()
-        or default_provider_model
-    )
+    base_url = input_fn("Base URL: ").strip()
+    model = input_fn("Model: ").strip()
     api_key = secret_input_fn("API key: ").strip()
     config = LLMProviderConfig(
         provider=provider,
@@ -358,11 +342,10 @@ def _configure_runtime_provider_interactively(
 
 def _select_provider_for_setup(
     *,
-    default_model: str,
     input_fn,
     prompt_stream,
 ) -> dict[str, object]:
-    options = _provider_setup_options(default_model)
+    options = _provider_setup_options()
     if _can_use_arrow_provider_menu(input_fn, prompt_stream):
         return _select_provider_with_arrow_keys(options, prompt_stream)
     print("Select provider:", file=prompt_stream)
@@ -371,9 +354,9 @@ def _select_provider_for_setup(
             f"  {index}. {option['label']} ({option['provider'].value})",
             file=prompt_stream,
         )
-    answer = input_fn("Provider [1]: ").strip()
+    answer = input_fn("Provider: ").strip()
     if not answer:
-        return options[0]
+        raise ValueError("provider selection is required")
     try:
         selected_index = int(answer)
     except ValueError as exc:
@@ -383,10 +366,10 @@ def _select_provider_for_setup(
     return options[selected_index - 1]
 
 
-def _provider_setup_options(default_model: str) -> list[dict[str, object]]:
+def _provider_setup_options() -> list[dict[str, object]]:
     from kagent.providers.llm import provider_setup_options
 
-    return provider_setup_options(default_model)
+    return provider_setup_options()
 
 
 def _can_use_arrow_provider_menu(input_fn, prompt_stream) -> bool:

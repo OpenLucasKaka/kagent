@@ -73,9 +73,6 @@ def test_stdio_runtime_accepts_run_request_and_streams_jsonl_events(tmp_path):
     assert events[0]["type"] == "runtime_ready"
     assert events[0]["provider"]["configured"] is False
     assert [option["provider"] for option in events[0]["provider_options"]] == [
-        "qwen_openai_compatible",
-        "deepseek",
-        "ollama_openai_compatible",
         "openai_compatible",
     ]
     assert [event["type"] for event in events][1:3] == [
@@ -473,8 +470,8 @@ def test_stdio_runtime_reports_missing_provider_as_structured_error(tmp_path):
 def test_stdio_runtime_treats_qwen_without_api_key_as_unconfigured(tmp_path):
     env = {
         "KAGENT_LLM_PROVIDER": "qwen_openai_compatible",
-        "KAGENT_LLM_BASE_URL": "https://dashscope.aliyuncs.com/compatible-mode/v1",
-        "KAGENT_LLM_MODEL": "qwen-plus",
+        "KAGENT_LLM_BASE_URL": "https://provider.example/v1",
+        "KAGENT_LLM_MODEL": "provider-model",
         "KAGENT_LLM_CONFIG_PATH": str(tmp_path / "missing-provider.json"),
         "KAGENT_SESSION_MEMORY_PATH": str(tmp_path / "session-memory.json"),
         "PATH": "/usr/bin:/bin:/usr/sbin:/sbin",
@@ -510,8 +507,8 @@ def test_stdio_runtime_configures_provider_without_leaking_secret(tmp_path):
     request = {
         "type": "provider_configure",
         "provider": "qwen_openai_compatible",
-        "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
-        "model": "qwen-plus",
+        "base_url": "https://provider.example/v1",
+        "model": "provider-model",
         "api_key": api_key,
     }
 
@@ -533,7 +530,7 @@ def test_stdio_runtime_configures_provider_without_leaking_secret(tmp_path):
             "provider": "qwen_openai_compatible",
             "display_name": "Qwen",
             "base_url_configured": True,
-            "model": "qwen-plus",
+            "model": "provider-model",
             "api_key_configured": True,
         },
     }
@@ -552,7 +549,7 @@ def test_stdio_runtime_rejects_invalid_provider_config_without_echoing_secret(tm
         "type": "provider_configure",
         "provider": "deepseek",
         "base_url": "not-a-url",
-        "model": "deepseek-chat",
+        "model": "provider-model",
         "api_key": api_key,
     }
     monkeypatch_env = {
@@ -589,8 +586,8 @@ def test_stdio_runtime_rejects_provider_config_symlink_path(tmp_path):
     request = {
         "type": "provider_configure",
         "provider": "ollama_openai_compatible",
-        "base_url": "http://localhost:11434/v1",
-        "model": "llama3",
+        "base_url": "http://local-provider.example/v1",
+        "model": "local-model",
         "api_key": "",
     }
 

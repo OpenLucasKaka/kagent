@@ -6,7 +6,6 @@ from kagent import (
     LLMProviderConfig,
     ProviderKind,
     __version__,
-    detect_provider_kind,
     run_runtime_agent,
     runtime_topology,
 )
@@ -86,4 +85,3 @@ def test_public_api_exports_runtime_agent_entrypoint():
 
 def test_public_api_exports_provider_kind_helpers():
     assert ProviderKind.DEEPSEEK.value == "deepseek"
-    assert detect_provider_kind("https://api.deepseek.com/v1") == ProviderKind.DEEPSEEK

@@ -5,7 +5,6 @@ from pathlib import Path
 
 import kagent.providers.llm as llm_provider
 from kagent.providers.llm import (
-    DEFAULT_LLM_MODEL,
     FakeLLMProvider,
     LLMProviderConfig,
     OpenAICompatibleProvider,
@@ -13,7 +12,6 @@ from kagent.providers.llm import (
     SequentialFakeLLMProvider,
     build_llm_provider,
     default_provider_config_path,
-    detect_provider_kind,
     load_provider_config,
     missing_provider_config_fields,
     provider_display_name,
@@ -103,7 +101,7 @@ def test_provider_config_can_be_saved_loaded_and_overridden_by_env(tmp_path):
             provider=ProviderKind.QWEN_OPENAI_COMPATIBLE,
             base_url="https://stored.example/v1",
             api_key="stored-key",
-            model=DEFAULT_LLM_MODEL,
+            model="stored-model",
         ),
         str(config_path),
     )
@@ -121,7 +119,7 @@ def test_provider_config_can_be_saved_loaded_and_overridden_by_env(tmp_path):
     assert loaded.provider == ProviderKind.QWEN_OPENAI_COMPATIBLE
     assert loaded.base_url == "https://stored.example/v1"
     assert loaded.api_key == "stored-key"
-    assert loaded.model == DEFAULT_LLM_MODEL
+    assert loaded.model == "stored-model"
     assert merged.base_url == "https://env.example/v1"
     assert merged.api_key == "stored-key"
     assert merged.model == "env-model"
@@ -129,27 +127,27 @@ def test_provider_config_can_be_saved_loaded_and_overridden_by_env(tmp_path):
     assert stat.S_IMODE(config_path.stat().st_mode) == 0o600
 
 
-def test_provider_config_reinfers_provider_when_env_overrides_base_or_model(tmp_path):
+def test_provider_config_does_not_infer_provider_when_env_overrides_endpoint(tmp_path):
     config_path = tmp_path / "provider.json"
     save_provider_config(
         LLMProviderConfig(
             provider=ProviderKind.QWEN_OPENAI_COMPATIBLE,
-            base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+            base_url="https://stored.example/v1",
             api_key="stored-key",
-            model="qwen-plus",
+            model="stored-model",
         ),
         str(config_path),
     )
 
     merged = LLMProviderConfig.from_sources(
         {
-            "KAGENT_LLM_BASE_URL": "https://api.deepseek.com/v1",
-            "KAGENT_LLM_MODEL": "deepseek-chat",
+            "KAGENT_LLM_BASE_URL": "https://env.example/v1",
+            "KAGENT_LLM_MODEL": "env-model",
         },
         config_path=str(config_path),
     )
 
-    assert merged.provider == ProviderKind.DEEPSEEK
+    assert merged.provider == ProviderKind.OPENAI_COMPATIBLE
     assert merged.api_key == "stored-key"
 
 
@@ -158,8 +156,8 @@ def test_provider_config_keeps_explicit_env_provider_when_url_is_generic(tmp_pat
     save_provider_config(
         LLMProviderConfig(
             provider=ProviderKind.QWEN_OPENAI_COMPATIBLE,
-            base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
-            model="qwen-plus",
+            base_url="https://stored.example/v1",
+            model="stored-model",
         ),
         str(config_path),
     )
@@ -176,39 +174,16 @@ def test_provider_config_keeps_explicit_env_provider_when_url_is_generic(tmp_pat
     assert merged.provider == ProviderKind.DEEPSEEK
 
 
-def test_provider_config_autodetects_provider_when_provider_env_is_missing():
+def test_provider_config_uses_generic_provider_when_provider_env_is_missing():
     config = LLMProviderConfig.from_env(
         {
-            "KAGENT_LLM_BASE_URL": "https://api.deepseek.com/v1",
-            "KAGENT_LLM_MODEL": "deepseek-chat",
+            "KAGENT_LLM_BASE_URL": "https://provider.example/v1",
+            "KAGENT_LLM_MODEL": "provider-model",
         }
     )
 
-    assert config.provider == ProviderKind.DEEPSEEK
-    assert config.redacted_snapshot()["llm_provider_display_name"] == "DeepSeek"
-
-
-def test_detect_provider_kind_uses_url_and_model_hints_conservatively():
-    assert (
-        detect_provider_kind("https://api.deepseek.com/v1", "deepseek-chat")
-        == ProviderKind.DEEPSEEK
-    )
-    assert (
-        detect_provider_kind("https://dashscope.aliyuncs.com/compatible-mode/v1", "qwen-plus")
-        == ProviderKind.QWEN_OPENAI_COMPATIBLE
-    )
-    assert (
-        detect_provider_kind("http://localhost:11434/v1", "llama3")
-        == ProviderKind.OLLAMA_OPENAI_COMPATIBLE
-    )
-    assert (
-        detect_provider_kind("https://company.example/v1", "qwen/qwen3-coder-next")
-        == ProviderKind.QWEN_OPENAI_COMPATIBLE
-    )
-    assert (
-        detect_provider_kind("https://company.example/v1", "custom-model")
-        == ProviderKind.OPENAI_COMPATIBLE
-    )
+    assert config.provider == ProviderKind.OPENAI_COMPATIBLE
+    assert config.redacted_snapshot()["llm_provider_display_name"] == "OpenAI-compatible"
 
 
 def test_provider_display_names_are_stable_for_setup_and_audit_output():
@@ -218,25 +193,22 @@ def test_provider_display_names_are_stable_for_setup_and_audit_output():
 
 
 def test_provider_setup_options_are_protocol_ready_and_keep_ollama_key_optional():
-    options = provider_setup_options("default-model")
+    options = provider_setup_options()
 
     assert [option["provider"] for option in options] == [
-        "qwen_openai_compatible",
-        "deepseek",
-        "ollama_openai_compatible",
         "openai_compatible",
     ]
-    assert options[0]["model"] == "default-model"
-    assert options[1]["model"] == "deepseek-chat"
-    assert options[2]["api_key_required"] is False
+    assert all(option["base_url"] == "" for option in options)
+    assert all(option["model"] == "" for option in options)
+    assert options[0]["api_key_required"] is False
 
 
 def test_validate_provider_setup_config_checks_url_model_and_required_key():
     valid = LLMProviderConfig(
         provider=ProviderKind.DEEPSEEK,
-        base_url="https://api.deepseek.com/v1",
+        base_url="https://provider.example/v1",
         api_key="secret",
-        model="deepseek-chat",
+        model="provider-model",
     )
 
     validate_provider_setup_config(valid)
@@ -273,8 +245,8 @@ def test_validate_provider_setup_config_allows_ollama_without_api_key():
     validate_provider_setup_config(
         LLMProviderConfig(
             provider=ProviderKind.OLLAMA_OPENAI_COMPATIBLE,
-            base_url="http://localhost:11434/v1",
-            model="llama3",
+            base_url="http://local-provider.example/v1",
+            model="local-model",
         )
     )
 
@@ -282,8 +254,8 @@ def test_validate_provider_setup_config_allows_ollama_without_api_key():
 def test_missing_provider_config_fields_requires_keys_only_for_hosted_native_options():
     qwen = LLMProviderConfig(
         provider=ProviderKind.QWEN_OPENAI_COMPATIBLE,
-        base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
-        model="qwen-plus",
+        base_url="https://provider.example/v1",
+        model="provider-model",
     )
     custom = LLMProviderConfig(
         provider=ProviderKind.OPENAI_COMPATIBLE,
@@ -299,9 +271,9 @@ def test_build_llm_provider_uses_configured_provider_kind():
     provider = build_llm_provider(
         LLMProviderConfig(
             provider=ProviderKind.DEEPSEEK,
-            base_url="https://api.deepseek.com/v1",
+            base_url="https://provider.example/v1",
             api_key="x",
-            model="deepseek-chat",
+            model="provider-model",
         ),
         urlopen=lambda request, *, timeout: None,
     )
